@@ -271,12 +271,14 @@ describe('private material drafts', () => {
   });
   it('prevents leaving DRAFT without a file at the database boundary', async () => {
     const item = await create('student');
-    await expect(
-      db.query(
-        "UPDATE hucescholar.document_versions SET review_status='SUBMITTED' WHERE document_id=$1",
-        [item.id],
-      ),
-    ).rejects.toMatchObject({ code: '23514' });
+    for (const state of ['SUBMITTED', 'CHANGES_REQUIRED', 'APPROVED', 'REJECTED']) {
+      await expect(
+        db.query('UPDATE hucescholar.document_versions SET review_status=$2 WHERE document_id=$1', [
+          item.id,
+          state,
+        ]),
+      ).rejects.toMatchObject({ code: '23514' });
+    }
   });
   it('searches and paginates only owned drafts', async () => {
     const item = await create('student');
@@ -289,15 +291,33 @@ describe('private material drafts', () => {
   });
   it('retains metadata after revocation but blocks edits even by dropping old courses', async () => {
     const item = await create();
-    await db.query(
-      "UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2,reason='Test revocation' WHERE lecturer_id=$1 AND revoked_at IS NULL",
-      [users.lecturer, users.admin],
-    );
+    const assignment = (
+      await db.query(
+        'SELECT id FROM hucescholar.lecturer_assignments WHERE lecturer_id=$1 AND revoked_at IS NULL',
+        [users.lecturer],
+      )
+    ).rows[0].id;
+    const csrf = (await agents.admin.get('/api/v1/auth/csrf')).body.csrfToken;
+    const [edit, revoke] = await Promise.all([
+      write('lecturer', { ...body(), title: 'Concurrent edit', revision: 1 }, item.id),
+      agents.admin
+        .patch(`/api/v1/admin/assignments/${assignment}/revoke`)
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send({ reason: 'Test revocation' }),
+    ]);
+    expect(revoke.status).toBe(200);
+    expect([200, 409]).toContain(edit.status);
     const current = await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`).expect(200);
     expect(current.body.item.editable).toBe(false);
     expect(
-      (await write('lecturer', { ...body(), courseIds: [courses[1]], revision: 1 }, item.id))
-        .status,
+      (
+        await write(
+          'lecturer',
+          { ...body(), courseIds: [courses[1]], revision: current.body.item.revision },
+          item.id,
+        )
+      ).status,
     ).toBe(409);
     expect((await agents.lecturer.get('/api/v1/material-drafts/courses')).body.total).toBe(0);
   });
