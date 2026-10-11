@@ -6,7 +6,7 @@ test('web reaches the real API through its own origin', async ({ page, request }
   expect(response.headers()['cache-control']).toBe('no-store');
   expect(await response.json()).toEqual({ status: 'ok', service: 'hucescholar-api' });
 
-  await page.goto('/');
+  await page.goto('/project');
   await expect(page.getByRole('heading', { name: 'HUCEScholar', exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('API đang hoạt động');
   await expect(
@@ -18,7 +18,7 @@ test('web reaches the real API through its own origin', async ({ page, request }
 
 test('API network failure has an accessible retry that recovers', async ({ page }) => {
   await page.route('**/api/v1/health', (route) => route.abort('failed'));
-  await page.goto('/');
+  await page.goto('/project');
   await expect(page.getByRole('status')).toContainText('Chưa kết nối được API');
   await page.screenshot({ path: '.local/foundation-error.png', fullPage: true });
   const retry = page.getByRole('button', { name: 'Thử lại' });
@@ -33,7 +33,7 @@ test('an unexpected 200 response is not treated as healthy', async ({ page }) =>
   await page.route('**/api/v1/health', (route) =>
     route.fulfill({ json: { status: 'ok', service: 'another-service' } }),
   );
-  await page.goto('/');
+  await page.goto('/project');
   await expect(page.getByRole('status')).toContainText('Chưa kết nối được API');
 });
 
@@ -46,7 +46,7 @@ test('shows loading while the API is still pending', async ({ page }) => {
     await gate;
     await route.continue();
   });
-  await page.goto('/');
+  await page.goto('/project');
   await expect(page.getByRole('status')).toContainText('Đang kiểm tra API');
   release();
   await expect(page.getByRole('status')).toContainText('API đang hoạt động');
@@ -59,7 +59,7 @@ for (const [name, width, height] of [
 ] as const) {
   test(`${name}: reflows without horizontal page overflow`, async ({ page }) => {
     await page.setViewportSize({ width, height });
-    await page.goto('/');
+    await page.goto('/project');
     await expect(page.getByRole('status')).toContainText('API đang hoạt động');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,

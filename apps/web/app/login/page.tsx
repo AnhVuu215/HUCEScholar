@@ -49,7 +49,7 @@ export default function LoginPage() {
             Chưa có tài khoản hoặc cần hỗ trợ mật khẩu? Liên hệ quản trị viên học liệu để được hỗ
             trợ.
           </p>
-          <Link className="project-link" href="/">
+          <Link className="project-link" href="/project">
             Xem tiến độ dự án
           </Link>
         </div>

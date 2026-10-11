@@ -165,7 +165,7 @@ export function RoleWorkspace({
               Học liệu của tôi
             </Link>
           )}
-          <Link href="/">Tiến độ dự án</Link>
+          <Link href="/project">Tiến độ dự án</Link>
         </nav>
         <p className="sidebar-note">
           Dự án độc lập đang phát triển. Chưa phải hệ thống chính thức của trường.
