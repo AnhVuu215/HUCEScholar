@@ -34,6 +34,51 @@ services:
       timeout: 5s
       retries: 5
 
+  clamav:
+    profiles: ['files']
+    image: clamav/clamav:1.4.6@sha256:57deb108fc4c72778aa83eafbca7bb7153e28c3f57c005afd38d31f16da86f23
+    restart: unless-stopped
+    volumes:
+      - clamav_data:/var/lib/clamav
+    mem_limit: 2g
+    cpus: 1.0
+    healthcheck:
+      test: ['CMD', 'clamdcheck.sh']
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  file-worker:
+    profiles: ['files']
+    build:
+      context: ..
+      dockerfile: infra/file-worker.Dockerfile
+    restart: unless-stopped
+    env_file: ../apps/api/.env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://hucescholar:${POSTGRES_PASSWORD}@postgres:5432/hucescholar
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      FILE_STORAGE: local
+      FILE_LOCAL_ROOT: /data/files
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: '3310'
+    volumes:
+      - ../.local/files:/data/files
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 64
+    security_opt: ['no-new-privileges:true']
+
 volumes:
   postgres_data:
   redis_data:
+  clamav_data:
