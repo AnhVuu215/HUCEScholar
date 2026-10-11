@@ -1,7 +1,12 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { Roles, RolesGuard, SessionGuard } from '../auth/session.guard';
-import { CreateCatalogDto, ListCatalogDto, UpdateCatalogDto } from './academic.dto';
+import {
+  CreateCatalogDto,
+  ListCatalogDto,
+  UpdateCatalogDto,
+  CourseProgramsDto,
+} from './academic.dto';
 import { AcademicService } from './academic.service';
 
 @Controller('admin/catalog')
@@ -9,6 +14,13 @@ import { AcademicService } from './academic.service';
 @Roles('ADMIN')
 export class AcademicController {
   constructor(private readonly academic: AcademicService) {}
+  @Patch('courses/:id/programs') programs(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: CourseProgramsDto,
+  ) {
+    return this.academic.setPrograms(req.user.id, id, body);
+  }
   @Get(':kind') list(@Param('kind') kind: string, @Query() query: ListCatalogDto) {
     return this.academic.list(kind, query);
   }

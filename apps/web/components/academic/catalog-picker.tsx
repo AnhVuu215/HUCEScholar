@@ -8,11 +8,13 @@ export function CatalogPicker({
   label,
   value,
   onChange,
+  required = true,
 }: {
   kind: CatalogKind;
   label: string;
   value: CatalogChoice | null;
   onChange: (value: CatalogChoice | null) => void;
+  required?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -79,7 +81,7 @@ export function CatalogPicker({
       <label htmlFor={id}>{label}</label>
       <select
         id={id}
-        required
+        required={required}
         value={value?.id ?? ''}
         onChange={(e) =>
           onChange(

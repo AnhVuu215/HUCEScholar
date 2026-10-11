@@ -60,6 +60,11 @@ describe('academic catalog', () => {
       await db.query('DELETE FROM hucescholar.audit_events WHERE actor_id=ANY($1::bigint[])', [
         ids,
       ]);
+      await db.query(
+        'DELETE FROM hucescholar.program_courses WHERE course_id IN (SELECT id FROM hucescholar.courses WHERE code LIKE $1)',
+        [`${prefix}%`],
+      );
+      await db.query('DELETE FROM hucescholar.courses WHERE code LIKE $1', [`${prefix}%`]);
       await db.query('DELETE FROM hucescholar.programs WHERE code LIKE $1', [`${prefix}%`]);
       await db.query('DELETE FROM hucescholar.faculties WHERE code LIKE $1', [`${prefix}%`]);
       await db.query('DELETE FROM hucescholar.auth_sessions WHERE user_id=ANY($1::bigint[])', [
@@ -230,6 +235,96 @@ describe('academic catalog', () => {
       .get(`/api/v1/admin/catalog/programs?facultyId=${parent.id}`)
       .expect(200);
     expect(list.body.items).toHaveLength(1);
+  });
+  it('links shared courses across faculties atomically, with stale and inactive checks', async () => {
+    const a = await faculty('COURSE-A');
+    const b = await faculty('COURSE-B');
+    const pr = await write('programs', {
+      code: `${prefix}-SHARED-P`,
+      name: 'Ngành khác khoa',
+      facultyId: b.id,
+    });
+    expect(pr.status).toBe(201);
+    const program = pr.body.item;
+    const cr = await write('courses', {
+      code: `${prefix}-SHARED-C`,
+      name: 'Môn dùng chung',
+      facultyId: a.id,
+    });
+    expect(cr.status).toBe(201);
+    const course = cr.body.item;
+    const linked = await write(
+      `courses/${course.id}/programs`,
+      { programIds: [program.id], revision: 1 },
+      'patch',
+    );
+    expect(linked.status).toBe(200);
+    expect(linked.body.item.programs).toEqual([expect.objectContaining({ id: program.id })]);
+    expect(
+      (await write(`courses/${course.id}/programs`, { programIds: [], revision: 1 }, 'patch')).body
+        .code,
+    ).toBe('STALE_REVISION');
+    expect(
+      (
+        await write(
+          `courses/${course.id}/programs`,
+          { programIds: [program.id, '9223372036854775807'], revision: 2 },
+          'patch',
+        )
+      ).status,
+    ).toBe(404);
+    const unchanged = await admin.get(`/api/v1/admin/catalog/courses/${course.id}`).expect(200);
+    expect(unchanged.body.item).toMatchObject({
+      revision: 2,
+      programs: [expect.objectContaining({ id: program.id })],
+    });
+    expect(
+      (
+        await write(
+          `programs/${program.id}`,
+          { code: program.code, name: program.name, active: false, revision: 1 },
+          'patch',
+        )
+      ).status,
+    ).toBe(200);
+    // Historical inactive links may remain or be explicitly removed.
+    expect(
+      (
+        await write(
+          `courses/${course.id}/programs`,
+          { programIds: [program.id], revision: 2 },
+          'patch',
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await write(`courses/${course.id}/programs`, { programIds: [], revision: 3 }, 'patch'))
+        .status,
+    ).toBe(200);
+    expect(
+      (
+        await write(
+          `courses/${course.id}/programs`,
+          { programIds: [program.id], revision: 4 },
+          'patch',
+        )
+      ).body.code,
+    ).toBe('INACTIVE_PROGRAM');
+    expect(
+      (
+        await write(
+          `courses/${course.id}/programs`,
+          { programIds: [program.id, program.id], revision: 4 },
+          'patch',
+        )
+      ).status,
+    ).toBe(400);
+    const stopped = await write(
+      `courses/${course.id}`,
+      { code: course.code, name: course.name, active: false, revision: 4 },
+      'patch',
+    );
+    expect(stopped.status).toBe(200);
   });
   it('rolls back the catalog mutation when audit cannot be written', async () => {
     const spy = jest

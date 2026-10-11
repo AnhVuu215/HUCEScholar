@@ -1,6 +1,73 @@
 import { expect, test } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 
+test('admin creates a course and links/unlinks a program from another faculty', async ({
+  page,
+}) => {
+  const code = `CRS-${randomBytes(5).toString('hex').toUpperCase()}`;
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: true }).fill('e2e-admin@example.test');
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  await expect(page).toHaveURL('/workspace/admin');
+  const csrf = await (await page.request.get('/api/v1/auth/csrf')).json();
+  const headers = { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf.csrfToken };
+  const a = await (
+    await page.request.post('/api/v1/admin/catalog/faculties', {
+      headers,
+      data: { code: `${code}-A`, name: 'Khoa phụ trách môn' },
+    })
+  ).json();
+  const b = await (
+    await page.request.post('/api/v1/admin/catalog/faculties', {
+      headers,
+      data: { code: `${code}-B`, name: 'Khoa sử dụng môn' },
+    })
+  ).json();
+  await page.request.post('/api/v1/admin/catalog/programs', {
+    headers,
+    data: { code, name: 'Ngành dùng chung', facultyId: b.item.id },
+  });
+  await page.goto('/workspace/admin/catalog/courses');
+  await page.getByRole('button', { name: 'Thêm môn học', exact: true }).click();
+  await page.getByLabel('Tìm khoa phụ trách', { exact: true }).fill(a.item.code);
+  await expect(
+    page
+      .getByLabel('Khoa phụ trách', { exact: true })
+      .getByRole('option', { name: `${a.item.code} · Khoa phụ trách môn`, exact: true }),
+  ).toBeAttached();
+  await page.getByLabel('Khoa phụ trách', { exact: true }).selectOption(a.item.id);
+  await page.getByLabel('Mã môn học', { exact: true }).fill(code);
+  await page.getByLabel('Tên môn học', { exact: true }).fill('Môn dùng chung');
+  await page.getByRole('button', { name: 'Lưu danh mục', exact: true }).click();
+  await expect(
+    page.getByRole('main').getByRole('status').filter({ hasText: 'Đã lưu môn học' }),
+  ).toBeVisible();
+  await page.getByLabel('Tìm môn học', { exact: true }).fill(code);
+  await page.getByRole('button', { name: 'Áp dụng', exact: true }).click();
+  await page.getByRole('button', { name: `Ngành sử dụng ${code}`, exact: true }).click();
+  await page.getByLabel('Tìm ngành sử dụng', { exact: true }).fill(code);
+  await expect(
+    page
+      .getByLabel('Ngành sử dụng', { exact: true })
+      .getByRole('option', { name: `${code} · Ngành dùng chung`, exact: true }),
+  ).toBeAttached();
+  await page
+    .getByLabel('Ngành sử dụng', { exact: true })
+    .selectOption({ label: `${code} · Ngành dùng chung` });
+  await page.getByRole('button', { name: 'Thêm vào danh sách', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu liên kết', exact: true }).click();
+  await expect(
+    page.getByRole('main').getByRole('status').filter({ hasText: 'Đã lưu các ngành' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: `Ngành sử dụng ${code}`, exact: true }).click();
+  await page.getByRole('button', { name: `Gỡ ${code} · Ngành dùng chung`, exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu liên kết', exact: true }).click();
+  await expect(
+    page.getByRole('main').getByRole('status').filter({ hasText: 'Đã lưu các ngành' }),
+  ).toBeVisible();
+});
+
 test('admin creates a program under a searched faculty and preserves a stale draft', async ({
   page,
 }) => {

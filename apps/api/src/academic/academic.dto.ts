@@ -10,6 +10,9 @@ import {
   MaxLength,
   Min,
   MinLength,
+  IsArray,
+  ArrayMaxSize,
+  ArrayUnique,
 } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
@@ -26,6 +29,15 @@ export class CreateCatalogDto extends CatalogFieldsDto {
 }
 export class UpdateCatalogDto extends CatalogFieldsDto {
   @IsBoolean() active!: boolean;
+  @IsInt() @Min(1) @Max(2147483646) revision!: number;
+}
+export class CourseProgramsDto {
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @Matches(/^[1-9]\d{0,18}$/, { each: true })
+  programIds!: string[];
   @IsInt() @Min(1) @Max(2147483646) revision!: number;
 }
 export class ListCatalogDto {

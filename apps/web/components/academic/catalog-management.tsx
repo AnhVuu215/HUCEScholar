@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { ApiError } from '../../lib/auth';
 import { CatalogPicker, type CatalogChoice } from './catalog-picker';
+import { CoursePrograms } from './course-programs';
 import {
   academicError,
   academicWrite,
@@ -22,7 +23,7 @@ export function CatalogManagement({ kind }: { kind: CatalogKind }) {
   const [data, setData] = useState<CatalogList | null>(null);
   const [loadError, setLoadError] = useState('');
   const [attempt, setAttempt] = useState(0);
-  const [editor, setEditor] = useState<{ item?: CatalogItem } | null>(null);
+  const [editor, setEditor] = useState<{ item?: CatalogItem; programs?: boolean } | null>(null);
   const [notice, setNotice] = useState('');
   const createButton = useRef<HTMLButtonElement>(null);
   const label = catalogLabels[kind].toLowerCase();
@@ -89,7 +90,17 @@ export function CatalogManagement({ kind }: { kind: CatalogKind }) {
       <p role="status" className={notice ? 'user-success' : 'sr-only'}>
         {notice}
       </p>
-      {editor && (
+      {editor?.programs && editor.item && (
+        <CoursePrograms
+          course={editor.item}
+          onClose={close}
+          onSaved={() => {
+            setNotice('Đã lưu các ngành sử dụng môn.');
+            reload();
+          }}
+        />
+      )}
+      {editor && !editor.programs && (
         <CatalogForm
           key={editor.item?.id ?? 'new'}
           kind={kind}
@@ -195,6 +206,19 @@ export function CatalogManagement({ kind }: { kind: CatalogKind }) {
                         >
                           Sửa
                         </button>
+                        {kind === 'courses' && (
+                          <button
+                            className="text-button"
+                            disabled={!!editor}
+                            aria-label={`Ngành sử dụng ${item.code}`}
+                            onClick={() => {
+                              setNotice('');
+                              setEditor({ item, programs: true });
+                            }}
+                          >
+                            Ngành sử dụng
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

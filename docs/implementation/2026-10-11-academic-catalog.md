@@ -9,3 +9,7 @@ Danh mục local bắt đầu rỗng; dữ liệu kiểm thử chỉ ở databas
 ## Ngành
 
 API cùng mẫu tại `/admin/catalog/programs`, thêm facultyId bắt buộc khi tạo và bộ lọc facultyId. Khoa được giữ cố định sau khi tạo. Tạo/kích hoạt ngành yêu cầu khoa hoạt động; ngừng ngành vẫn giữ liên kết lịch sử. Migration `202610110004_program_revision` thêm revision dương. Picker khoa tìm theo mã/tên, phân trang 20, có retry, không cắt danh sách ở 100 bản ghi. UI `/workspace/admin/catalog/programs`. Kiểm thử bổ sung chặn ngừng khoa có con, không ghi audit/revision khi thất bại, rollback khi audit lỗi và giữ draft khi 409.
+
+## Môn và ngành sử dụng
+
+API cùng mẫu `/admin/catalog/courses`; revision kế thừa baseline. GET `/:id` trả thêm programs trong cùng snapshot. PATCH `/courses/:id/programs` thay tập ngành với revision và tối đa 100 liên kết/môn trong MVP. Hỗ trợ khác khoa. Thêm mới yêu cầu môn/ngành/khoa hoạt động; liên kết lịch sử với ngành đã ngừng có thể giữ/gỡ, không tự xóa. Toàn bộ liên kết/revision/audit cập nhật atomic. Ngừng môn bị chặn nếu còn phân công hiện hành. UI `/workspace/admin/catalog/courses` có form riêng để tìm/chọn/gỡ ngành, thay đổi chỉ ghi khi bấm Lưu liên kết.

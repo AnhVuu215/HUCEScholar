@@ -1,6 +1,6 @@
 import { ApiError, apiRequest, csrfToken } from './auth';
 
-export const catalogLabels = { faculties: 'Khoa', programs: 'Ngành' } as const;
+export const catalogLabels = { faculties: 'Khoa', programs: 'Ngành', courses: 'Môn học' } as const;
 export type CatalogKind = keyof typeof catalogLabels;
 export interface CatalogItem {
   id: string;
@@ -10,6 +10,7 @@ export interface CatalogItem {
   revision: number;
   facultyId?: string;
   facultyName?: string;
+  programs?: CatalogItem[];
 }
 export interface CatalogList {
   items: CatalogItem[];
@@ -67,6 +68,20 @@ export async function academicWrite(path: string, body: object, method = 'POST')
     body: JSON.stringify(body),
   });
 }
+export async function currentCatalog(kind: CatalogKind, id: string, signal?: AbortSignal) {
+  const body: unknown = await (await apiRequest(`/admin/catalog/${kind}/${id}`, { signal })).json();
+  if (body && typeof body === 'object' && 'item' in body && isCatalogItem(body.item)) {
+    if (
+      kind === 'courses' &&
+      (!('programs' in body.item) ||
+        !Array.isArray(body.item.programs) ||
+        !body.item.programs.every(isCatalogItem))
+    )
+      throw new Error('Invalid course programs.');
+    return body.item;
+  }
+  throw new Error('Invalid catalog item.');
+}
 export function academicError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 401) {
@@ -83,6 +98,12 @@ export function academicError(error: unknown): string {
         'Khoa còn ngành hoặc môn hoạt động. Ngừng các danh mục đó trước khi ngừng khoa.',
       INACTIVE_FACULTY:
         'Khoa phụ trách đã ngừng sử dụng. Chọn khoa đang hoạt động hoặc kích hoạt lại khoa trước.',
+      INACTIVE_PROGRAM:
+        'Ngành đã ngừng sử dụng. Chọn ngành đang hoạt động; liên kết cũ có thể giữ lại hoặc gỡ.',
+      INACTIVE_COURSE:
+        'Môn đã ngừng sử dụng. Kích hoạt lại môn trước khi thêm liên kết hoặc phân công.',
+      ACTIVE_ASSIGNMENTS:
+        'Môn còn phân công giảng viên hiện hành. Thu hồi các phân công đó trước khi ngừng môn.',
     };
     if (error.code && codes[error.code]) return codes[error.code];
     if (error.status === 400)

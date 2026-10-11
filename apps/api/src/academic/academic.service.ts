@@ -7,12 +7,18 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
-import { CreateCatalogDto, ListCatalogDto, UpdateCatalogDto } from './academic.dto';
+import {
+  CreateCatalogDto,
+  ListCatalogDto,
+  UpdateCatalogDto,
+  CourseProgramsDto,
+} from './academic.dto';
 
 // Identifiers below are static application constants, never interpolated request values.
 const resources = {
   faculties: { table: 'hucescholar.faculties', entity: 'FACULTY' },
   programs: { table: 'hucescholar.programs', entity: 'PROGRAM' },
+  courses: { table: 'hucescholar.courses', entity: 'COURSE' },
 } as const;
 export type CatalogKind = keyof typeof resources;
 export type CatalogItem = {
@@ -99,7 +105,16 @@ export class AcademicService {
   }
   async get(rawKind: string, rawId: string) {
     const kind = catalogKind(rawKind);
-    return { item: await this.read(this.db, kind, academicId(rawId)) };
+    const id = academicId(rawId);
+    return this.db.$transaction(
+      async (tx) => ({
+        item: {
+          ...(await this.read(tx, kind, id)),
+          ...(kind === 'courses' ? { programs: await this.linkedPrograms(tx, id) } : {}),
+        },
+      }),
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
   private async read(tx: Prisma.TransactionClient, kind: CatalogKind, id: bigint, lock = false) {
     const rows = await tx.$queryRaw<CatalogItem[]>(
@@ -170,6 +185,15 @@ export class AcademicService {
               message: 'Ngừng ngành và môn thuộc khoa trước.',
             });
         }
+        if (
+          kind === 'courses' &&
+          !body.active &&
+          (await tx.lecturer_assignments.count({ where: { course_id: id, revoked_at: null } }))
+        )
+          throw new ConflictException({
+            code: 'ACTIVE_ASSIGNMENTS',
+            message: 'Thu hồi phân công hiện hành trước khi ngừng môn.',
+          });
         const rows = await tx.$queryRaw<CatalogItem[]>(
           Prisma.sql`UPDATE ${Prisma.raw(resources[kind].table)} SET code=${body.code}, name=${body.name}, is_active=${body.active}, revision=revision+1 WHERE id=${id} RETURNING ${columns(kind)}`,
         );
@@ -193,5 +217,55 @@ export class AcademicService {
     if (!parent) throw new NotFoundException('Không tìm thấy khoa.');
     if (!parent.is_active)
       throw new ConflictException({ code: 'INACTIVE_FACULTY', message: 'Khoa đã ngừng sử dụng.' });
+  }
+  private async linkedPrograms(tx: Prisma.TransactionClient, courseId: bigint) {
+    return tx.$queryRaw<
+      CatalogItem[]
+    >`SELECT p.id::text, p.code, p.name, p.is_active AS active, p.revision, p.faculty_id::text AS "facultyId" FROM hucescholar.programs p JOIN hucescholar.program_courses pc ON pc.program_id=p.id WHERE pc.course_id=${courseId} ORDER BY p.code,p.id`;
+  }
+  async setPrograms(actor: string, rawId: string, body: CourseProgramsDto) {
+    const id = academicId(rawId);
+    const wanted = body.programIds.map(academicId);
+    return this.db.$transaction(async (tx) => {
+      const actorId = await this.beginWrite(tx, actor);
+      const course = await this.read(tx, 'courses', id, true);
+      if (course.revision !== body.revision) throw staleCatalog();
+      const existing = await tx.program_courses.findMany({ where: { course_id: id } });
+      const additions = wanted.filter(
+        (programId) => !existing.some((link) => link.program_id === programId),
+      );
+      if (additions.length) {
+        if (!course.active)
+          throw new ConflictException({
+            code: 'INACTIVE_COURSE',
+            message: 'Môn đã ngừng sử dụng.',
+          });
+        await this.activeFaculty(tx, BigInt(course.facultyId!));
+        for (const programId of additions) {
+          const program = await this.read(tx, 'programs', programId, true);
+          if (!program.active)
+            throw new ConflictException({
+              code: 'INACTIVE_PROGRAM',
+              message: 'Ngành đã ngừng sử dụng.',
+            });
+          await this.activeFaculty(tx, BigInt(program.facultyId!));
+        }
+      }
+      await tx.program_courses.deleteMany({
+        where: { course_id: id, program_id: { notIn: wanted } },
+      });
+      if (additions.length)
+        await tx.program_courses.createMany({
+          data: additions.map((programId) => ({ course_id: id, program_id: programId })),
+        });
+      await tx.courses.update({ where: { id }, data: { revision: { increment: 1 } } });
+      await this.audit(tx, actorId, 'COURSE', id, 'COURSE_PROGRAMS_UPDATED');
+      return {
+        item: {
+          ...(await this.read(tx, 'courses', id)),
+          programs: await this.linkedPrograms(tx, id),
+        },
+      };
+    });
   }
 }
