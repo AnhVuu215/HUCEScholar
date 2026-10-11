@@ -104,6 +104,8 @@ Triển khai migration `202610110003_faculty_revision` bổ sung `revision integ
 
 Ngành hoặc chương trình thuộc một khoa.
 
+Triển khai migration `202610110004_program_revision` bổ sung revision dương, mặc định 1; API tăng mỗi lần sửa để phát hiện cập nhật đồng thời.
+
 | Trường | Kiểu | Khóa | Null | Ý nghĩa |
 |---|---|---|---|---|
 | id | bigint | PK | Không | Khóa chính do database cấp |

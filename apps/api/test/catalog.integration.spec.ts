@@ -8,6 +8,7 @@ import Redis from 'ioredis';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApplication } from '../src/configure-application';
+import { AcademicService } from '../src/academic/academic.service';
 
 type Browser = ReturnType<typeof request.agent>;
 const origin = 'http://127.0.0.1:3100';
@@ -59,6 +60,7 @@ describe('academic catalog', () => {
       await db.query('DELETE FROM hucescholar.audit_events WHERE actor_id=ANY($1::bigint[])', [
         ids,
       ]);
+      await db.query('DELETE FROM hucescholar.programs WHERE code LIKE $1', [`${prefix}%`]);
       await db.query('DELETE FROM hucescholar.faculties WHERE code LIKE $1', [`${prefix}%`]);
       await db.query('DELETE FROM hucescholar.auth_sessions WHERE user_id=ANY($1::bigint[])', [
         ids,
@@ -150,6 +152,104 @@ describe('academic catalog', () => {
     await admin.get('/api/v1/admin/catalog/faculties/9223372036854775808').expect(400);
     await admin.get('/api/v1/admin/catalog/faculties?page=0').expect(400);
     await admin.get('/api/v1/admin/catalog/unknown').expect(400);
+  });
+  it('requires an active faculty for programs and blocks parent deactivation atomically', async () => {
+    const parent = await faculty('PARENT');
+    const result = await write('programs', {
+      code: `${prefix}-PRG`,
+      name: 'Ngành kiểm thử',
+      facultyId: parent.id,
+    });
+    expect(result.status).toBe(201);
+    const item = result.body.item;
+    expect(item).toMatchObject({ facultyId: parent.id, revision: 1 });
+    expect(
+      (await write(`faculties/${parent.id}`, { ...parent, id: undefined, active: false }, 'patch'))
+        .body.code,
+    ).toBe('ACTIVE_CHILDREN');
+    expect(
+      (await admin.get(`/api/v1/admin/catalog/faculties/${parent.id}`)).body.item.revision,
+    ).toBe(1);
+    expect(
+      (
+        await db.query(
+          "SELECT count(*)::int n FROM hucescholar.audit_events WHERE actor_id=$1 AND entity_id=$2 AND event_type='FACULTY_UPDATED'",
+          [ids[0], parent.id],
+        )
+      ).rows[0].n,
+    ).toBe(0);
+    expect(
+      (await write('programs', { code: `${prefix}-MISSING`, name: 'Thiếu khoa' })).status,
+    ).toBe(400);
+    expect(
+      (
+        await write(
+          `programs/${item.id}`,
+          { code: item.code, name: item.name, active: false, revision: 1, facultyId: parent.id },
+          'patch',
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await write(
+          `programs/${item.id}`,
+          { code: item.code, name: item.name, active: false, revision: 1 },
+          'patch',
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await write(
+          `faculties/${parent.id}`,
+          { code: parent.code, name: parent.name, active: false, revision: 1 },
+          'patch',
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await write('programs', {
+          code: `${prefix}-INACTIVE`,
+          name: 'Khoa ngừng',
+          facultyId: parent.id,
+        })
+      ).body.code,
+    ).toBe('INACTIVE_FACULTY');
+    expect(
+      (
+        await write(
+          `programs/${item.id}`,
+          { code: item.code, name: item.name, active: true, revision: 2 },
+          'patch',
+        )
+      ).body.code,
+    ).toBe('INACTIVE_FACULTY');
+    const list = await admin
+      .get(`/api/v1/admin/catalog/programs?facultyId=${parent.id}`)
+      .expect(200);
+    expect(list.body.items).toHaveLength(1);
+  });
+  it('rolls back the catalog mutation when audit cannot be written', async () => {
+    const spy = jest
+      .spyOn(app.get(AcademicService), 'audit')
+      .mockRejectedValueOnce(new Error('Simulated audit outage'));
+    try {
+      expect(
+        (await write('faculties', { code: `${prefix}-ROLLBACK`, name: 'Không lưu thiếu audit' }))
+          .status,
+      ).toBe(500);
+      expect(
+        (
+          await db.query('SELECT count(*)::int n FROM hucescholar.faculties WHERE code=$1', [
+            `${prefix}-ROLLBACK`,
+          ])
+        ).rows[0].n,
+      ).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
   it('updates with revision, prevents concurrent overwrite and filters with pagination', async () => {
     const item = await faculty('EDIT');

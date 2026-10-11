@@ -21,12 +21,15 @@ export class CatalogFieldsDto {
   @Transform(code) @IsString() @MaxLength(30) @Matches(/^[A-Z0-9][A-Z0-9._-]*$/) code!: string;
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(200) name!: string;
 }
-export class CreateCatalogDto extends CatalogFieldsDto {}
+export class CreateCatalogDto extends CatalogFieldsDto {
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,18}$/) facultyId?: string;
+}
 export class UpdateCatalogDto extends CatalogFieldsDto {
   @IsBoolean() active!: boolean;
   @IsInt() @Min(1) @Max(2147483646) revision!: number;
 }
 export class ListCatalogDto {
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,18}$/) facultyId?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(200) search?: string;
   @IsOptional() @IsIn(['ACTIVE', 'INACTIVE']) status?: string;
   @Transform(integer) @IsInt() @Min(1) @Max(100000) page = 1;

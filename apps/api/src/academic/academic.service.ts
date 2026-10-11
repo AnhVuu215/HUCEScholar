@@ -10,7 +10,10 @@ import { Prisma } from '../generated/prisma/client';
 import { CreateCatalogDto, ListCatalogDto, UpdateCatalogDto } from './academic.dto';
 
 // Identifiers below are static application constants, never interpolated request values.
-const resources = { faculties: { table: 'hucescholar.faculties', entity: 'FACULTY' } } as const;
+const resources = {
+  faculties: { table: 'hucescholar.faculties', entity: 'FACULTY' },
+  programs: { table: 'hucescholar.programs', entity: 'PROGRAM' },
+} as const;
 export type CatalogKind = keyof typeof resources;
 export type CatalogItem = {
   id: string;
@@ -18,6 +21,8 @@ export type CatalogItem = {
   name: string;
   active: boolean;
   revision: number;
+  facultyId?: string;
+  facultyName?: string;
 };
 export function academicId(value: string): bigint {
   if (!/^[1-9]\d{0,18}$/.test(value) || BigInt(value) > 9223372036854775807n)
@@ -29,7 +34,9 @@ export function catalogKind(value: string): CatalogKind {
     throw new BadRequestException('Loại danh mục không hợp lệ.');
   return value as CatalogKind;
 }
-const columns = Prisma.sql`id::text, code, name, is_active AS active, revision`;
+function columns(kind: CatalogKind) {
+  return Prisma.sql`id::text, code, name, is_active AS active, revision ${kind !== 'faculties' ? Prisma.sql`, faculty_id::text AS "facultyId", (SELECT code || ' · ' || name FROM hucescholar.faculties WHERE id=faculty_id) AS "facultyName"` : Prisma.empty}`;
+}
 export const staleCatalog = () =>
   new ConflictException({
     code: 'STALE_REVISION',
@@ -67,6 +74,10 @@ export class AcademicService {
     const kind = catalogKind(rawKind);
     const table = Prisma.raw(resources[kind].table);
     const predicates: Prisma.Sql[] = [Prisma.sql`true`];
+    if (query.facultyId) {
+      if (kind === 'faculties') throw new BadRequestException('Khoa không có khoa cha.');
+      predicates.push(Prisma.sql`faculty_id=${academicId(query.facultyId)}`);
+    }
     if (query.search)
       predicates.push(
         Prisma.sql`(strpos(lower(code),lower(${query.search})) > 0 OR strpos(lower(name),lower(${query.search})) > 0)`,
@@ -76,7 +87,7 @@ export class AcademicService {
     const [items, count] = await this.db.$transaction(
       [
         this.db.$queryRaw<CatalogItem[]>(
-          Prisma.sql`SELECT ${columns} FROM ${table} WHERE ${where} ORDER BY code,id LIMIT ${query.limit} OFFSET ${(query.page - 1) * query.limit}`,
+          Prisma.sql`SELECT ${columns(kind)} FROM ${table} WHERE ${where} ORDER BY code,id LIMIT ${query.limit} OFFSET ${(query.page - 1) * query.limit}`,
         ),
         this.db.$queryRaw<{ total: number }[]>(
           Prisma.sql`SELECT count(*)::int AS total FROM ${table} WHERE ${where}`,
@@ -92,7 +103,7 @@ export class AcademicService {
   }
   private async read(tx: Prisma.TransactionClient, kind: CatalogKind, id: bigint, lock = false) {
     const rows = await tx.$queryRaw<CatalogItem[]>(
-      Prisma.sql`SELECT ${columns} FROM ${Prisma.raw(resources[kind].table)} WHERE id=${id} ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`,
+      Prisma.sql`SELECT ${columns(kind)} FROM ${Prisma.raw(resources[kind].table)} WHERE id=${id} ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`,
     );
     if (!rows[0]) throw new NotFoundException('Không tìm thấy danh mục.');
     return rows[0];
@@ -116,11 +127,14 @@ export class AcademicService {
   }
   async create(actor: string, rawKind: string, body: CreateCatalogDto) {
     const kind = catalogKind(rawKind);
+    if ((kind === 'faculties') === !!body.facultyId)
+      throw new BadRequestException('Kiểm tra khoa phụ trách.');
     try {
       const item = await this.db.$transaction(async (tx) => {
         const actorId = await this.beginWrite(tx, actor);
+        if (body.facultyId) await this.activeFaculty(tx, academicId(body.facultyId));
         const rows = await tx.$queryRaw<CatalogItem[]>(
-          Prisma.sql`INSERT INTO ${Prisma.raw(resources[kind].table)} (code,name) VALUES (${body.code},${body.name}) RETURNING ${columns}`,
+          Prisma.sql`INSERT INTO ${Prisma.raw(resources[kind].table)} (code,name ${body.facultyId ? Prisma.sql`,faculty_id` : Prisma.empty}) VALUES (${body.code},${body.name} ${body.facultyId ? Prisma.sql`,${academicId(body.facultyId)}` : Prisma.empty}) RETURNING ${columns(kind)}`,
         );
         await this.audit(
           tx,
@@ -144,7 +158,9 @@ export class AcademicService {
         const actorId = await this.beginWrite(tx, actor);
         const current = await this.read(tx, kind, id, true);
         if (current.revision !== body.revision) throw staleCatalog();
-        if (!body.active) {
+        if (kind !== 'faculties' && body.active)
+          await this.activeFaculty(tx, BigInt(current.facultyId!));
+        if (kind === 'faculties' && !body.active) {
           const children = await tx.$queryRaw<
             { n: number }[]
           >`SELECT ((SELECT count(*) FROM hucescholar.programs WHERE faculty_id=${id} AND is_active) + (SELECT count(*) FROM hucescholar.courses WHERE faculty_id=${id} AND is_active))::int AS n`;
@@ -155,7 +171,7 @@ export class AcademicService {
             });
         }
         const rows = await tx.$queryRaw<CatalogItem[]>(
-          Prisma.sql`UPDATE ${Prisma.raw(resources[kind].table)} SET code=${body.code}, name=${body.name}, is_active=${body.active}, revision=revision+1 WHERE id=${id} RETURNING ${columns}`,
+          Prisma.sql`UPDATE ${Prisma.raw(resources[kind].table)} SET code=${body.code}, name=${body.name}, is_active=${body.active}, revision=revision+1 WHERE id=${id} RETURNING ${columns(kind)}`,
         );
         await this.audit(
           tx,
@@ -170,5 +186,12 @@ export class AcademicService {
     } catch (error) {
       this.duplicate(error);
     }
+  }
+  async activeFaculty(tx: Prisma.TransactionClient, id: bigint) {
+    await tx.$queryRaw`SELECT id FROM hucescholar.faculties WHERE id=${id} FOR SHARE`;
+    const parent = await tx.faculties.findUnique({ where: { id }, select: { is_active: true } });
+    if (!parent) throw new NotFoundException('Không tìm thấy khoa.');
+    if (!parent.is_active)
+      throw new ConflictException({ code: 'INACTIVE_FACULTY', message: 'Khoa đã ngừng sử dụng.' });
   }
 }

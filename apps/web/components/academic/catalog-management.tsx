@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { ApiError } from '../../lib/auth';
+import { CatalogPicker, type CatalogChoice } from './catalog-picker';
 import {
   academicError,
   academicWrite,
@@ -173,6 +174,7 @@ export function CatalogManagement({ kind }: { kind: CatalogKind }) {
                       <td className="user-identity">
                         <strong>{item.name}</strong>
                         <span>{item.code}</span>
+                        {item.facultyName && <span>Khoa: {item.facultyName}</span>}
                       </td>
                       <td>
                         <span
@@ -238,6 +240,7 @@ function CatalogForm({
   const [code, setCode] = useState(item?.code ?? '');
   const [name, setName] = useState(item?.name ?? '');
   const [active, setActive] = useState(item?.active ?? true);
+  const [faculty, setFaculty] = useState<CatalogChoice | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [stale, setStale] = useState(false);
@@ -254,7 +257,15 @@ function CatalogForm({
     try {
       const response = await academicWrite(
         `/admin/catalog/${kind}${item ? `/${item.id}` : ''}`,
-        { code, name, ...(item ? { active, revision: item.revision } : {}) },
+        {
+          code,
+          name,
+          ...(item
+            ? { active, revision: item.revision }
+            : kind !== 'faculties'
+              ? { facultyId: faculty?.id }
+              : {}),
+        },
         item ? 'PATCH' : 'POST',
       );
       const result: unknown = await response.json();
@@ -287,6 +298,20 @@ function CatalogForm({
           </p>
         )}
         <fieldset disabled={pending} className="user-fields">
+          <legend className="sr-only">Thông tin danh mục</legend>
+          {kind !== 'faculties' &&
+            (item ? (
+              <p className="field-hint">
+                Khoa phụ trách: {item.facultyName}. Khoa được giữ cố định sau khi tạo.
+              </p>
+            ) : (
+              <CatalogPicker
+                kind="faculties"
+                label="Khoa phụ trách"
+                value={faculty}
+                onChange={setFaculty}
+              />
+            ))}
           <div className="form-field">
             <label htmlFor="catalog-code">Mã {label}</label>
             <input

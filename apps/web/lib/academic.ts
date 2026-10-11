@@ -1,6 +1,6 @@
 import { ApiError, apiRequest, csrfToken } from './auth';
 
-export const catalogLabels = { faculties: 'Khoa' } as const;
+export const catalogLabels = { faculties: 'Khoa', programs: 'Ngành' } as const;
 export type CatalogKind = keyof typeof catalogLabels;
 export interface CatalogItem {
   id: string;
@@ -8,6 +8,8 @@ export interface CatalogItem {
   name: string;
   active: boolean;
   revision: number;
+  facultyId?: string;
+  facultyName?: string;
 }
 export interface CatalogList {
   items: CatalogItem[];
@@ -79,6 +81,8 @@ export function academicError(error: unknown): string {
         'Dữ liệu đã thay đổi. Bản sửa của bạn được giữ lại. Bỏ bản sửa và tải lại để dùng thông tin hiện hành.',
       ACTIVE_CHILDREN:
         'Khoa còn ngành hoặc môn hoạt động. Ngừng các danh mục đó trước khi ngừng khoa.',
+      INACTIVE_FACULTY:
+        'Khoa phụ trách đã ngừng sử dụng. Chọn khoa đang hoạt động hoặc kích hoạt lại khoa trước.',
     };
     if (error.code && codes[error.code]) return codes[error.code];
     if (error.status === 400)
