@@ -2,7 +2,7 @@
 
 Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hướng web responsive + PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên. Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường.
 
-Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo, tìm và sửa metadata bản nháp riêng. Giao diện dùng trên desktop, điện thoại và tablet. **Chưa có PDF thật, upload, công bố, reader hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
+Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF vào kho riêng tư và xem kết quả kiểm tra nền. Giao diện dùng trên desktop, điện thoại và tablet. **Chưa có học liệu được cấp quyền thật, gửi duyệt, công bố, reader hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
 
 ## Tài liệu
 
@@ -12,6 +12,7 @@ Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hư�
 - [Quản lý tài khoản và giới hạn hiện tại](docs/implementation/2026-10-11-account-management.md)
 - [Danh mục đào tạo và phân công](docs/implementation/2026-10-11-academic-catalog.md)
 - [Bản nháp học liệu](docs/implementation/2026-10-11-material-drafts.md)
+- [Upload PDF riêng tư, worker và cách chạy](docs/implementation/2026-10-11-private-pdf-upload.md)
 - [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)
 - [Prototype thiết kế](design/wireframe/README.md)
 - [Proposal, use case và tài liệu bàn giao](docs/deliverables/)
@@ -62,7 +63,9 @@ Tại `/workspace/admin/assignments`, chọn giảng viên hoạt động/đã x
 
 Giảng viên mở `/workspace/lecturer/materials`, sinh viên mở `/workspace/student/materials` hoặc chọn **Học liệu của tôi**. Tạo bản nháp, nhập tiêu đề/loại/nguồn/căn cứ quyền, thêm 1–20 môn rồi lưu. Tác giả/mô tả có thể để trống. Bản sinh viên mang loại riêng, không sửa giáo trình giảng viên; Admin không biên soạn ở luồng này.
 
-Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. **Chưa có upload PDF, gửi duyệt hoặc đọc/tải**; lựa chọn cho phép tải chỉ là đề nghị cho bước công bố sau này.
+Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. Bản đã lưu có thể gắn/thay PDF tối đa 25 MiB, xem CHECKING/SAFE/FAILED bằng **Cập nhật trạng thái**. SAFE chỉ là kết quả kỹ thuật. **Chưa có gửi duyệt hoặc đọc/tải**; lựa chọn cho phép tải chỉ là đề nghị cho bước công bố sau này.
+
+Để chạy kiểm tra file local, bật profile Docker riêng: `docker compose --env-file infra/.env -f infra/compose.yaml --profile files up -d --build clamav file-worker`. API và worker dùng chung `.local/files` ngoài webroot. Production yêu cầu S3 private; chưa tạo dịch vụ cloud. Hướng dẫn, giới hạn và bằng chứng quét thật ở tài liệu upload phía trên.
 
 ## Kiểm tra
 
@@ -104,18 +107,18 @@ CI dùng PostgreSQL/Redis ephemeral trên runner và chạy format, lint, typech
 
 ## Lộ trình còn lại
 
-1. Upload PDF riêng tư, kiểm tra file, gửi/rút và kiểm duyệt học liệu; nối vào bản nháp đã có.
+1. Gửi/rút, kiểm duyệt và công bố học liệu; nối với bản nháp/PDF đã kiểm tra.
 2. PDF reader, ghi chú riêng theo phiên bản, tiến độ đọc.
 3. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
 
 Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
 
 ```text
-apps/web/       Next.js App Router, login, tài khoản, danh mục và phân công
-apps/api/       NestJS, Prisma, auth/CSRF/session/role guards, Users/Academic modules
+apps/web/       Next.js App Router, login, tài khoản, danh mục, phân công và bản nháp/PDF
+apps/api/       NestJS, Prisma, auth guards, Users/Academic/Materials và PDF worker
 scripts/        Cấu hình local và database/test fixture riêng
 apps/api/prisma SQL migrations và mapping 23 model
-infra/          PostgreSQL/Redis local
+infra/          PostgreSQL/Redis local và profile ClamAV/Poppler worker
 tests/          Hành trình Playwright (không ghi credential vào trace)
 design/         Prototype được giữ riêng
 docs/           Proposal, use case, schema và nhật ký triển khai
