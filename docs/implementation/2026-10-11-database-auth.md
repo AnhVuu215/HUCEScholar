@@ -4,7 +4,7 @@ Ngày: 11/10/2026. Phạm vi: PostgreSQL/Prisma, đăng nhập/đăng xuất b�
 
 ## Triển khai
 
-- Prisma 7.10.0 với adapter pg; đủ 23 model trong namespace `hucescholar`. Baseline migration sao chép nguyên văn SQL tham chiếu, SHA-256 `3F458C6C95B5A7A02234F7EB680216B7DC77B191B3AEF4DC0F100F9A9754419D`. Migration bookkeeping nằm ở `public`.
+- Prisma 7.10.0 với adapter pg; đủ 23 model trong namespace `hucescholar`. Baseline migration sao chép nguyên văn SQL tham chiếu; hai blob Git giống từng byte sau chuẩn hóa LF, SHA-256 `872fc46cf65f2f2c7bfbc97b0afc02069d8f6d25dfe3d06bd9b65cf1c2bf1ebe`. Migration bookkeeping nằm ở `public`.
 - Prisma không suy ra inverse duy nhất của FK `(documents.id,current_version_id)`. Mapping inverse dùng collection kèm chú thích; SQL/FK giữ nguyên. Không thêm unique dư thừa, không dùng `db push`; đọc lại schema bằng introspection cần giữ bản chỉnh mapping này.
 - Migration thứ hai thu hồi tất cả phiên còn hiệu lực khi `status`, `password_hash`, `role` hoặc `verified_at` thực sự thay đổi. Khôi phục trạng thái không làm sống lại phiên cũ.
 - Mật khẩu Argon2id (19 MiB, 2 lượt, parallelism 1). Token ngẫu nhiên 32 byte, chỉ lưu SHA-256 vào PostgreSQL, hết hạn sau 8 giờ, không gia hạn ngầm. ID bigint trả dưới dạng chuỗi JSON.
@@ -56,6 +56,8 @@ Kiểm chứng local bổ sung: tạo ADMIN đầu tiên vào app DB bằng CLI,
 Review lại phát hiện initial Redis failure có thể để retry timer sống sau bootstrap thất bại: đã thêm disconnect khi connect đầu thất bại và đóng Nest app để dọn pool/worker. Redis mất sau khi API đã sẵn sàng vẫn tiếp tục reconnect. Node 24 process probe với Redis không sẵn sàng đã thoát status 1 trong 10 giây, không bị timeout bởi pool/timer còn sống. Reviewer kiểm lại lifecycle không còn finding cụ thể. CI tại HEAD được kiểm tra sau push và theo dõi ở draft PR #1.
 
 Prisma generate cũng đạt khi bỏ DATABASE_URL khỏi môi trường và không tải `.env`, xác nhận sinh client không cần kết nối database. Build/dev runtime ứng dụng vẫn bắt buộc đủ cấu hình auth; không dùng credential mặc định để bỏ qua validation.
+
+Commit triển khai `1257c31` đã được đẩy lên [draft PR #1](https://github.com/AnhVuu215/HUCEScholar/pull/1). [GitHub Actions trên Linux/Node 24](https://github.com/AnhVuu215/HUCEScholar/actions/runs/38131781516) **success**, gồm tạo dịch vụ ephemeral, install/format/check, test setup, integration và browser. Không merge `main`. Trạng thái các commit tài liệu sau đó theo dõi trực tiếp tại PR; không coi CI của commit cũ là bằng chứng HEAD mới.
 
 ## Giới hạn và bước sau
 

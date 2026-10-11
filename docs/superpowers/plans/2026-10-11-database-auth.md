@@ -62,7 +62,7 @@
 - [x] Implement existing navy login composition and three truthful workspace shells. No fake materials, disabled dead navigation or simulated upload.
 - [x] Check loading/network/auth-expiry feedback and prevent credentials/private responses from entering caches, URLs, traces or screenshots.
 - [x] Run format/lint/typecheck/unit/integration/build/browser checks, inspect desktop/mobile/tablet once, then independent code/security and UI reviews.
-- [ ] Update README, API/implementation notes, bootstrap instructions and current milestone status; commit/push to current PR, update PR scope and verify GitHub CI. Local documentation is ready; GitHub verification follows push.
+- [x] Update README, API/implementation notes, bootstrap instructions and current milestone status; commit/push to current PR, update PR scope and verify GitHub CI. Implementation commit 1257c31 passed GitHub Actions; later documentation HEAD is checked separately.
 
 ## Execution ruling
 
