@@ -38,7 +38,7 @@ export function RoleWorkspace({
   children?: ReactNode;
   title?: string;
   description?: string;
-  activeSection?: 'users';
+  activeSection?: 'users' | 'catalog';
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -142,6 +142,14 @@ export function RoleWorkspace({
             </Link>
           )}
           <Link href="/">Tiến độ dự án</Link>
+          {state.kind === 'ready' && state.user.role === 'ADMIN' && (
+            <Link
+              href="/workspace/admin/catalog/faculties"
+              aria-current={activeSection === 'catalog' ? 'page' : undefined}
+            >
+              Danh mục đào tạo
+            </Link>
+          )}
         </nav>
         <p className="sidebar-note">
           Dự án độc lập đang phát triển. Chưa phải hệ thống chính thức của trường.

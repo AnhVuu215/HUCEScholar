@@ -90,6 +90,8 @@ Ràng buộc: `CHECK (expires_at > created_at)`; `CHECK (used_at IS NULL OR used
 
 Khoa hoặc đơn vị quản lý học phần.
 
+Triển khai migration `202610110003_faculty_revision` bổ sung `revision integer NOT NULL DEFAULT 1 CHECK (revision > 0)` để phát hiện cập nhật đồng thời. Mỗi lần sửa qua API tăng 1.
+
 | Trường | Kiểu | Khóa | Null | Ý nghĩa |
 |---|---|---|---|---|
 | id | bigint | PK | Không | Khóa chính do database cấp |
