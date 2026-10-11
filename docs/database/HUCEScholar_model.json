@@ -1,0 +1,1514 @@
+{
+  "tables": [
+    {
+      "name": "users",
+      "group": "Tài khoản",
+      "purpose": "Tài khoản nội bộ; một role chính cho MVP, chưa có SSO hoặc tự đăng ký.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "email",
+          "sql": "varchar(254) NOT NULL",
+          "meaning": "Lưu lowercase sau trim; định danh đăng nhập duy nhất"
+        },
+        {
+          "name": "display_name",
+          "sql": "varchar(150) NOT NULL CHECK (btrim(display_name) <> '')",
+          "meaning": "Tên hiển thị"
+        },
+        {
+          "name": "password_hash",
+          "sql": "text NOT NULL",
+          "meaning": "Hash mật khẩu; không lưu mật khẩu gốc"
+        },
+        {
+          "name": "role",
+          "sql": "varchar(12) NOT NULL CHECK (role IN ('ADMIN','LECTURER','STUDENT'))",
+          "meaning": "Role chính; thay role chỉ do admin"
+        },
+        {
+          "name": "status",
+          "sql": "varchar(12) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','ACTIVE','LOCKED'))",
+          "meaning": "Chỉ ACTIVE và đã xác minh mới sử dụng học liệu"
+        },
+        {
+          "name": "verified_at",
+          "sql": "timestamptz",
+          "meaning": "Admin xác minh thuộc nhóm người dùng hợp lệ"
+        },
+        {
+          "name": "verified_by",
+          "sql": "bigint REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Admin thực hiện xác minh; bootstrap admin đầu tiên có thể null"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        },
+        {
+          "name": "updated_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Ứng dụng cập nhật khi ghi thay đổi"
+        },
+        {
+          "name": "revision",
+          "sql": "integer NOT NULL DEFAULT 1 CHECK (revision > 0)",
+          "meaning": "Khóa kiểm soát cập nhật đồng thời; mỗi lần ghi tăng 1"
+        }
+      ],
+      "constraints": [
+        "UNIQUE (email)",
+        "CHECK (email = lower(btrim(email)) AND position('@' in email) > 1)",
+        "CHECK (status <> 'ACTIVE' OR verified_at IS NOT NULL)"
+      ]
+    },
+    {
+      "name": "auth_sessions",
+      "group": "Tài khoản",
+      "purpose": "Phiên web có thể thu hồi; có thể ánh xạ sang cơ chế session của framework.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "user_id",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Chủ phiên"
+        },
+        {
+          "name": "token_hash",
+          "sql": "varchar(128) NOT NULL UNIQUE",
+          "meaning": "Hash token ngẫu nhiên; không lưu cookie gốc"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        },
+        {
+          "name": "expires_at",
+          "sql": "timestamptz NOT NULL",
+          "meaning": "Hết hạn phiên"
+        },
+        {
+          "name": "revoked_at",
+          "sql": "timestamptz",
+          "meaning": "Thu hồi khi đăng xuất, khóa tài khoản hoặc reset mật khẩu"
+        }
+      ],
+      "constraints": [
+        "CHECK (expires_at > created_at)",
+        "CHECK (revoked_at IS NULL OR revoked_at >= created_at)"
+      ]
+    },
+    {
+      "name": "password_reset_tokens",
+      "group": "Tài khoản",
+      "purpose": "Token đặt lại mật khẩu một lần; không thay đổi trạng thái khóa tài khoản.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "user_id",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Tài khoản cần khôi phục"
+        },
+        {
+          "name": "token_hash",
+          "sql": "varchar(128) NOT NULL UNIQUE",
+          "meaning": "Hash token khôi phục"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        },
+        {
+          "name": "expires_at",
+          "sql": "timestamptz NOT NULL",
+          "meaning": "Thời điểm hết hạn"
+        },
+        {
+          "name": "used_at",
+          "sql": "timestamptz",
+          "meaning": "Đánh dấu đã tiêu thụ trong giao dịch reset"
+        }
+      ],
+      "constraints": [
+        "CHECK (expires_at > created_at)",
+        "CHECK (used_at IS NULL OR used_at >= created_at)"
+      ]
+    },
+    {
+      "name": "faculties",
+      "group": "Danh mục",
+      "purpose": "Khoa hoặc đơn vị quản lý học phần.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "code",
+          "sql": "varchar(30) NOT NULL UNIQUE",
+          "meaning": "Mã nội bộ; không tự nhận là mã chính thức"
+        },
+        {
+          "name": "name",
+          "sql": "varchar(200) NOT NULL",
+          "meaning": "Tên đơn vị"
+        },
+        {
+          "name": "is_active",
+          "sql": "boolean NOT NULL DEFAULT true",
+          "meaning": "Ngừng sử dụng thay vì xóa dữ liệu đang được tham chiếu"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "programs",
+      "group": "Danh mục",
+      "purpose": "Ngành hoặc chương trình thuộc một khoa.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "faculty_id",
+          "sql": "bigint NOT NULL REFERENCES faculties(id) ON DELETE RESTRICT",
+          "meaning": "Khoa quản lý"
+        },
+        {
+          "name": "code",
+          "sql": "varchar(30) NOT NULL UNIQUE",
+          "meaning": "Mã chương trình"
+        },
+        {
+          "name": "name",
+          "sql": "varchar(200) NOT NULL",
+          "meaning": "Tên chương trình"
+        },
+        {
+          "name": "is_active",
+          "sql": "boolean NOT NULL DEFAULT true",
+          "meaning": "Trạng thái sử dụng"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "courses",
+      "group": "Danh mục",
+      "purpose": "Học phần; có thể dùng chung giữa nhiều chương trình.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "faculty_id",
+          "sql": "bigint NOT NULL REFERENCES faculties(id) ON DELETE RESTRICT",
+          "meaning": "Đơn vị quản lý học phần"
+        },
+        {
+          "name": "code",
+          "sql": "varchar(30) NOT NULL UNIQUE",
+          "meaning": "Mã học phần"
+        },
+        {
+          "name": "name",
+          "sql": "varchar(200) NOT NULL",
+          "meaning": "Tên học phần"
+        },
+        {
+          "name": "is_active",
+          "sql": "boolean NOT NULL DEFAULT true",
+          "meaning": "Trạng thái sử dụng"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        },
+        {
+          "name": "revision",
+          "sql": "integer NOT NULL DEFAULT 1 CHECK (revision > 0)",
+          "meaning": "Khóa kiểm soát cập nhật đồng thời; mỗi lần ghi tăng 1"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "program_courses",
+      "group": "Danh mục",
+      "purpose": "Bảng nối chương trình và học phần nhiều–nhiều.",
+      "columns": [
+        {
+          "name": "program_id",
+          "sql": "bigint NOT NULL REFERENCES programs(id) ON DELETE RESTRICT",
+          "meaning": "Chương trình"
+        },
+        {
+          "name": "course_id",
+          "sql": "bigint NOT NULL REFERENCES courses(id) ON DELETE RESTRICT",
+          "meaning": "Học phần"
+        }
+      ],
+      "constraints": [
+        "PRIMARY KEY (program_id, course_id)"
+      ]
+    },
+    {
+      "name": "lecturer_assignments",
+      "group": "Danh mục",
+      "purpose": "Lưu cả phân công hiện hành và lịch sử thu hồi.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "lecturer_id",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Giảng viên; backend kiểm tra role và ACTIVE"
+        },
+        {
+          "name": "course_id",
+          "sql": "bigint NOT NULL REFERENCES courses(id) ON DELETE RESTRICT",
+          "meaning": "Học phần phụ trách"
+        },
+        {
+          "name": "assigned_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Admin phân công"
+        },
+        {
+          "name": "assigned_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Bắt đầu phân công"
+        },
+        {
+          "name": "revoked_at",
+          "sql": "timestamptz",
+          "meaning": "Null là chưa thu hồi"
+        },
+        {
+          "name": "revoked_by",
+          "sql": "bigint REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Admin thu hồi"
+        },
+        {
+          "name": "reason",
+          "sql": "text",
+          "meaning": "Lý do thay đổi"
+        }
+      ],
+      "constraints": [
+        "CHECK (revoked_at IS NULL OR revoked_at >= assigned_at)",
+        "CHECK ((revoked_at IS NULL) = (revoked_by IS NULL))"
+      ]
+    },
+    {
+      "name": "documents",
+      "group": "Học liệu",
+      "purpose": "Danh tính ổn định của học liệu; sở hữu hiện tại và trạng thái ẩn thuộc tài liệu.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "kind",
+          "sql": "varchar(20) NOT NULL CHECK (kind IN ('LECTURER_MATERIAL','STUDENT_SUPPLEMENT'))",
+          "meaning": "Giáo trình giảng viên hoặc tài liệu sinh viên bổ sung"
+        },
+        {
+          "name": "created_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Người tạo gốc; không đổi khi bàn giao"
+        },
+        {
+          "name": "manager_id",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Chủ quản lý hiện tại; không dùng làm nhãn tác giả"
+        },
+        {
+          "name": "visibility",
+          "sql": "varchar(8) NOT NULL DEFAULT 'VISIBLE' CHECK (visibility IN ('VISIBLE','HIDDEN'))",
+          "meaning": "Ẩn toàn tài liệu và mọi phiên bản"
+        },
+        {
+          "name": "current_version_id",
+          "sql": "bigint",
+          "meaning": "Bản đã duyệt hiện hành; null trước công bố đầu tiên"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        },
+        {
+          "name": "updated_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Ứng dụng cập nhật khi ghi thay đổi"
+        },
+        {
+          "name": "revision",
+          "sql": "integer NOT NULL DEFAULT 1 CHECK (revision > 0)",
+          "meaning": "Khóa kiểm soát cập nhật đồng thời; mỗi lần ghi tăng 1"
+        }
+      ],
+      "constraints": [
+        "UNIQUE (current_version_id)"
+      ]
+    },
+    {
+      "name": "files",
+      "group": "Học liệu",
+      "purpose": "Metadata của PDF trong kho riêng tư; database không chứa bytes của file.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "uploaded_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Người upload gốc"
+        },
+        {
+          "name": "object_key",
+          "sql": "varchar(500) NOT NULL UNIQUE",
+          "meaning": "Khóa đối tượng bất biến, không phải URL công khai"
+        },
+        {
+          "name": "original_name",
+          "sql": "varchar(255) NOT NULL",
+          "meaning": "Tên file đã làm sạch để hiển thị/tải"
+        },
+        {
+          "name": "mime_type",
+          "sql": "varchar(80) NOT NULL DEFAULT 'application/pdf' CHECK (mime_type = 'application/pdf')",
+          "meaning": "Khai báo MIME; không thay việc kiểm tra bytes"
+        },
+        {
+          "name": "byte_size",
+          "sql": "bigint NOT NULL CHECK (byte_size > 0)",
+          "meaning": "Dung lượng; hạn mức upload do cấu hình dịch vụ"
+        },
+        {
+          "name": "sha256",
+          "sql": "char(64) NOT NULL CHECK (sha256 ~ '^[0-9a-f]{64}$')",
+          "meaning": "Hash xác minh file; không UNIQUE vì không tự gộp bản trùng"
+        },
+        {
+          "name": "scan_status",
+          "sql": "varchar(8) NOT NULL DEFAULT 'CHECKING' CHECK (scan_status IN ('CHECKING','SAFE','FAILED'))",
+          "meaning": "Kết quả kiểm tra kỹ thuật hiện hành"
+        },
+        {
+          "name": "page_count",
+          "sql": "integer CHECK (page_count > 0)",
+          "meaning": "Số trang được parser xác định"
+        },
+        {
+          "name": "has_text_layer",
+          "sql": "boolean",
+          "meaning": "Khả năng highlight cần kiểm tra thêm ở từng trang"
+        },
+        {
+          "name": "checked_at",
+          "sql": "timestamptz",
+          "meaning": "Thời điểm hoàn thành kiểm tra"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        }
+      ],
+      "constraints": [
+        "CHECK (scan_status <> 'SAFE' OR (page_count IS NOT NULL AND checked_at IS NOT NULL AND has_text_layer IS NOT NULL))"
+      ]
+    },
+    {
+      "name": "document_versions",
+      "group": "Học liệu",
+      "purpose": "Snapshot file, metadata và quyền. Bản APPROVED/REJECTED bất biến; sửa bằng bản mới.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "document_id",
+          "sql": "bigint NOT NULL REFERENCES documents(id) ON DELETE RESTRICT",
+          "meaning": "Tài liệu gốc"
+        },
+        {
+          "name": "version_no",
+          "sql": "integer NOT NULL CHECK (version_no > 0)",
+          "meaning": "Số thứ tự tăng trong tài liệu; cấp dưới khóa tài liệu"
+        },
+        {
+          "name": "file_id",
+          "sql": "bigint NOT NULL REFERENCES files(id) ON DELETE RESTRICT",
+          "meaning": "PDF của phiên bản"
+        },
+        {
+          "name": "created_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Người tạo snapshot gốc"
+        },
+        {
+          "name": "title",
+          "sql": "varchar(300) NOT NULL CHECK (btrim(title) <> '')",
+          "meaning": "Tiêu đề của phiên bản"
+        },
+        {
+          "name": "authors",
+          "sql": "text NOT NULL DEFAULT ''",
+          "meaning": "Nhãn tác giả học thuật; tách khỏi tài khoản quản lý"
+        },
+        {
+          "name": "description",
+          "sql": "text NOT NULL DEFAULT ''",
+          "meaning": "Mô tả học liệu"
+        },
+        {
+          "name": "material_type",
+          "sql": "varchar(20) NOT NULL CHECK (material_type IN ('TEXTBOOK','LECTURE','EXERCISE','EXAM','REFERENCE','OTHER'))",
+          "meaning": "Loại học liệu"
+        },
+        {
+          "name": "publication_year",
+          "sql": "smallint CHECK (publication_year BETWEEN 1000 AND 9999)",
+          "meaning": "Năm tài liệu nếu biết"
+        },
+        {
+          "name": "source_reference",
+          "sql": "text NOT NULL",
+          "meaning": "Nguồn hoặc dẫn chứng; có thể hoàn thiện khi còn nháp"
+        },
+        {
+          "name": "rights_basis",
+          "sql": "text NOT NULL",
+          "meaning": "Căn cứ được chia sẻ/đọc/tải; bắt buộc có nội dung trước gửi duyệt"
+        },
+        {
+          "name": "rights_valid_until",
+          "sql": "timestamptz",
+          "meaning": "Hết hạn căn cứ nếu có; null không tự chứng minh quyền vô thời hạn"
+        },
+        {
+          "name": "download_allowed",
+          "sql": "boolean NOT NULL DEFAULT false",
+          "meaning": "Được tải file gốc khi còn đủ quyền đọc"
+        },
+        {
+          "name": "review_status",
+          "sql": "varchar(20) NOT NULL DEFAULT 'DRAFT' CHECK (review_status IN ('DRAFT','SUBMITTED','CHANGES_REQUIRED','APPROVED','REJECTED'))",
+          "meaning": "Trạng thái xét công bố của phiên bản"
+        },
+        {
+          "name": "change_summary",
+          "sql": "text NOT NULL DEFAULT ''",
+          "meaning": "Mô tả thay đổi so với bản trước"
+        },
+        {
+          "name": "search_text",
+          "sql": "text NOT NULL DEFAULT ''",
+          "meaning": "Metadata đã chuẩn hóa tiếng Việt có/không dấu do ứng dụng tạo"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        },
+        {
+          "name": "updated_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Ứng dụng cập nhật khi ghi thay đổi"
+        },
+        {
+          "name": "revision",
+          "sql": "integer NOT NULL DEFAULT 1 CHECK (revision > 0)",
+          "meaning": "Khóa kiểm soát cập nhật đồng thời; mỗi lần ghi tăng 1"
+        }
+      ],
+      "constraints": [
+        "UNIQUE (document_id, version_no)",
+        "UNIQUE (document_id, id)"
+      ]
+    },
+    {
+      "name": "version_courses",
+      "group": "Học liệu",
+      "purpose": "Học phần gắn với snapshot, tránh thay môn của bản đã công bố.",
+      "columns": [
+        {
+          "name": "version_id",
+          "sql": "bigint NOT NULL REFERENCES document_versions(id) ON DELETE RESTRICT",
+          "meaning": "Phiên bản"
+        },
+        {
+          "name": "course_id",
+          "sql": "bigint NOT NULL REFERENCES courses(id) ON DELETE RESTRICT",
+          "meaning": "Học phần"
+        }
+      ],
+      "constraints": [
+        "PRIMARY KEY (version_id, course_id)"
+      ]
+    },
+    {
+      "name": "publication_requests",
+      "group": "Kiểm duyệt",
+      "purpose": "Mỗi dòng là một lần gửi duyệt. Rút/sửa/gửi lại tạo dòng mới, giữ người gửi cũ.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "version_id",
+          "sql": "bigint NOT NULL REFERENCES document_versions(id) ON DELETE RESTRICT",
+          "meaning": "Phiên bản được xét"
+        },
+        {
+          "name": "submitted_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Người thực sự gửi lần này"
+        },
+        {
+          "name": "submitted_revision",
+          "sql": "integer NOT NULL CHECK (submitted_revision > 0)",
+          "meaning": "Revision sau chuyển phiên bản sang SUBMITTED"
+        },
+        {
+          "name": "submitted_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Lúc gửi"
+        },
+        {
+          "name": "status",
+          "sql": "varchar(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','WITHDRAWN','APPROVED','CHANGES_REQUIRED','REJECTED'))",
+          "meaning": "Trạng thái của lần gửi, tách khỏi review_status của phiên bản"
+        },
+        {
+          "name": "resolved_by",
+          "sql": "bigint REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Người duyệt/rút; bàn giao là admin"
+        },
+        {
+          "name": "resolved_at",
+          "sql": "timestamptz",
+          "meaning": "Lúc kết thúc lần gửi"
+        },
+        {
+          "name": "reason",
+          "sql": "text",
+          "meaning": "Bắt buộc khi yêu cầu sửa/từ chối/rút"
+        },
+        {
+          "name": "revision",
+          "sql": "integer NOT NULL DEFAULT 1 CHECK (revision > 0)",
+          "meaning": "Khóa kiểm soát cập nhật đồng thời; mỗi lần ghi tăng 1"
+        }
+      ],
+      "constraints": [
+        "CHECK ((status = 'PENDING' AND resolved_by IS NULL AND resolved_at IS NULL) OR (status <> 'PENDING' AND resolved_by IS NOT NULL AND resolved_at IS NOT NULL))",
+        "CHECK (status NOT IN ('WITHDRAWN','CHANGES_REQUIRED','REJECTED') OR nullif(btrim(reason), '') IS NOT NULL)",
+        "CHECK (resolved_at IS NULL OR resolved_at >= submitted_at)"
+      ]
+    },
+    {
+      "name": "ownership_transfers",
+      "group": "Kiểm duyệt",
+      "purpose": "Lịch sử bàn giao giáo trình; không đổi tác giả hoặc chủ ghi chú.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "document_id",
+          "sql": "bigint NOT NULL REFERENCES documents(id) ON DELETE RESTRICT",
+          "meaning": "Giáo trình được bàn giao"
+        },
+        {
+          "name": "from_user_id",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Chủ quản lý trước"
+        },
+        {
+          "name": "to_user_id",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Giảng viên nhận"
+        },
+        {
+          "name": "performed_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Admin xác nhận"
+        },
+        {
+          "name": "reason",
+          "sql": "text NOT NULL CHECK (btrim(reason) <> '')",
+          "meaning": "Lý do bàn giao"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        }
+      ],
+      "constraints": [
+        "CHECK (from_user_id <> to_user_id)"
+      ]
+    },
+    {
+      "name": "visibility_events",
+      "group": "Kiểm duyệt",
+      "purpose": "Nhật ký ẩn/khôi phục toàn tài liệu.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "document_id",
+          "sql": "bigint NOT NULL REFERENCES documents(id) ON DELETE RESTRICT",
+          "meaning": "Tài liệu bị tác động"
+        },
+        {
+          "name": "performed_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Admin xử lý"
+        },
+        {
+          "name": "from_visibility",
+          "sql": "varchar(8) NOT NULL CHECK (from_visibility IN ('VISIBLE','HIDDEN'))",
+          "meaning": "Trạng thái trước"
+        },
+        {
+          "name": "to_visibility",
+          "sql": "varchar(8) NOT NULL CHECK (to_visibility IN ('VISIBLE','HIDDEN'))",
+          "meaning": "Trạng thái sau"
+        },
+        {
+          "name": "reason",
+          "sql": "text NOT NULL CHECK (btrim(reason) <> '')",
+          "meaning": "Căn cứ quyết định"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        }
+      ],
+      "constraints": [
+        "CHECK (from_visibility <> to_visibility)"
+      ]
+    },
+    {
+      "name": "annotations",
+      "group": "Học tập cá nhân",
+      "purpose": "Ghi chú riêng gắn người, phiên bản và trang; không gắn sang current_version tự động.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "user_id",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Chủ ghi chú; backend luôn lọc theo tài khoản phiên"
+        },
+        {
+          "name": "version_id",
+          "sql": "bigint NOT NULL REFERENCES document_versions(id) ON DELETE RESTRICT",
+          "meaning": "Phiên bản PDF gốc"
+        },
+        {
+          "name": "page_number",
+          "sql": "integer NOT NULL CHECK (page_number > 0)",
+          "meaning": "Trang bắt đầu từ 1, không quá page_count"
+        },
+        {
+          "name": "kind",
+          "sql": "varchar(16) NOT NULL CHECK (kind IN ('PAGE_NOTE','TEXT_HIGHLIGHT'))",
+          "meaning": "Ghi chú theo trang hoặc highlight chữ"
+        },
+        {
+          "name": "content",
+          "sql": "text NOT NULL DEFAULT ''",
+          "meaning": "Nội dung riêng tư; không đưa vào audit/log"
+        },
+        {
+          "name": "anchor",
+          "sql": "jsonb",
+          "meaning": "Highlight: quads và quote trên trang gốc chưa xoay, chuẩn hóa 0..1"
+        },
+        {
+          "name": "color",
+          "sql": "varchar(7) NOT NULL DEFAULT '#FFF59D' CHECK (color ~ '^#[0-9A-Fa-f]{6}$')",
+          "meaning": "Màu hiển thị"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        },
+        {
+          "name": "updated_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Ứng dụng cập nhật khi ghi thay đổi"
+        },
+        {
+          "name": "revision",
+          "sql": "integer NOT NULL DEFAULT 1 CHECK (revision > 0)",
+          "meaning": "Khóa kiểm soát cập nhật đồng thời; mỗi lần ghi tăng 1"
+        }
+      ],
+      "constraints": [
+        "CHECK ((kind = 'PAGE_NOTE' AND btrim(content) <> '' AND anchor IS NULL) OR (kind = 'TEXT_HIGHLIGHT' AND anchor IS NOT NULL AND jsonb_typeof(anchor) = 'object' AND anchor ? 'quads' AND jsonb_typeof(anchor->'quads') = 'array' AND jsonb_array_length(anchor->'quads') > 0))"
+      ]
+    },
+    {
+      "name": "reading_progress",
+      "group": "Học tập cá nhân",
+      "purpose": "Một tiến độ cho mỗi người và mỗi phiên bản, không ghi đè bản cũ khi có bản mới.",
+      "columns": [
+        {
+          "name": "user_id",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Người đọc"
+        },
+        {
+          "name": "version_id",
+          "sql": "bigint NOT NULL REFERENCES document_versions(id) ON DELETE RESTRICT",
+          "meaning": "Phiên bản đang đọc"
+        },
+        {
+          "name": "page_number",
+          "sql": "integer NOT NULL CHECK (page_number > 0)",
+          "meaning": "Trang hiện tại"
+        },
+        {
+          "name": "page_offset",
+          "sql": "numeric(6,5) NOT NULL DEFAULT 0 CHECK (page_offset BETWEEN 0 AND 1)",
+          "meaning": "Vị trí tương đối trong trang"
+        },
+        {
+          "name": "updated_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Ứng dụng cập nhật khi ghi thay đổi"
+        },
+        {
+          "name": "revision",
+          "sql": "integer NOT NULL DEFAULT 1 CHECK (revision > 0)",
+          "meaning": "Khóa kiểm soát cập nhật đồng thời; mỗi lần ghi tăng 1"
+        }
+      ],
+      "constraints": [
+        "PRIMARY KEY (user_id, version_id)"
+      ]
+    },
+    {
+      "name": "saved_documents",
+      "group": "Học tập cá nhân",
+      "purpose": "Lưu theo tài liệu để theo dõi bản mới; bỏ lưu không xóa ghi chú hoặc tiến độ.",
+      "columns": [
+        {
+          "name": "user_id",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Chủ thư viện"
+        },
+        {
+          "name": "document_id",
+          "sql": "bigint NOT NULL REFERENCES documents(id) ON DELETE RESTRICT",
+          "meaning": "Tài liệu đã lưu"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        }
+      ],
+      "constraints": [
+        "PRIMARY KEY (user_id, document_id)"
+      ]
+    },
+    {
+      "name": "books",
+      "group": "Thư viện và phản hồi",
+      "purpose": "Metadata sách và nguồn ngoài; không giả định có PDF hoặc tồn kho.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "title",
+          "sql": "varchar(300) NOT NULL CHECK (btrim(title) <> '')",
+          "meaning": "Tên sách"
+        },
+        {
+          "name": "authors",
+          "sql": "text NOT NULL DEFAULT ''",
+          "meaning": "Tác giả hiển thị"
+        },
+        {
+          "name": "publisher",
+          "sql": "varchar(200)",
+          "meaning": "Nhà xuất bản nếu biết"
+        },
+        {
+          "name": "publication_year",
+          "sql": "smallint CHECK (publication_year BETWEEN 1000 AND 9999)",
+          "meaning": "Năm xuất bản"
+        },
+        {
+          "name": "edition",
+          "sql": "varchar(80)",
+          "meaning": "Ấn bản"
+        },
+        {
+          "name": "isbn",
+          "sql": "varchar(20)",
+          "meaning": "ISBN nếu biết; không tự gộp ấn bản"
+        },
+        {
+          "name": "source_provider",
+          "sql": "varchar(100) NOT NULL",
+          "meaning": "Tên nguồn danh mục"
+        },
+        {
+          "name": "external_id",
+          "sql": "varchar(150)",
+          "meaning": "ID sách tại nguồn nếu có"
+        },
+        {
+          "name": "source_url",
+          "sql": "text NOT NULL",
+          "meaning": "Liên kết HTTPS/HTTP; backend xác thực và mở an toàn"
+        },
+        {
+          "name": "metadata_rights_basis",
+          "sql": "text NOT NULL",
+          "meaning": "Căn cứ được sử dụng thông tin danh mục"
+        },
+        {
+          "name": "native_document_id",
+          "sql": "bigint REFERENCES documents(id) ON DELETE RESTRICT",
+          "meaning": "Tài liệu nội bộ có quyền phục vụ, nếu có; vẫn kiểm tra quyền riêng"
+        },
+        {
+          "name": "checked_at",
+          "sql": "timestamptz",
+          "meaning": "Lần kiểm tra nguồn gần nhất"
+        },
+        {
+          "name": "is_active",
+          "sql": "boolean NOT NULL DEFAULT true",
+          "meaning": "Ngừng hiển thị bản ghi"
+        },
+        {
+          "name": "managed_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Admin biên tập"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        },
+        {
+          "name": "updated_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Ứng dụng cập nhật khi ghi thay đổi"
+        },
+        {
+          "name": "revision",
+          "sql": "integer NOT NULL DEFAULT 1 CHECK (revision > 0)",
+          "meaning": "Khóa kiểm soát cập nhật đồng thời; mỗi lần ghi tăng 1"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "book_courses",
+      "group": "Thư viện và phản hồi",
+      "purpose": "Gợi ý sách theo học phần; độc lập với môn của một PDF.",
+      "columns": [
+        {
+          "name": "book_id",
+          "sql": "bigint NOT NULL REFERENCES books(id) ON DELETE RESTRICT",
+          "meaning": "Sách"
+        },
+        {
+          "name": "course_id",
+          "sql": "bigint NOT NULL REFERENCES courses(id) ON DELETE RESTRICT",
+          "meaning": "Môn liên quan"
+        }
+      ],
+      "constraints": [
+        "PRIMARY KEY (book_id, course_id)"
+      ]
+    },
+    {
+      "name": "reports",
+      "group": "Thư viện và phản hồi",
+      "purpose": "Báo cáo một tài liệu hoặc một sách; version_id chỉ rõ bản PDF nếu cần.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "reported_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Người báo cáo"
+        },
+        {
+          "name": "document_id",
+          "sql": "bigint REFERENCES documents(id) ON DELETE RESTRICT",
+          "meaning": "Tài liệu bị báo cáo"
+        },
+        {
+          "name": "version_id",
+          "sql": "bigint",
+          "meaning": "Phiên bản cụ thể của document_id, nếu có"
+        },
+        {
+          "name": "book_id",
+          "sql": "bigint REFERENCES books(id) ON DELETE RESTRICT",
+          "meaning": "Sách bị báo cáo, loại trừ document_id"
+        },
+        {
+          "name": "category",
+          "sql": "varchar(20) NOT NULL CHECK (category IN ('FILE_ERROR','WRONG_COURSE','RIGHTS','CONTENT','BROKEN_LINK','OTHER'))",
+          "meaning": "Loại vấn đề"
+        },
+        {
+          "name": "description",
+          "sql": "text NOT NULL CHECK (btrim(description) <> '')",
+          "meaning": "Mô tả; không tự đính kèm ghi chú riêng"
+        },
+        {
+          "name": "status",
+          "sql": "varchar(12) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','IN_REVIEW','RESOLVED','DISMISSED'))",
+          "meaning": "Tiến trình xử lý báo cáo"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        },
+        {
+          "name": "updated_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Ứng dụng cập nhật khi ghi thay đổi"
+        },
+        {
+          "name": "revision",
+          "sql": "integer NOT NULL DEFAULT 1 CHECK (revision > 0)",
+          "meaning": "Khóa kiểm soát cập nhật đồng thời; mỗi lần ghi tăng 1"
+        }
+      ],
+      "constraints": [
+        "CHECK ((document_id IS NOT NULL)::integer + (book_id IS NOT NULL)::integer = 1)",
+        "CHECK (version_id IS NULL OR document_id IS NOT NULL)",
+        "FOREIGN KEY (document_id, version_id) REFERENCES document_versions(document_id, id) ON DELETE RESTRICT"
+      ]
+    },
+    {
+      "name": "report_actions",
+      "group": "Thư viện và phản hồi",
+      "purpose": "Lịch sử xử lý báo cáo; quyết định ẩn liên kết visibility_events.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "report_id",
+          "sql": "bigint NOT NULL REFERENCES reports(id) ON DELETE RESTRICT",
+          "meaning": "Báo cáo"
+        },
+        {
+          "name": "performed_by",
+          "sql": "bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Admin xử lý"
+        },
+        {
+          "name": "action",
+          "sql": "varchar(20) NOT NULL CHECK (action IN ('TAKE_REVIEW','REQUEST_INFO','RESOLVE','DISMISS'))",
+          "meaning": "Loại xử lý"
+        },
+        {
+          "name": "result",
+          "sql": "text NOT NULL",
+          "meaning": "Kết quả được phép hiển thị cho người báo cáo"
+        },
+        {
+          "name": "visibility_event_id",
+          "sql": "bigint REFERENCES visibility_events(id) ON DELETE RESTRICT",
+          "meaning": "Quyết định ẩn liên quan nếu có"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "name": "audit_events",
+      "group": "Thư viện và phản hồi",
+      "purpose": "Nhật ký kỹ thuật có danh sách trường cho phép; không chứa mật khẩu, token hoặc ghi chú.",
+      "columns": [
+        {
+          "name": "id",
+          "sql": "bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY",
+          "meaning": "Khóa chính do database cấp"
+        },
+        {
+          "name": "actor_id",
+          "sql": "bigint REFERENCES users(id) ON DELETE RESTRICT",
+          "meaning": "Người thực hiện; null cho tác vụ nền"
+        },
+        {
+          "name": "event_type",
+          "sql": "varchar(80) NOT NULL",
+          "meaning": "Ví dụ ACCOUNT_LOCKED, ASSIGNMENT_REVOKED"
+        },
+        {
+          "name": "entity_type",
+          "sql": "varchar(80) NOT NULL",
+          "meaning": "Tên loại đối tượng"
+        },
+        {
+          "name": "entity_id",
+          "sql": "bigint NOT NULL",
+          "meaning": "ID đối tượng; tham chiếu đa hình không có FK"
+        },
+        {
+          "name": "reason_code",
+          "sql": "varchar(80)",
+          "meaning": "Mã lý do, không lưu payload tùy ý"
+        },
+        {
+          "name": "request_id",
+          "sql": "varchar(100)",
+          "meaning": "ID tương quan request, không phải token"
+        },
+        {
+          "name": "created_at",
+          "sql": "timestamptz NOT NULL DEFAULT now()",
+          "meaning": "Thời điểm tạo, lưu theo UTC"
+        }
+      ],
+      "constraints": []
+    }
+  ],
+  "links": [
+    {
+      "child": "users",
+      "column": "verified_by",
+      "parent": "users",
+      "required": false,
+      "label": "verified_by"
+    },
+    {
+      "child": "auth_sessions",
+      "column": "user_id",
+      "parent": "users",
+      "required": true,
+      "label": "user_id"
+    },
+    {
+      "child": "password_reset_tokens",
+      "column": "user_id",
+      "parent": "users",
+      "required": true,
+      "label": "user_id"
+    },
+    {
+      "child": "programs",
+      "column": "faculty_id",
+      "parent": "faculties",
+      "required": true,
+      "label": "faculty_id"
+    },
+    {
+      "child": "courses",
+      "column": "faculty_id",
+      "parent": "faculties",
+      "required": true,
+      "label": "faculty_id"
+    },
+    {
+      "child": "program_courses",
+      "column": "program_id",
+      "parent": "programs",
+      "required": true,
+      "label": "program_id"
+    },
+    {
+      "child": "program_courses",
+      "column": "course_id",
+      "parent": "courses",
+      "required": true,
+      "label": "course_id"
+    },
+    {
+      "child": "lecturer_assignments",
+      "column": "lecturer_id",
+      "parent": "users",
+      "required": true,
+      "label": "lecturer_id"
+    },
+    {
+      "child": "lecturer_assignments",
+      "column": "assigned_by",
+      "parent": "users",
+      "required": true,
+      "label": "assigned_by"
+    },
+    {
+      "child": "lecturer_assignments",
+      "column": "course_id",
+      "parent": "courses",
+      "required": true,
+      "label": "course_id"
+    },
+    {
+      "child": "lecturer_assignments",
+      "column": "revoked_by",
+      "parent": "users",
+      "required": false,
+      "label": "revoked_by"
+    },
+    {
+      "child": "documents",
+      "column": "created_by",
+      "parent": "users",
+      "required": true,
+      "label": "created_by"
+    },
+    {
+      "child": "documents",
+      "column": "manager_id",
+      "parent": "users",
+      "required": true,
+      "label": "manager_id"
+    },
+    {
+      "child": "documents",
+      "column": "current_version_id",
+      "parent": "document_versions",
+      "required": false,
+      "label": "current_version_id",
+      "child_max": 1
+    },
+    {
+      "child": "files",
+      "column": "uploaded_by",
+      "parent": "users",
+      "required": true,
+      "label": "uploaded_by"
+    },
+    {
+      "child": "document_versions",
+      "column": "document_id",
+      "parent": "documents",
+      "required": true,
+      "label": "document_id"
+    },
+    {
+      "child": "document_versions",
+      "column": "file_id",
+      "parent": "files",
+      "required": true,
+      "label": "file_id"
+    },
+    {
+      "child": "document_versions",
+      "column": "created_by",
+      "parent": "users",
+      "required": true,
+      "label": "created_by"
+    },
+    {
+      "child": "version_courses",
+      "column": "version_id",
+      "parent": "document_versions",
+      "required": true,
+      "label": "version_id"
+    },
+    {
+      "child": "version_courses",
+      "column": "course_id",
+      "parent": "courses",
+      "required": true,
+      "label": "course_id"
+    },
+    {
+      "child": "publication_requests",
+      "column": "version_id",
+      "parent": "document_versions",
+      "required": true,
+      "label": "version_id"
+    },
+    {
+      "child": "publication_requests",
+      "column": "submitted_by",
+      "parent": "users",
+      "required": true,
+      "label": "submitted_by"
+    },
+    {
+      "child": "publication_requests",
+      "column": "resolved_by",
+      "parent": "users",
+      "required": false,
+      "label": "resolved_by"
+    },
+    {
+      "child": "ownership_transfers",
+      "column": "document_id",
+      "parent": "documents",
+      "required": true,
+      "label": "document_id"
+    },
+    {
+      "child": "ownership_transfers",
+      "column": "from_user_id",
+      "parent": "users",
+      "required": true,
+      "label": "from_user_id"
+    },
+    {
+      "child": "ownership_transfers",
+      "column": "to_user_id",
+      "parent": "users",
+      "required": true,
+      "label": "to_user_id"
+    },
+    {
+      "child": "ownership_transfers",
+      "column": "performed_by",
+      "parent": "users",
+      "required": true,
+      "label": "performed_by"
+    },
+    {
+      "child": "visibility_events",
+      "column": "document_id",
+      "parent": "documents",
+      "required": true,
+      "label": "document_id"
+    },
+    {
+      "child": "visibility_events",
+      "column": "performed_by",
+      "parent": "users",
+      "required": true,
+      "label": "performed_by"
+    },
+    {
+      "child": "annotations",
+      "column": "user_id",
+      "parent": "users",
+      "required": true,
+      "label": "user_id"
+    },
+    {
+      "child": "annotations",
+      "column": "version_id",
+      "parent": "document_versions",
+      "required": true,
+      "label": "version_id"
+    },
+    {
+      "child": "reading_progress",
+      "column": "user_id",
+      "parent": "users",
+      "required": true,
+      "label": "user_id"
+    },
+    {
+      "child": "reading_progress",
+      "column": "version_id",
+      "parent": "document_versions",
+      "required": true,
+      "label": "version_id"
+    },
+    {
+      "child": "saved_documents",
+      "column": "user_id",
+      "parent": "users",
+      "required": true,
+      "label": "user_id"
+    },
+    {
+      "child": "saved_documents",
+      "column": "document_id",
+      "parent": "documents",
+      "required": true,
+      "label": "document_id"
+    },
+    {
+      "child": "books",
+      "column": "native_document_id",
+      "parent": "documents",
+      "required": false,
+      "label": "native_document_id"
+    },
+    {
+      "child": "books",
+      "column": "managed_by",
+      "parent": "users",
+      "required": true,
+      "label": "managed_by"
+    },
+    {
+      "child": "book_courses",
+      "column": "book_id",
+      "parent": "books",
+      "required": true,
+      "label": "book_id"
+    },
+    {
+      "child": "book_courses",
+      "column": "course_id",
+      "parent": "courses",
+      "required": true,
+      "label": "course_id"
+    },
+    {
+      "child": "reports",
+      "column": "reported_by",
+      "parent": "users",
+      "required": true,
+      "label": "reported_by"
+    },
+    {
+      "child": "reports",
+      "column": "document_id",
+      "parent": "documents",
+      "required": false,
+      "label": "document_id"
+    },
+    {
+      "child": "reports",
+      "column": "version_id",
+      "parent": "document_versions",
+      "required": false,
+      "label": "version_id"
+    },
+    {
+      "child": "reports",
+      "column": "book_id",
+      "parent": "books",
+      "required": false,
+      "label": "book_id"
+    },
+    {
+      "child": "report_actions",
+      "column": "report_id",
+      "parent": "reports",
+      "required": true,
+      "label": "report_id"
+    },
+    {
+      "child": "report_actions",
+      "column": "performed_by",
+      "parent": "users",
+      "required": true,
+      "label": "performed_by"
+    },
+    {
+      "child": "report_actions",
+      "column": "visibility_event_id",
+      "parent": "visibility_events",
+      "required": false,
+      "label": "visibility_event_id"
+    },
+    {
+      "child": "audit_events",
+      "column": "actor_id",
+      "parent": "users",
+      "required": false,
+      "label": "actor_id"
+    }
+  ],
+  "indexes": [
+    "CREATE UNIQUE INDEX ux_active_assignment ON lecturer_assignments(lecturer_id, course_id) WHERE revoked_at IS NULL;",
+    "CREATE INDEX ix_assignment_course ON lecturer_assignments(course_id) WHERE revoked_at IS NULL;",
+    "CREATE INDEX ix_session_user ON auth_sessions(user_id) WHERE revoked_at IS NULL;",
+    "CREATE INDEX ix_reset_user ON password_reset_tokens(user_id) WHERE used_at IS NULL;",
+    "CREATE INDEX ix_program_course_reverse ON program_courses(course_id, program_id);",
+    "CREATE INDEX ix_document_manager ON documents(manager_id, kind);",
+    "CREATE INDEX ix_file_hash ON files(sha256);",
+    "CREATE UNIQUE INDEX ux_one_working_version ON document_versions(document_id) WHERE review_status IN ('DRAFT','SUBMITTED','CHANGES_REQUIRED');",
+    "CREATE INDEX ix_version_file ON document_versions(file_id);",
+    "CREATE INDEX ix_version_metadata ON document_versions USING gin(to_tsvector('simple', search_text));",
+    "CREATE INDEX ix_version_course_reverse ON version_courses(course_id, version_id);",
+    "CREATE UNIQUE INDEX ux_one_pending_request ON publication_requests(version_id) WHERE status = 'PENDING';",
+    "CREATE INDEX ix_request_queue ON publication_requests(status, submitted_at);",
+    "CREATE INDEX ix_request_submitter ON publication_requests(submitted_by, submitted_at DESC);",
+    "CREATE INDEX ix_transfer_document ON ownership_transfers(document_id, created_at DESC);",
+    "CREATE INDEX ix_visibility_document ON visibility_events(document_id, created_at DESC);",
+    "CREATE INDEX ix_annotation_owner_page ON annotations(user_id, version_id, page_number);",
+    "CREATE INDEX ix_annotation_version ON annotations(version_id);",
+    "CREATE INDEX ix_progress_version ON reading_progress(version_id);",
+    "CREATE INDEX ix_saved_document ON saved_documents(document_id);",
+    "CREATE UNIQUE INDEX ux_book_source ON books(lower(source_provider), external_id) WHERE external_id IS NOT NULL;",
+    "CREATE INDEX ix_book_course_reverse ON book_courses(course_id, book_id);",
+    "CREATE INDEX ix_report_owner ON reports(reported_by, created_at DESC);",
+    "CREATE INDEX ix_report_queue ON reports(status, created_at);",
+    "CREATE INDEX ix_report_document ON reports(document_id, version_id);",
+    "CREATE INDEX ix_report_book ON reports(book_id);",
+    "CREATE INDEX ix_report_action ON report_actions(report_id, created_at);",
+    "CREATE INDEX ix_audit_entity ON audit_events(entity_type, entity_id, created_at DESC);"
+  ]
+}

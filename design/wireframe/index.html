@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Wireframe tương tác HUCEScholar: tìm học liệu, đọc và ghi chú, gửi công bố và kiểm duyệt. Dữ liệu minh họa.">
+  <title>HUCEScholar — Thiết kế tương tác</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Đến nội dung chính</a>
+  <header class="prototype-bar" aria-label="Điều khiển bản thiết kế">
+    <div class="prototype-label"><span class="prototype-dot"></span><strong>Thiết kế v2</strong><span class="demo-caption">Dữ liệu minh họa</span></div>
+    <div class="prototype-controls">
+      <label for="role">Xem vai trò</label>
+      <select id="role"><option value="student">Sinh viên</option><option value="lecturer">Giảng viên</option><option value="admin">Quản trị</option></select>
+      <label for="scenario">Trạng thái</label><select id="scenario"></select>
+      <button class="text-button light" id="screen-map">Màn hình & luồng</button>
+    </div>
+  </header>
+  <div id="app"></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+  <script src="app.js"></script>
+</body>
+</html>

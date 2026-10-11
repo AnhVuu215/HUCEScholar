@@ -1,0 +1,9 @@
+erDiagram
+    users ||..o{ documents : relates_to
+    documents ||..o{ document_versions : relates_to
+    files ||..o{ document_versions : relates_to
+    document_versions ||..o{ publication_requests : relates_to
+    document_versions ||..o{ annotations : relates_to
+    users ||..o{ annotations : relates_to
+    courses }o..|{ document_versions : via_version_courses
+    courses }o..o{ books : via_book_courses

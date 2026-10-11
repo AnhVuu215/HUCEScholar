@@ -1,0 +1,324 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-11T08:55:22.940Z",
+  "title": "Design System: HUCEScholar wireframe v2 — proposal, not brand approved",
+  "extensions": {
+    "colorMeta": {
+      "navy": {
+        "role": "primary",
+        "displayName": "navy"
+      },
+      "navy-soft": {
+        "role": "primary",
+        "displayName": "navy soft"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "ink"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "muted"
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "paper"
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "ground"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "line"
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "accent"
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "accent soft"
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "accent hover"
+      },
+      "secondary-line": {
+        "role": "neutral",
+        "displayName": "secondary line"
+      },
+      "secondary-hover": {
+        "role": "neutral",
+        "displayName": "secondary hover"
+      },
+      "focus": {
+        "role": "neutral",
+        "displayName": "focus"
+      },
+      "field-line": {
+        "role": "neutral",
+        "displayName": "field line"
+      },
+      "field-placeholder": {
+        "role": "neutral",
+        "displayName": "field placeholder"
+      },
+      "nav-ink": {
+        "role": "neutral",
+        "displayName": "nav ink"
+      },
+      "nav-active": {
+        "role": "neutral",
+        "displayName": "nav active"
+      },
+      "nav-secondary": {
+        "role": "neutral",
+        "displayName": "nav secondary"
+      },
+      "badge-line": {
+        "role": "neutral",
+        "displayName": "badge line"
+      },
+      "blue": {
+        "role": "neutral",
+        "displayName": "blue"
+      },
+      "blue-bg": {
+        "role": "neutral",
+        "displayName": "blue bg"
+      },
+      "warn": {
+        "role": "neutral",
+        "displayName": "warn"
+      },
+      "warn-bg": {
+        "role": "neutral",
+        "displayName": "warn bg"
+      },
+      "danger": {
+        "role": "neutral",
+        "displayName": "danger"
+      },
+      "danger-bg": {
+        "role": "neutral",
+        "displayName": "danger bg"
+      },
+      "danger-hover": {
+        "role": "neutral",
+        "displayName": "danger hover"
+      },
+      "cover": {
+        "role": "secondary",
+        "displayName": "cover"
+      },
+      "cover-2": {
+        "role": "secondary",
+        "displayName": "cover 2"
+      },
+      "cover-3": {
+        "role": "secondary",
+        "displayName": "cover 3"
+      },
+      "cover-4": {
+        "role": "secondary",
+        "displayName": "cover 4"
+      },
+      "cover-ink": {
+        "role": "secondary",
+        "displayName": "cover ink"
+      },
+      "reader-stage": {
+        "role": "neutral",
+        "displayName": "reader stage"
+      },
+      "document-ink": {
+        "role": "neutral",
+        "displayName": "document ink"
+      },
+      "highlight": {
+        "role": "neutral",
+        "displayName": "highlight"
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "body",
+        "purpose": "Vietnamese UI body in design/wireframe only."
+      },
+      "headline": {
+        "displayName": "headline",
+        "purpose": "Default h1; surface-specific headings override it. Route-focused h1[tabindex=\"-1\"] uses a 2px solid #3379be focus-visible outline, 6px offset, and 2px radius."
+      },
+      "catalog-headline": {
+        "displayName": "catalog headline",
+        "purpose": "Catalog headline with 34px and 31px responsive overrides."
+      },
+      "title": {
+        "displayName": "title",
+        "purpose": "Default h2; panels and reader use local sizes."
+      },
+      "label": {
+        "displayName": "label",
+        "purpose": "Form and ordinary action labels."
+      },
+      "cover-title": {
+        "displayName": "cover title",
+        "purpose": "Decorative catalog course-cover lettering; duplicate artwork is aria-hidden."
+      },
+      "document-body": {
+        "displayName": "document body",
+        "purpose": "Times New Roman HTML paper simulation; not a PDF font contract."
+      },
+      "document-title": {
+        "displayName": "document title",
+        "purpose": "Illustrative paper section heading."
+      }
+    },
+    "shadows": [
+      {
+        "name": "elevation",
+        "value": "0 12px 32px rgba(17,24,39,.16)",
+        "purpose": "Final --elevation for dialogs, toast and the open mobile sidebar; supersedes earlier navy values."
+      },
+      {
+        "name": "reader-paper",
+        "value": "0 4px 15px #11182712",
+        "purpose": "Final local illustrative paper shadow."
+      }
+    ],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "reader-wide-min",
+        "value": "1500px"
+      },
+      {
+        "name": "compact-workspace-max",
+        "value": "1200px"
+      },
+      {
+        "name": "sidebar-collapse-max",
+        "value": "900px"
+      },
+      {
+        "name": "single-column-max",
+        "value": "650px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Blue primary action in the navy v2 proposal.",
+      "html": "<button class=\"ds-primary\">Mở tài liệu</button>",
+      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 17px;background:var(--accent,#0056a6);border:1px solid var(--accent,#0056a6);border-radius:8px;color:#fff;font-family:'Segoe UI',Arial,sans-serif;font-weight:600;font-size:13px;line-height:1.55;cursor:pointer}.ds-primary:hover{background:#003d7a}.ds-primary:focus-visible{outline:3px solid #3379be;outline-offset:3px}.ds-primary:disabled{cursor:not-allowed;opacity:.5}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined secondary action with a pale blue hover.",
+      "html": "<button class=\"ds-secondary\">Quay lại</button>",
+      "css": ".ds-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 17px;background:var(--paper,#fff);border:1px solid #c8d5e5;border-radius:8px;color:var(--ink,#172b45);font-family:'Segoe UI',Arial,sans-serif;font-weight:600;font-size:13px;line-height:1.55;cursor:pointer}.ds-secondary:hover{background:#edf3fb}.ds-secondary:focus-visible{outline:3px solid #3379be;outline-offset:3px}.ds-secondary:disabled{cursor:not-allowed;opacity:.5}"
+    },
+    {
+      "name": "Destructive button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Red destructive action with the explicit final dark-red hover.",
+      "html": "<button class=\"ds-danger\">Từ chối</button>",
+      "css": ".ds-danger{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 17px;background:var(--danger,#943a32);border:1px solid var(--danger,#943a32);border-radius:8px;color:#fff;font-family:'Segoe UI',Arial,sans-serif;font-weight:600;font-size:13px;line-height:1.55;cursor:pointer}.ds-danger:hover{background:#762b25}.ds-danger:focus-visible{outline:3px solid #3379be;outline-offset:3px}.ds-danger:disabled{cursor:not-allowed;opacity:.5}.ds-danger:hover{border-color:#762b25}"
+    },
+    {
+      "name": "Labeled input",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "White text input with specificity-preserved 6px corners and visible keyboard focus.",
+      "html": "<label class=\"ds-field\">Tên tài liệu<input class=\"ds-input\" placeholder=\"Nhập tên tài liệu\"></label>",
+      "css": ".ds-field{display:block;font-family:'Segoe UI',Arial,sans-serif;font-size:13px;font-weight:600;line-height:1.55;color:var(--ink,#172b45)}.ds-input{display:block;margin-top:7px;width:100%;min-width:0;border:1px solid #b8c9de;background:var(--paper,#fff);color:var(--ink,#172b45);border-radius:6px;padding:10px 12px;font-family:'Segoe UI',Arial,sans-serif;font-size:15px;font-weight:400;line-height:1.55;caret-color:var(--accent,#0056a6)}.ds-input::placeholder{color:#5e7085}.ds-input:focus-visible{outline:3px solid #3379be;outline-offset:3px}.ds-input[aria-invalid=true]{border-color:var(--danger,#943a32)}"
+    },
+    {
+      "name": "Navigation item",
+      "kind": "nav",
+      "refersTo": "navigation-item",
+      "description": "Pale text on a navy sidebar with an explicit current-page fill.",
+      "html": "<nav class=\"ds-sidebar\"><a class=\"ds-nav\" href=\"#\" aria-current=\"page\">Kho học liệu</a></nav>",
+      "css": ".ds-sidebar{background:var(--navy,#001e42);padding:18px}.ds-nav{display:flex;align-items:center;gap:12px;text-decoration:none;color:#c4d5e9;font-family:'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.55;min-height:46px;padding:12px;border-radius:8px}.ds-nav:hover{background:#153b68;color:#fff}.ds-nav[aria-current=page]{background:#164a80;color:#fff;font-weight:650}.ds-nav:focus-visible{outline:3px solid #3379be;outline-offset:3px}"
+    },
+    {
+      "name": "Status badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Noninteractive text status; source defines no hover or focus state.",
+      "html": "<span class=\"ds-badge\">Đã công bố</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;gap:5px;border:1px solid #d2dfef;background:#edf4fc;color:#245a88;font-family:'Segoe UI',Arial,sans-serif;font-size:11px;line-height:1.5;padding:3px 8px;border-radius:4px;font-weight:600;white-space:nowrap}@media(max-width:650px){.ds-badge{font-size:10px}}"
+    },
+    {
+      "name": "Content panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Flat white bordered container; final shared radius is 12px.",
+      "html": "<section class=\"ds-panel\"><h2>Thông tin tài liệu</h2><p>Nội dung minh họa trong wireframe.</p></section>",
+      "css": ".ds-panel{background:var(--paper,#fff);color:var(--ink,#172b45);border:1px solid var(--line,#dce4ef);border-radius:var(--radius,12px);padding:24px;font-family:'Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.55}.ds-panel h2{font-size:18px;font-weight:650;line-height:1.35;margin:0 0 16px}.ds-panel p{margin:0;max-width:72ch}@media(max-width:650px){.ds-panel{padding:20px}}"
+    },
+    {
+      "name": "Illustrative reader paper",
+      "kind": "custom",
+      "refersTo": "reader-paper",
+      "description": "Times New Roman HTML paper with the final neutral shadow; not a PDF renderer.",
+      "html": "<article class=\"ds-paper\" aria-label=\"Trang tài liệu minh họa\"><h2>Trang tài liệu minh họa</h2><p>Nội dung dùng để xem bố cục đọc và ghi chú.</p></article>",
+      "css": ".ds-paper{background:white;min-height:680px;padding:44px 36px 30px;font-family:\"Times New Roman\",Times,serif;color:#263347;box-shadow:0 4px 15px #11182712;font-size:15px;line-height:1.85;margin:auto;width:100%;max-width:none;transform-origin:top center}.ds-paper h2{font-family:inherit;font-size:22px;font-weight:650;line-height:1.4;margin:0 0 18px}.ds-paper p{margin:12px 0;text-align:justify;max-width:72ch}@media(min-width:1500px){.ds-paper{padding:48px 58px}}@media(max-width:650px){.ds-paper{padding:28px 22px;min-height:560px;font-size:14px}.ds-paper h2{font-size:20px}}"
+    },
+    {
+      "name": "Horizontal learning card",
+      "kind": "card",
+      "refersTo": "learning-card",
+      "description": "Decorative cover plus separate course/source/version/rights context and document action.",
+      "html": "<article class=\"ds-learning\"><div class=\"ds-cover\" aria-hidden=\"true\"><small>HUCEScholar</small><strong>Cơ học kết cấu</strong><span>HỌC LIỆU<br>Bìa minh họa · v2</span></div><div class=\"ds-info\"><span class=\"ds-tag\">Giáo trình giảng viên</span><span class=\"ds-tag ds-neutral\">Phiên bản 2</span><h3><a href=\"#\">Cơ học kết cấu — bài học minh họa</a></h3><div class=\"ds-meta\"><span>Cơ học kết cấu</span><span>Tác giả minh họa</span><span>Chỉ đọc trực tuyến</span></div></div><div class=\"ds-actions\"><a class=\"ds-open\" href=\"#\">Xem tài liệu</a></div></article>",
+      "css": ".ds-learning{display:grid;grid-template-columns:106px minmax(0,1fr);grid-template-rows:1fr auto;gap:14px 20px;align-items:start;background:#fff;border:1px solid var(--line,#dce4ef);border-radius:12px;padding:22px;min-width:0;color:var(--ink,#172b45);font-family:'Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.55}.ds-cover{width:106px;min-height:152px;grid-row:1/3;background:#07396b;color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:15px 13px;position:relative;border-radius:2px 6px 6px 2px}.ds-cover:before{content:'';position:absolute;top:0;bottom:0;left:5px;border-left:1px solid #ffffff36}.ds-cover>small{font-size:8px;line-height:1.4;letter-spacing:.03em;color:#d3e4f8}.ds-cover>strong{font-size:16px;line-height:1.35;letter-spacing:-.02em;font-weight:600;overflow-wrap:anywhere}.ds-cover>span{font-size:8px;color:#d3e4f8;border-top:1px solid #ffffff52;padding-top:8px;line-height:1.5}.ds-tag{display:inline-flex;gap:5px;border:1px solid #d2dfef;background:#edf4fc;color:#245a88;font-size:11px;line-height:1.5;padding:2px 6px;border-radius:4px;font-weight:600;white-space:nowrap}.ds-neutral{background:#f3f6fa;color:#52647a;border-color:#dce4ef}.ds-info h3{font-size:17px;font-weight:650;line-height:1.45;margin:10px 0 8px;overflow-wrap:anywhere}.ds-info h3 a{color:var(--ink,#172b45);text-decoration:none}.ds-info h3 a:hover{text-decoration:underline}.ds-info h3 a:focus-visible{outline:3px solid #3379be;outline-offset:3px}.ds-meta{display:grid;gap:4px;font-size:12px;color:var(--muted,#52647a)}.ds-actions{grid-column:2;display:flex;gap:8px}.ds-open{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;background:#fff;border:1px solid #c8d5e5;border-radius:8px;color:var(--ink,#172b45);text-decoration:none;font-size:12px;font-weight:600}.ds-open:hover{background:#edf3fb}.ds-open:focus-visible{outline:3px solid #3379be;outline-offset:3px}@media(max-width:1200px){.ds-learning{grid-template-rows:auto auto}.ds-cover{min-height:142px}.ds-meta{display:flex;flex-wrap:wrap;gap:6px 16px}}@media(max-width:650px){.ds-learning{grid-template-columns:84px minmax(0,1fr);padding:16px;gap:12px 16px}.ds-cover{width:84px;min-height:138px;grid-row:1;padding:12px 10px}.ds-cover>strong{font-size:14px}.ds-cover>small,.ds-cover>span{font-size:7px}.ds-info h3{font-size:15px;margin-top:8px}.ds-meta{display:grid;gap:3px;font-size:11px}.ds-meta>span:first-child{display:none}.ds-actions{grid-column:1/-1}.ds-open{min-height:44px}}"
+    },
+    {
+      "name": "Continue reading panel",
+      "kind": "custom",
+      "refersTo": "continue-reading",
+      "description": "Current-session progress supplies the version/page; no progress shows the library fallback.",
+      "html": "<aside class=\"ds-resume\" aria-label=\"Tiếp tục đọc\"><h2>Tiếp tục đọc</h2><h3>Cơ học kết cấu</h3><p>Trang 2 / 24 · Phiên bản 2</p><a href=\"#/reader/1/2/2\">Mở trang đang đọc <svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" aria-hidden=\"true\"><path d=\"M5 12h14M13 6l6 6-6 6\"/></svg></a></aside>",
+      "css": ".ds-resume{padding:20px 22px;background:#e8f1fb;border-radius:12px;font-family:'Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.55}.ds-resume h2{font-size:13px;font-weight:650;line-height:1.35;color:var(--accent,#0056a6);display:flex;align-items:center;gap:8px;margin:0 0 10px}.ds-resume h3{font-size:17px;line-height:1.4;font-weight:650;color:var(--navy,#001e42);margin:0 0 7px}.ds-resume p{font-size:12px;color:var(--muted,#52647a);margin:0 0 12px}.ds-resume a{font-size:13px;font-weight:650;display:inline-flex;align-items:center;gap:8px;text-decoration:none;min-height:36px;color:var(--accent,#0056a6)}.ds-resume a:hover{text-decoration:underline}.ds-resume a:focus-visible{outline:3px solid #3379be;outline-offset:3px}@media(max-width:1200px){.ds-resume{padding:18px}}@media(max-width:650px){.ds-resume{padding:16px 18px}.ds-resume h2{margin-bottom:5px}.ds-resume h3{font-size:16px}.ds-resume p{margin-bottom:4px}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Không gian học tập HUCE",
+    "overview": "**Status: wireframe proposal, not brand approved. Scope: `design/wireframe` only.** This extraction records the finished navy v2 static prototype. Tokens are normative for reproducing this proposal, not an official HUCE identity or a production application specification.\n\n**Creative North Star: \"Không gian học tập HUCE\".** The direction contract establishes a learning workspace with navy navigation, a horizontal learning shelf, white content surfaces, and a focused reading page. NEU Reader informs recognition of books and learning material; the HUCE website informs the observed navy. Composition, HTML/CSS cover artwork, and product organization belong to this prototype.\n\n`PRODUCT.md` owns product truth and the confirmed HUCEScholar name. `design/wireframe/DESIGN_BRIEF.md` owns the chosen surface direction; `design/wireframe/styles.css` owns exact visual values, including its final overrides; `design/wireframe/app.js` owns rendered markup and in-memory interactions. `.impeccable/design.json` extends these tokens with component samples and responsive/elevation metadata. No approved logo, official palette, or student/lecturer usability validation is established.",
+    "keyCharacteristics": [
+      "Dark navy navigation beside a light Vietnamese learning workspace.",
+      "Horizontal learning cards with decorative cover typography and source/version context outside the artwork.",
+      "A resume panel that opens the version and page held in the current prototype session.",
+      "System sans-serif tools surrounding an illustrative serif reading page.",
+      "Responsive reflow, visible keyboard focus, and status text alongside color."
+    ],
+    "rules": [
+      {
+        "name": "The Status Text Rule",
+        "body": "Keep explicit status text alongside warning, danger, information, and neutral treatments; color alone does not express state.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "**Do** reproduce the final cascade in `design/wireframe/styles.css` and rendered markup in `design/wireframe/app.js` when extending this proposal.",
+      "**Do** preserve source/version/rights context outside decorative cover artwork, text status labels, and the prototype disclosure.",
+      "**Do** open resume links at their stored version and page and keep notes tied to their original version.",
+      "**Do** preserve visible keyboard focus, reduced-motion preference, and mobile reflow.",
+      "**Do** obtain product-owner review before treating the proposal as a production visual specification."
+    ],
+    "donts": [
+      "**Don't** present the adapted palette, illustrative book mark, or cover artwork as approved HUCE branding or official school material.",
+      "**Don't** copy NEU landing composition, logos, imagery, or book content into this distinct learning workspace.",
+      "**Don't** infer production authentication, permissions, upload safety, persistence, PDF rendering, or annotation accuracy from the static prototype.",
+      "**Don't** invent tonal ramps, fonts, animation tokens, or component variants while documenting the current CSS.",
+      "**Don't** apply this file as design authority outside `design/wireframe` without an explicit scope decision.\r"
+    ]
+  }
+}

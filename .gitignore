@@ -1,0 +1,29 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local verification and tools
+.tools/
+.superpowers/
+.local/
+test-results/
+playwright-report/
+**/_qa/
+**/__pycache__/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

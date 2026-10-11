@@ -1,0 +1,1690 @@
+{
+  "proposal_intro": [
+    "HUCEScholar được đề xuất như một ứng dụng giáo trình điện tử dành riêng cho sinh viên Trường Đại học Xây dựng Hà Nội. Hệ thống tổ chức học liệu theo học phần, để giảng viên cung cấp và cập nhật tài liệu, sinh viên đọc và ghi chú cá nhân, quản trị viên quản lý tài khoản, danh mục và việc công bố.",
+    "Đề xuất tập trung vào một bản web thử nghiệm có thể dùng trên máy tính và điện thoại. Kết quả cần đánh giá là sinh viên tìm được học liệu phù hợp và sử dụng thuận tiện, giảng viên cập nhật được giáo trình, và nhóm vận hành kiểm soát được nguồn nội dung. Tài liệu là cơ sở thống nhất phạm vi trước khi thiết kế và triển khai."
+  ],
+  "usecase_intro": [
+    "Tài liệu đặc tả hành vi của HUCEScholar thông qua 22 use case của quản trị viên, giảng viên và sinh viên. Mỗi use case có mục tiêu, tiền điều kiện, kích hoạt, luồng chính, ngoại lệ, hậu điều kiện và quy tắc nghiệm thu.",
+    "FR01–FR12 liên kết với Project Proposal. A01–A06 là chính sách MVP đã được người đề xuất chốt ngày 09/10/2026. BR16–BR17 bổ sung chi tiết thiết kế về quyền admin và bàn giao học liệu. Tài liệu là cơ sở thiết kế dữ liệu, màn hình và kiểm thử; chưa phải bằng chứng phần mềm đã được triển khai."
+  ],
+  "requirements": [
+    [
+      "FR01",
+      "Tài khoản và phiên truy cập",
+      "Cấp/xác minh tài khoản, ba role, đăng nhập, đăng xuất và khôi phục mật khẩu"
+    ],
+    [
+      "FR02",
+      "Danh mục và phân công",
+      "Khoa, chương trình, học phần và phạm vi giảng viên phụ trách"
+    ],
+    [
+      "FR03",
+      "Tìm và xem thông tin",
+      "Tìm kiếm metadata có/không dấu, bộ lọc, nguồn, phiên bản và quyền sử dụng"
+    ],
+    [
+      "FR04",
+      "Đọc và tiếp tục đọc",
+      "Reader PDF, điều hướng, zoom và tiến độ theo tài khoản/phiên bản"
+    ],
+    [
+      "FR05",
+      "Ghi chú cá nhân",
+      "Ghi chú theo trang, highlight chữ khi có lớp văn bản; sửa/xóa và đồng bộ"
+    ],
+    [
+      "FR06",
+      "Tải theo quyền",
+      "Tải file gốc được phép sau khi máy chủ kiểm tra quyền"
+    ],
+    [
+      "FR07",
+      "Tài liệu sinh viên đóng góp",
+      "Gửi PDF, bổ sung thông tin và theo dõi/chỉnh sửa bài gửi"
+    ],
+    [
+      "FR08",
+      "Thư viện cá nhân",
+      "Danh sách đã lưu, đang đọc, ghi chú và bài gửi của mình"
+    ],
+    [
+      "FR09",
+      "Tra cứu sách",
+      "Thông tin sách, môn liên quan, nguồn và liên kết đọc/tra cứu"
+    ],
+    [
+      "FR10",
+      "Kiểm duyệt và báo cáo",
+      "Duyệt công bố, yêu cầu sửa, từ chối, ẩn/khôi phục và xử lý báo cáo"
+    ],
+    [
+      "FR11",
+      "Giảng viên quản lý giáo trình",
+      "Bản nháp, phiên bản mới và yêu cầu công bố trong phạm vi phân công"
+    ],
+    [
+      "FR12",
+      "Quản lý dữ liệu sách",
+      "Quản trị viên tạo/cập nhật danh mục sách có nguồn và quyền rõ ràng"
+    ]
+  ],
+  "assumptions": [
+    [
+      "A01",
+      "Tài khoản thử nghiệm do quản trị viên cấp hoặc xác minh từ danh sách được cung cấp hợp lệ; chưa mở tự đăng ký, chưa tích hợp SSO trường."
+    ],
+    [
+      "A02",
+      "Giảng viên gửi yêu cầu công bố; quản trị viên duyệt trước khi sinh viên truy cập. Giảng viên không tự công bố trong MVP."
+    ],
+    [
+      "A03",
+      "Tài khoản đã xác minh được khám phá học liệu đã công bố; bản đầu chưa giới hạn theo lớp/môn đăng ký. Quyền từng tài liệu vẫn được kiểm tra riêng."
+    ],
+    [
+      "A04",
+      "Sinh viên được gửi tài liệu bổ sung để duyệt, không sửa giáo trình do giảng viên quản lý."
+    ],
+    [
+      "A05",
+      "Tải xuống chỉ là file gốc được phép; ghi chú lưu riêng, chưa xuất PDF kèm ghi chú và chưa hỗ trợ offline."
+    ],
+    [
+      "A06",
+      "Thư viện mini dùng thông tin được phép và liên kết nguồn; chưa có API hoặc quyền sao chép toàn văn sách từ trường được xác nhận."
+    ]
+  ],
+  "proposal_sections": [
+    {
+      "title": "1 Tổng quan và vấn đề cần giải quyết",
+      "blocks": [
+        {
+          "p": "Ý tưởng xuất phát từ trải nghiệm phải tìm tài liệu ở nhiều nơi trong quá trình học, đặc biệt khi ôn thi. Khó khăn được phản ánh gồm tìm đúng môn, nhận biết phiên bản phù hợp và chuyển giữa công cụ đọc với công cụ ghi chú. Đây là trải nghiệm của người đề xuất, chưa phải kết quả khảo sát đại diện cho toàn trường."
+        },
+        {
+          "p": "HUCE đã có website thư viện, danh mục học liệu và hướng dẫn đọc tài liệu số bằng tài khoản cá nhân [S1, S2]. Vì vậy, đề tài tập trung cải thiện trải nghiệm sử dụng giáo trình theo môn và vai trò, đồng thời bổ sung cho các nguồn hiện có. Chưa có bằng chứng cho phép kết luận toàn bộ hệ thống của trường thiếu một tính năng cụ thể."
+        },
+        {
+          "p": "HUCEScholar tạo một luồng học liên tục: sinh viên tìm học liệu, kiểm tra nguồn và phiên bản, đọc, ghi chú riêng rồi tiếp tục ở lần truy cập sau. Giảng viên có không gian duy trì học liệu thuộc môn được phân công. Quản trị viên kiểm soát tài khoản, phân công và nội dung công bố."
+        },
+        {
+          "h2": "1 1 Người đọc và mục đích đề xuất"
+        },
+        {
+          "p": "Tài liệu dành cho người đề xuất, người hướng dẫn và nhóm phát triển dự kiến. Nội dung xác lập vấn đề, phạm vi, nguồn lực, rủi ro và cách nghiệm thu bản thử nghiệm. Tên sản phẩm và ba role đã được người đề xuất chọn; chưa có sự xác nhận về tài trợ, đối tác hoặc vị thế hệ thống chính thức của trường."
+        }
+      ]
+    },
+    {
+      "title": "2 Mục tiêu và cách đánh giá",
+      "blocks": [
+        {
+          "p": "Mục tiêu tổng quát là xây dựng ứng dụng giáo trình điện tử có thể thử nghiệm với người dùng thật, giúp tiếp cận học liệu phù hợp và lưu quá trình tự học mà vẫn kiểm soát nguồn và quyền sử dụng nội dung."
+        },
+        {
+          "table": {
+            "headers": [
+              "Mục tiêu",
+              "Chỉ tiêu thử nghiệm đề xuất",
+              "Cách đo"
+            ],
+            "widths": [
+              3.9,
+              7.2,
+              5.7
+            ],
+            "rows": [
+              [
+                "Tìm học liệu thuận tiện",
+                "Ít nhất 80% người thử tìm đúng tài liệu đã có trong kho trong 2 phút",
+                "Quan sát tác vụ tương đương; đối chiếu cách tìm cũ"
+              ],
+              [
+                "Ghi chú đáng tin cậy",
+                "Ghi chú đã được máy chủ xác nhận còn đúng người và phiên bản khi mở lại",
+                "Kiểm thử tải lại, đổi thiết bị, mất mạng và xung đột cập nhật"
+              ],
+              [
+                "Quản lý nội dung rõ trách nhiệm",
+                "Mọi tài liệu công bố có nguồn, phiên bản, quyền và quyết định duyệt",
+                "Rà soát dữ liệu và lịch sử công bố"
+              ],
+              [
+                "Phân quyền đúng",
+                "Không truy cập trái phép qua thay ID, gọi API hoặc URL file trực tiếp",
+                "Kiểm thử tiêu cực theo ma trận ba role"
+              ],
+              [
+                "Kho thử nghiệm có ích",
+                "5–10 môn, mục tiêu 50–100 tài liệu không trùng có căn cứ chia sẻ",
+                "Kiểm kê nguồn và phản hồi của người dùng theo môn"
+              ]
+            ]
+          }
+        },
+        {
+          "p": "Các con số là mục tiêu đề xuất, chưa phải số liệu đã đạt. Thử nghiệm dự kiến gồm 20–50 sinh viên và 2–3 giảng viên nếu có thể mời tham gia. Theo dõi thêm truy vấn không có kết quả, lỗi đọc/lưu, tỷ lệ quay lại và thời gian chờ duyệt; không thu nội dung ghi chú riêng để phân tích hành vi."
+        }
+      ]
+    },
+    {
+      "title": "3 Đối tượng sử dụng và chính sách MVP",
+      "blocks": [
+        {
+          "table": {
+            "headers": [
+              "Vai trò",
+              "Trách nhiệm",
+              "Giới hạn"
+            ],
+            "widths": [
+              3.1,
+              7.2,
+              6.5
+            ],
+            "rows": [
+              [
+                "ADMIN",
+                "Quản lý người dùng, role, danh mục, phân công, sách; duyệt và xử lý báo cáo",
+                "Không biên soạn giáo trình; không đọc ghi chú riêng của người khác"
+              ],
+              [
+                "LECTURER",
+                "Tạo, cập nhật phiên bản và gửi công bố học liệu do mình quản lý thuộc môn được giao",
+                "Không quản lý học liệu của giảng viên khác hoặc ngoài phân công"
+              ],
+              [
+                "STUDENT",
+                "Tìm, đọc, ghi chú, lưu, tải theo quyền và gửi tài liệu bổ sung",
+                "Không sửa giáo trình của giảng viên hoặc tự cấp quyền"
+              ]
+            ]
+          }
+        },
+        {
+          "p": "Giảng viên có thể đọc học liệu được phép và ghi chú cho bản thân. Hệ thống có ba role nghiệp vụ; kiểm duyệt là nhiệm vụ của quản trị viên, không tạo thêm role kiểm duyệt riêng trong bản đầu. Dịch vụ email, công cụ kiểm tra file và nguồn thư viện là hệ thống hỗ trợ, không phải role người dùng."
+        },
+        {
+          "h2": "3 1 Chính sách MVP đã chốt"
+        },
+        {
+          "p": "A01–A06 được người đề xuất chốt ngày 09/10/2026 cho MVP. Giữ mã A để truy vết từ bản 1.0. Thay đổi chính sách phải cập nhật đồng thời proposal, use case, ma trận quyền và tiêu chí nghiệm thu."
+        },
+        {
+          "table": {
+            "headers": [
+              "Mã",
+              "Chính sách MVP"
+            ],
+            "widths": [
+              1.5,
+              15.3
+            ],
+            "rows": []
+          }
+        }
+      ]
+    },
+    {
+      "title": "4 Phạm vi và yêu cầu chức năng",
+      "blocks": [
+        {
+          "p": "Bản đầu là web responsive hỗ trợ PDF, có đăng nhập bằng tài khoản đã xác minh. Sinh viên truy cập các tài liệu đã công bố theo chính sách; ghi chú và tiến độ thuộc từng người. Danh mục sách có thể dẫn ra nguồn ngoài, còn việc đọc/ghi chú trong HUCEScholar chỉ áp dụng cho file nền tảng được phép phục vụ."
+        },
+        {
+          "table": {
+            "headers": [
+              "Mã",
+              "Nhóm chức năng",
+              "Phạm vi bản đầu"
+            ],
+            "widths": [
+              1.5,
+              4.4,
+              10.9
+            ],
+            "rows": []
+          }
+        },
+        {
+          "h2": "4 1 Những phần để giai đoạn sau"
+        },
+        {
+          "bullets": [
+            "Ứng dụng Android/iOS riêng, PWA offline và thông báo đẩy.",
+            "OCR, tìm kiếm toàn văn PDF, highlight vùng ảnh và xuất PDF kèm ghi chú.",
+            "AI hỏi đáp/tóm tắt, ghi chú chia sẻ, học nhóm và điểm thưởng.",
+            "SSO trường, đồng bộ tài khoản thư viện, số lượng sách còn lại và mượn/trả.",
+            "Quản lý lớp, điểm số, giao/nộp bài và chấm điểm.",
+            "Chuyển Word/PowerPoint hoặc xử lý CAD/BIM thành tài liệu đọc."
+          ]
+        },
+        {
+          "p": "Việc đưa một tính năng sang giai đoạn sau không loại bỏ yêu cầu gốc. Bản đầu phải hoàn thành đủ luồng giảng viên gửi giáo trình để công bố, sinh viên đọc và ghi chú, tải theo quyền, cùng đóng góp và kiểm duyệt tài liệu bổ sung."
+        }
+      ]
+    },
+    {
+      "title": "5 Mô hình nghiệp vụ và dữ liệu",
+      "blocks": [
+        {
+          "h2": "5 1 Phát hành và sử dụng giáo trình"
+        },
+        {
+          "p": "Quản trị viên cấp/xác minh tài khoản và phân công môn. Giảng viên tạo bản nháp, upload PDF, cung cấp nguồn và quyền sử dụng. Khi file đạt kiểm tra kỹ thuật, giảng viên gửi công bố. Theo A02, quản trị viên duyệt hoặc trả lại kèm lý do. Sinh viên được đọc phiên bản đã công bố và tải nếu quyền tài liệu cho phép."
+        },
+        {
+          "p": "Mỗi lần thay file tạo phiên bản mới. Bản mới phải được kiểm tra và duyệt lại; bản đang công bố giữ hiệu lực cho tới khi có quyết định thay thế hoặc gỡ. Ghi chú và tiến độ gắn với phiên bản bất biến, tránh chuyển ghi chú sang nội dung khác."
+        },
+        {
+          "h2": "5 2 Đóng góp và kiểm soát chất lượng"
+        },
+        {
+          "p": "Sinh viên gửi học liệu bổ sung kèm môn, loại, nguồn và căn cứ chia sẻ. File được cách ly và kiểm tra trước khi quản trị viên xem xét công bố. Tài liệu sinh viên đóng góp có nhãn riêng; việc qua kiểm duyệt đăng tải không đồng nghĩa đáp án đã được xác nhận chuyên môn."
+        },
+        {
+          "h2": "5 3 Thư viện mini"
+        },
+        {
+          "p": "Tách bản ghi sách khỏi file toàn văn. Khi chưa có hợp tác dữ liệu, quản trị viên biên tập danh mục nhỏ từ thông tin được phép sử dụng, ghi nguồn, thời điểm kiểm tra và liên kết tra cứu. Chưa xác nhận API công khai hoặc quyền tái phân phối sách từ trường. Chỉ tài liệu có quyền phục vụ toàn văn mới được gắn vào reader của HUCEScholar."
+        },
+        {
+          "h2": "5 4 Các nhóm dữ liệu"
+        },
+        {
+          "table": {
+            "headers": [
+              "Nhóm",
+              "Thông tin chính"
+            ],
+            "widths": [
+              4.8,
+              12
+            ],
+            "rows": [
+              [
+                "Tài khoản và phân quyền",
+                "Tài khoản, role, trạng thái, thông tin xác minh và phân công giảng viên"
+              ],
+              [
+                "Danh mục",
+                "Khoa, chương trình, học phần; quan hệ nhiều–nhiều khi môn dùng chung"
+              ],
+              [
+                "Giáo trình và tài liệu",
+                "Định danh, chủ quản lý, môn liên quan, phiên bản, nguồn và quyền"
+              ],
+              [
+                "Hoạt động học cá nhân",
+                "Ghi chú, highlight, tiến độ và tài liệu đã lưu theo người/phiên bản"
+              ],
+              [
+                "Sách và nguồn",
+                "Thông tin sách, môn liên quan, URL nguồn, ngày kiểm tra và file được cấp quyền nếu có"
+              ],
+              [
+                "Kiểm duyệt và báo cáo",
+                "Yêu cầu công bố, quyết định, lý do, người thực hiện và lịch sử"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "6 Giải pháp kỹ thuật và yêu cầu chất lượng",
+      "blocks": [
+        {
+          "p": "Đề xuất một backend chia module nghiệp vụ, một frontend web, database quan hệ và kho file riêng tư. Kiến trúc này cho phép giữ triển khai gọn, tách quyền và luồng nghiệp vụ rõ ràng. Chưa cần chia hệ thống thành nhiều dịch vụ độc lập trong bản đầu."
+        },
+        {
+          "table": {
+            "headers": [
+              "Thành phần",
+              "Phương án tham khảo",
+              "Lưu ý"
+            ],
+            "widths": [
+              3.4,
+              5.5,
+              7.9
+            ],
+            "rows": [
+              [
+                "Frontend",
+                "React và TypeScript",
+                "Web dùng trên máy tính/điện thoại, reader và trạng thái đồng bộ rõ"
+              ],
+              [
+                "Backend",
+                "Spring Boot",
+                "Kiểm tra quyền, phạm vi môn, phiên bản và công bố; chọn theo năng lực nhóm"
+              ],
+              [
+                "Database",
+                "PostgreSQL",
+                "Lưu metadata, quan hệ, ghi chú và lịch sử; không lưu PDF trong bảng nghiệp vụ"
+              ],
+              [
+                "Kho file",
+                "Object storage riêng tư",
+                "Backend cấp quyền đọc/tải và URL có thời hạn ngắn"
+              ],
+              [
+                "PDF",
+                "PDF.js và lớp ghi chú ứng dụng",
+                "Ghi chú theo trang; highlight chữ có điều kiện; scan chưa có OCR"
+              ],
+              [
+                "Tác vụ nền",
+                "Kiểm tra file và gửi email",
+                "Có trạng thái chờ, thất bại và thử lại; không tự duyệt khi dịch vụ lỗi"
+              ]
+            ]
+          }
+        },
+        {
+          "p": "Stack là đề xuất, chưa chốt dependency hoặc phiên bản. Nếu nhóm thành thạo stack khác, ưu tiên năng lực hiện có. Tài khoản web có thể dùng session/cookie bảo mật, chống CSRF; không cần mặc định thêm token phức tạp khi chưa có app riêng."
+        },
+        {
+          "table": {
+            "headers": [
+              "Mã",
+              "Yêu cầu phi chức năng",
+              "Cách kiểm chứng"
+            ],
+            "widths": [
+              1.6,
+              8,
+              7.2
+            ],
+            "rows": [
+              [
+                "NFR01",
+                "Kiểm tra role, sở hữu, phân công và quyền tài liệu tại backend",
+                "Gọi API trực tiếp, thay ID, thu hồi phân công và thử lại"
+              ],
+              [
+                "NFR02",
+                "PDF chưa đạt kiểm tra hoặc chưa duyệt không được phục vụ",
+                "Kiểm tra file lỗi, sai định dạng, bị cách ly và file đang chờ duyệt"
+              ],
+              [
+                "NFR03",
+                "Ghi chú riêng tư, lưu có xác nhận và tránh ghi đè âm thầm",
+                "Thử người dùng khác, lỗi mạng và hai thiết bị sửa đồng thời"
+              ],
+              [
+                "NFR04",
+                "Mục tiêu 95% API tìm kiếm dưới 1 giây với 1.000 bản ghi và 30 người dùng giả lập",
+                "Đo trên môi trường có cấu hình ghi nhận; đo riêng thời gian hiện PDF"
+              ],
+              [
+                "NFR05",
+                "Giao diện đọc được trên điện thoại và dùng bàn phím",
+                "Kiểm tra viewport đại diện, nhãn nút, focus và trạng thái lỗi"
+              ],
+              [
+                "NFR06",
+                "Sao lưu database/file và khôi phục nhất quán",
+                "Khôi phục ở môi trường tách biệt, kiểm tra liên kết tài liệu/ghi chú"
+              ],
+              [
+                "NFR07",
+                "Nhật ký quyết định và thao tác quản trị, không lưu bí mật/ghi chú riêng",
+                "Rà soát audit log và log ứng dụng"
+              ],
+              [
+                "NFR08",
+                "File mới giữ phiên bản cũ và không làm lệch ghi chú",
+                "Thử thay file, đổi số trang, zoom và xoay trang"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "7 Lộ trình nguồn lực và chi phí",
+      "blocks": [
+        {
+          "p": "Lộ trình tham khảo 10–12 tuần cho khoảng hai người đã quen stack, mỗi người dành 15–20 giờ/tuần, có người hỗ trợ nội dung. Chưa bao gồm thời gian xin quyền tích hợp trường. Cần ước lượng lại sau khi chốt A01–A06 và thử kỹ thuật reader; đây chưa phải cam kết tiến độ."
+        },
+        {
+          "table": {
+            "headers": [
+              "Thời gian",
+              "Công việc",
+              "Điều kiện hoàn thành"
+            ],
+            "widths": [
+              2.4,
+              6.8,
+              7.6
+            ],
+            "rows": [
+              [
+                "Tuần 1–2",
+                "Khảo sát sinh viên/giảng viên; chốt quyền; wireframe; thử PDF",
+                "Danh sách môn và nguồn khả dụng, giả định được rà soát, reader khả thi"
+              ],
+              [
+                "Tuần 3–4",
+                "Tài khoản, role, danh mục, phân công và tìm kiếm",
+                "Kiểm tra quyền và kết quả tìm trên dữ liệu mẫu"
+              ],
+              [
+                "Tuần 5–6",
+                "Reader, ghi chú, tiến độ và tải theo quyền",
+                "Lưu/khôi phục đúng người, đúng phiên bản và báo lỗi chính xác"
+              ],
+              [
+                "Tuần 7–8",
+                "Không gian giảng viên, đóng góp, duyệt và sách",
+                "Hoàn thành luồng từ bản nháp đến công bố/ẩn"
+              ],
+              [
+                "Tuần 9–10",
+                "Kiểm thử, bảo vệ file, dữ liệu thật có căn cứ, backup",
+                "Đạt tiêu chí an toàn và khôi phục, không còn lỗi cản trở luồng chính"
+              ],
+              [
+                "Tuần 11–12",
+                "Thử nghiệm có giới hạn và sửa lỗi",
+                "Có kết quả đo, phản hồi và quyết định mở rộng hoặc thu hẹp"
+              ]
+            ]
+          }
+        },
+        {
+          "p": "Các trách nhiệm cần có gồm phân tích/điều phối, frontend, backend, kiểm thử và vận hành/kiểm duyệt. Một người có thể kiêm nhiệm nhưng cần xác định ai chịu trách nhiệm quyết định công bố và xử lý sự cố. Mời giảng viên tham gia là mục tiêu chuẩn bị, chưa phải nguồn lực đã xác nhận."
+        },
+        {
+          "p": "Chi phí cần dự toán gồm hosting, database, kho file, băng thông, backup, email, tên miền và công sức vận hành. Chưa báo giá tiền vì chưa chọn nhà cung cấp và quy mô. Dung lượng lưu phải tính cả phiên bản và bản sao lưu, băng thông phải tính cả đọc online và tải lại."
+        },
+        {
+          "p": "Ví dụ giả định: 1.000 file trung bình 20 MB tạo khoảng 20 GB file gốc; 5.000 lượt tải đủ file cùng dung lượng tạo khoảng 100 GB truyền dữ liệu, chưa gồm đọc online và backup. Ví dụ phục vụ tính quy mô, không phải số liệu đã sử dụng hoặc báo giá."
+        }
+      ]
+    },
+    {
+      "title": "8 Rủi ro và phương án xử lý",
+      "blocks": [
+        {
+          "table": {
+            "headers": [
+              "Rủi ro",
+              "Ảnh hưởng",
+              "Phương án"
+            ],
+            "widths": [
+              4.4,
+              5.2,
+              7.2
+            ],
+            "rows": [
+              [
+                "Nhu cầu đã được nguồn hiện có đáp ứng",
+                "Sản phẩm ít được dùng",
+                "Quan sát tác vụ thực tế và xác định phần trải nghiệm cần cải thiện"
+              ],
+              [
+                "Chưa có giảng viên/nguồn nội dung tham gia",
+                "Không đủ học liệu để thử",
+                "Chọn ít môn, xác nhận người phụ trách và nguồn trước triển khai rộng"
+              ],
+              [
+                "Chưa có quyền tích hợp trường",
+                "Không đồng bộ sách/tài khoản",
+                "Giữ A01/A06 và liên kết nguồn; không phụ thuộc API chưa có"
+              ],
+              [
+                "Tài liệu sai quyền hoặc nội dung không phù hợp",
+                "Phải gỡ và mất niềm tin",
+                "Kiểm nguồn, quyền, nhãn chất lượng; báo cáo và quyết định có nhật ký"
+              ],
+              [
+                "Ghi chú lệch hoặc mất khi cập nhật",
+                "Ảnh hưởng việc học",
+                "Phiên bản bất biến, revision khi sửa và kiểm thử nhiều loại PDF"
+              ],
+              [
+                "Tăng chi phí hoặc quá tải duyệt",
+                "Không duy trì được hệ thống",
+                "Giới hạn file/tần suất, theo dõi băng thông và phân công vận hành"
+              ],
+              [
+                "Mở rộng thành LMS đầy đủ",
+                "Vượt thời gian và năng lực",
+                "Giữ phạm vi giáo trình điện tử và xử lý thay đổi bằng đánh giá tác động"
+              ]
+            ]
+          }
+        },
+        {
+          "p": "Không tự sử dụng mật khẩu cổng trường, vượt kiểm soát truy cập hoặc sao chép hàng loạt sách. Nếu chưa được nhà trường công nhận, giới thiệu đúng đơn vị vận hành. Quy trình gỡ, lưu lịch sử và xóa dữ liệu cần được quy định trước khi tiếp nhận người dùng thật."
+        }
+      ]
+    },
+    {
+      "title": "9 Sản phẩm bàn giao và nghiệm thu",
+      "blocks": [
+        {
+          "bullets": [
+            "Mã nguồn và hướng dẫn cấu hình/chạy trên môi trường thống nhất; thông tin bí mật nằm ngoài mã nguồn.",
+            "Schema và migration, dữ liệu mẫu được ghi nhãn, danh mục nguồn thật đã rà soát quyền.",
+            "Web cho ba role, PDF reader, ghi chú, luồng công bố và đóng góp hoạt động theo đặc tả.",
+            "Tài liệu API, ma trận quyền, use case, kết quả kiểm thử và hướng dẫn vận hành.",
+            "Quy trình sao lưu/khôi phục, kiểm duyệt, tiếp nhận báo cáo và xử lý tài liệu bị gỡ."
+          ]
+        },
+        {
+          "p": "Để nghiệm thu bản thử nghiệm, nhóm cần chứng minh đủ FR01–FR12 và các kiểm tra NFR tương ứng. Các tình huống trọng yếu gồm truy cập trái phép, file chưa duyệt, ghi chú người khác, sửa đồng thời, thay phiên bản và thu hồi tài liệu. Không dùng dữ liệu mẫu hoặc fixture đã rollback làm bằng chứng kho thật có nội dung."
+        },
+        {
+          "p": "Mở thử nghiệm khi nguồn tài liệu và tài khoản đã xác minh, kiểm tra file hoạt động, người vận hành được phân công, backup khôi phục được và các lỗi nghiêm trọng đã xử lý. Quyết định mở rộng dựa trên kết quả tác vụ học tập, khả năng duy trì nội dung và chi phí thực tế."
+        }
+      ]
+    },
+    {
+      "title": "10 Quyết định đã chốt và công việc tiếp theo",
+      "blocks": [
+        {
+          "p": "A01–A06 đã chốt cho MVP ngày 09/10/2026. Admin quản trị và duyệt, không trực tiếp biên soạn giáo trình. Admin có thể bàn giao học liệu giữa các giảng viên đủ phân công; giữ nguyên phiên bản đã công bố, tác giả và ghi chú. Chi tiết ở BR16–BR17 và Business Rules and Publication Workflow."
+        },
+        {
+          "bullets": [
+            "Xác định nhóm phát triển, thời gian mỗi tuần, ngân sách và mốc bắt buộc.",
+            "Chọn 5–10 môn, người phụ trách nội dung và giảng viên có thể thử nghiệm.",
+            "Rà soát nguồn sách/tài liệu và khả năng hợp tác với đơn vị trong trường.",
+            "Chọn stack theo năng lực, thiết kế dữ liệu/API và kế hoạch triển khai chi tiết."
+          ]
+        },
+        {
+          "p": "Các đầu ra trong proposal là mục tiêu triển khai. Hiện chưa có ứng dụng, kết quả khảo sát sinh viên/giảng viên, API trường được xác nhận, dữ liệu đã nhập hay kết quả kiểm thử phần mềm."
+        }
+      ]
+    },
+    {
+      "title": "11 Tài liệu tham khảo",
+      "break_before": true,
+      "blocks": [
+        {
+          "p": "Thông tin nguồn công khai được kiểm tra khi lập bản khởi động ngày 09/10/2026. Không suy ra quyền tích hợp hay tái phân phối từ việc website cho phép tra cứu. Cổng ebook được website thư viện liên kết, nhưng mở trực tiếp bị timeout trong lần kiểm tra; chưa xác nhận phiên đăng nhập/đọc/tải."
+        },
+        {
+          "links": [
+            [
+              "S1 Website Thư viện Trường Đại học Xây dựng Hà Nội",
+              "https://thuvien.huce.edu.vn/default.aspx?mnuid=11"
+            ],
+            [
+              "S2 Hướng dẫn đọc tài liệu số của thư viện",
+              "https://thuvien.huce.edu.vn/introduction.aspx?contentid=1192&mnuid=164"
+            ],
+            [
+              "S3 Cổng sách điện tử HUCE",
+              "https://ebooklib.huce.edu.vn/"
+            ],
+            [
+              "S4 PDF.js của Mozilla",
+              "https://mozilla.github.io/pdf.js/"
+            ],
+            [
+              "S5 Spring Boot",
+              "https://spring.io/projects/spring-boot/"
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "usecase_front": [
+    {
+      "title": "1 Phạm vi thuật ngữ và chính sách MVP",
+      "blocks": [
+        {
+          "p": "Hệ thống phục vụ giáo trình điện tử, học liệu bổ sung và tra cứu sách cho sinh viên HUCE. Phạm vi gồm tài khoản, danh mục, phân công, reader PDF, ghi chú riêng, tải theo quyền, học liệu giảng viên, đóng góp sinh viên và quản trị công bố. Giao bài, chấm điểm, lớp học, OCR, AI, app riêng và tích hợp trường chưa thuộc bản đầu."
+        },
+        {
+          "table": {
+            "headers": [
+              "Thuật ngữ",
+              "Cách hiểu trong tài liệu"
+            ],
+            "widths": [
+              4.1,
+              12.7
+            ],
+            "rows": [
+              [
+                "Giáo trình",
+                "Học liệu do giảng viên được phân công quản lý; nhãn này không tự xác nhận nguồn chính thức hoặc quyền phân phối"
+              ],
+              [
+                "Tài liệu bổ sung",
+                "Học liệu sinh viên gửi để xét duyệt; không thay thế giáo trình giảng viên"
+              ],
+              [
+                "Phiên bản",
+                "Bản chụp bất biến của file, metadata và chính sách đã được duyệt; đổi file hoặc quyền phải duyệt lại"
+              ],
+              [
+                "Công bố",
+                "Chấp thuận một phiên bản để người có quyền truy cập; không đồng nghĩa nội dung đúng tuyệt đối"
+              ],
+              [
+                "Ghi chú",
+                "Dữ liệu cá nhân gắn người dùng, phiên bản và trang; có thể kèm highlight khi PDF có lớp chữ"
+              ],
+              [
+                "Sách nguồn ngoài",
+                "Bản ghi thông tin và liên kết; khả năng đọc/tải do hệ thống nguồn quyết định"
+              ]
+            ]
+          }
+        },
+        {
+          "h2": "1 1 Chính sách MVP đã chốt"
+        },
+        {
+          "table": {
+            "headers": [
+              "Mã",
+              "Chính sách MVP"
+            ],
+            "widths": [
+              1.5,
+              15.3
+            ],
+            "rows": []
+          }
+        },
+        {
+          "p": "A01–A06 thống nhất với Project Proposal phiên bản 1.1, đã chốt ngày 09/10/2026. BR16–BR17 cụ thể hóa quyền admin và bàn giao; không thay đổi ba role hoặc bổ sung chức năng LMS."
+        }
+      ]
+    },
+    {
+      "title": "2 Tác nhân phân quyền và quy tắc",
+      "blocks": [
+        {
+          "table": {
+            "headers": [
+              "Tác nhân",
+              "Vai trò trong use case"
+            ],
+            "widths": [
+              3.5,
+              13.3
+            ],
+            "rows": [
+              [
+                "Quản trị viên",
+                "Quản lý tài khoản/role, danh mục, phân công, sách, công bố và báo cáo"
+              ],
+              [
+                "Giảng viên",
+                "Quản lý học liệu của mình trong môn được phân công; sử dụng học liệu theo quyền"
+              ],
+              [
+                "Sinh viên",
+                "Tìm/đọc/ghi chú/tải/lưu; gửi tài liệu bổ sung và báo cáo"
+              ],
+              [
+                "Dịch vụ hỗ trợ",
+                "Email gửi khôi phục mật khẩu; công cụ kiểm tra file; kho file; website nguồn sách. Không cấp thêm role nghiệp vụ."
+              ]
+            ]
+          }
+        },
+        {
+          "h2": "2 1 Ma trận quyền"
+        },
+        {
+          "table": {
+            "headers": [
+              "Hành động",
+              "ADMIN",
+              "LECTURER",
+              "STUDENT"
+            ],
+            "widths": [
+              7.5,
+              3.1,
+              3.1,
+              3.1
+            ],
+            "rows": [
+              [
+                "Quản lý tài khoản và role",
+                "Có",
+                "Không",
+                "Không"
+              ],
+              [
+                "Quản lý môn và phân công",
+                "Có",
+                "Không",
+                "Không"
+              ],
+              [
+                "Bàn giao chủ quản lý giáo trình",
+                "Có theo BR17",
+                "Không",
+                "Không"
+              ],
+              [
+                "Tạo/cập nhật giáo trình",
+                "Không biên soạn",
+                "Của mình và đúng phân công",
+                "Không"
+              ],
+              [
+                "Duyệt/công bố/ẩn",
+                "Có theo A02",
+                "Gửi công bố",
+                "Không"
+              ],
+              [
+                "Đọc và tải",
+                "Theo quyền tài liệu",
+                "Theo quyền tài liệu",
+                "Theo quyền tài liệu"
+              ],
+              [
+                "Ghi chú và thư viện cá nhân",
+                "Dữ liệu của mình",
+                "Dữ liệu của mình",
+                "Dữ liệu của mình"
+              ],
+              [
+                "Gửi tài liệu bổ sung",
+                "Không",
+                "Qua UC15–17",
+                "Có theo A04"
+              ],
+              [
+                "Xử lý báo cáo và danh mục sách",
+                "Có",
+                "Không",
+                "Không"
+              ]
+            ]
+          }
+        },
+        {
+          "h2": "2 2 Quy tắc nghiệp vụ"
+        },
+        {
+          "bullets": [
+            "BR01 Tài khoản phải hoạt động và có quyền với thao tác/đối tượng. Kiểm tra ở máy chủ trong từng yêu cầu, kể cả truy cập trực tiếp URL/API.",
+            "BR02 Chỉ ADMIN cấp/đổi role và phân công giảng viên. Không cho tự nâng quyền; không được vô hiệu hóa hoặc hạ quyền quản trị viên hoạt động cuối cùng.",
+            "BR03 LECTURER chỉ quản lý học liệu của mình thuộc các môn đang được phân công. Thu hồi phân công chặn thay đổi/gửi công bố mới; nội dung đã công bố chỉ bị gỡ khi có quyết định quản trị.",
+            "BR04 File PDF phải đạt kiểm tra định dạng thật, kích thước, mã băm và an toàn trước xét công bố. Nếu kiểm tra lỗi hoặc đang chờ thì không cấp file cho sinh viên.",
+            "BR05 Trạng thái kiểm tra file, trạng thái xét công bố và hiển thị tài liệu là ba trục riêng. Một cờ published không thay thế toàn bộ điều kiện.",
+            "BR06 Chỉ ADMIN duyệt đúng phiên bản đã gửi theo A02. File, metadata và quyền của phiên bản đang xét không đổi âm thầm; muốn sửa phải rút yêu cầu rồi gửi lại.",
+            "BR07 Phiên bản đã công bố là bất biến. Phiên bản mới giữ nguyên liên kết ghi chú bản cũ; bản cũ chỉ tiếp tục đọc nếu quyền còn hiệu lực và chưa bị gỡ.",
+            "BR08 Ghi chú thuộc người tạo. ADMIN và LECTURER không có giao diện/API đọc ghi chú riêng của người khác trong luồng thông thường.",
+            "BR09 Tải chỉ áp dụng khi phiên bản được đọc và có downloadAllowed. Download file gốc không bao gồm ghi chú; khóa tải trên UI không thay thế kiểm tra backend.",
+            "BR10 Bản ghi sách nguồn ngoài chỉ cung cấp thông tin/đường dẫn. Không tự nhận có toàn văn, số bản còn lại hoặc quyền ghi chú tại nguồn ngoài.",
+            "BR11 Quyết định duyệt, ẩn, khôi phục, thay role và phân công có nhật ký người thực hiện, đối tượng, thời gian và lý do; log không chứa mật khẩu/token/ghi chú riêng.",
+            "BR12 Lưu ghi chú có revision để phát hiện cập nhật đồng thời. Thông báo đã lưu chỉ xuất hiện sau xác nhận máy chủ; khi lỗi giữ bản nháp trong phiên mở và cho thử lại.",
+            "BR13 Nguồn và căn cứ chia sẻ phải được khai báo. Nhãn đã duyệt đăng tải, nguồn chính thức và đã kiểm tra chuyên môn phải phân biệt.",
+            "BR14 Tài liệu bị ẩn không được cấp lượt đọc/tải mới. URL ngắn hạn đã cấp có thể còn hiệu lực đến lúc hết hạn; không thu hồi được bản người dùng đã tải.",
+            "BR15 Khôi phục chỉ áp dụng phiên bản từng được duyệt, file còn an toàn và quyền còn hợp lệ. Không biến bản bị từ chối thành bản công bố bằng thao tác khôi phục.",
+            "BR16 ADMIN không tạo, thay file hoặc sửa nội dung/metadata giáo trình trong MVP. ADMIN duyệt, yêu cầu sửa, ẩn/khôi phục và bàn giao chủ quản lý theo UC06. Danh mục sách vẫn do ADMIN biên tập theo UC22.",
+            "BR17 Bàn giao chỉ áp dụng học liệu giảng viên. Người nhận phải hoạt động và được giao tất cả môn liên quan. Chuyển chủ quản lý và đưa bản SUBMITTED về DRAFT trong một giao dịch có kiểm tra revision; người nhận rà soát và gửi lại. Giữ tác giả/người gửi cũ trong lịch sử, file đã duyệt và ghi chú. Không tự bàn giao khi thu hồi phân công."
+          ]
+        },
+        {
+          "h2": "2 3 Trạng thái nội dung"
+        },
+        {
+          "p": "Kiểm tra file dùng CHECKING, SAFE, FAILED. Xét công bố dùng DRAFT, SUBMITTED, CHANGES_REQUIRED, APPROVED, REJECTED. Hiển thị dùng VISIBLE, HIDDEN. Chỉ phiên bản SAFE và APPROVED của tài liệu VISIBLE, kèm quyền người dùng phù hợp, mới được phục vụ trong luồng sinh viên. APPROVED không tự tạo VISIBLE nếu tài liệu đang bị gỡ. MVP ẩn/khôi phục toàn tài liệu, áp dụng tất cả phiên bản; không có thao tác ẩn riêng một phiên bản. Phiên bản cũ còn phải đáp ứng quyền hiện hành và điều kiện an toàn."
+        },
+        {
+          "p": "Rút yêu cầu từ SUBMITTED về DRAFT để chỉnh sửa; yêu cầu mới cần duyệt lại. Khi chấp thuận phiên bản mới, cập nhật con trỏ phiên bản hiện hành trong cùng giao dịch. Thao tác đồng thời phải kiểm tra trạng thái/revision để không công bố phiên bản đã bị rút hoặc sửa."
+        }
+      ]
+    },
+    {
+      "title": "3 Danh mục use case",
+      "blocks": [
+        {
+          "p": "Mã UC là định danh ổn định để đối chiếu với yêu cầu, sơ đồ và kịch bản kiểm thử. Các use case dùng chung cũng chịu chính sách tài liệu; quyền ADMIN không mặc nhiên bỏ qua quyền phân phối nội dung."
+        },
+        {
+          "table": {
+            "headers": [
+              "Mã",
+              "Use case",
+              "Tác nhân chính",
+              "Yêu cầu"
+            ],
+            "widths": [
+              1.7,
+              7.2,
+              4.4,
+              3.5
+            ],
+            "rows": []
+          }
+        }
+      ]
+    }
+  ],
+  "usecases": [
+    {
+      "id": "UC01",
+      "name": "Đăng nhập",
+      "short": "Đăng nhập",
+      "actors": "ADMIN, LECTURER, STUDENT",
+      "fr": [
+        "FR01"
+      ],
+      "goal": "Truy cập chức năng đúng role bằng tài khoản đã được cấp hoặc xác minh.",
+      "pre": "Tài khoản tồn tại theo A01; người dùng chưa có phiên hợp lệ.",
+      "trigger": "Người dùng gửi biểu mẫu đăng nhập.",
+      "steps": [
+        "Người dùng nhập định danh tài khoản và mật khẩu.",
+        "Hệ thống kiểm tra dữ liệu, giới hạn thử đăng nhập và xác thực thông tin.",
+        "Hệ thống kiểm tra trạng thái hoạt động và role được cấp.",
+        "Hệ thống tạo phiên bảo mật, xác lập quyền và ghi sự kiện đăng nhập không chứa bí mật.",
+        "Chuyển đến trang phù hợp role hoặc đích ban đầu nếu người dùng có quyền."
+      ],
+      "alts": [
+        "Sai thông tin: trả thông báo chung, không tiết lộ tài khoản tồn tại; không tạo phiên.",
+        "Tài khoản chưa xác minh/bị khóa hoặc quá giới hạn: từ chối và hướng dẫn cách xử lý thích hợp; không cho dùng role từ dữ liệu client.",
+        "Đích chia sẻ không còn truy cập được: đăng nhập vẫn thành công nhưng thông báo tài liệu không khả dụng."
+      ],
+      "post": "Có phiên hợp lệ gắn tài khoản và quyền hiện tại; thất bại không tạo phiên có quyền.",
+      "rules": "A01, BR01, BR02. Nghiệm thu bằng ba role, tài khoản bị khóa, mật khẩu sai và đường dẫn không được phép."
+    },
+    {
+      "id": "UC02",
+      "name": "Đăng xuất",
+      "short": "Đăng xuất",
+      "actors": "ADMIN, LECTURER, STUDENT",
+      "fr": [
+        "FR01"
+      ],
+      "goal": "Kết thúc phiên đang dùng để bảo vệ tài khoản.",
+      "pre": "Người dùng có phiên đăng nhập hoặc trình duyệt còn thông tin phiên.",
+      "trigger": "Người dùng chọn đăng xuất.",
+      "steps": [
+        "Nếu có ghi chú chưa lưu, giao diện thông báo để người dùng lưu lại hoặc chủ động bỏ bản nháp.",
+        "Người dùng xác nhận tiếp tục đăng xuất khi có thay đổi chưa lưu.",
+        "Máy chủ vô hiệu hóa phiên hiện tại và trả kết quả.",
+        "Trình duyệt xóa thông tin phiên theo cơ chế xác thực và chuyển tới đăng nhập.",
+        "Các yêu cầu bảo vệ tiếp theo bằng phiên cũ bị từ chối."
+      ],
+      "alts": [
+        "Phiên đã hết hạn: vẫn dọn thông tin phiên ở trình duyệt, coi thao tác kết thúc phiên là hoàn tất.",
+        "Mất mạng: giao diện có thể dọn thông tin cục bộ nhưng phải nói chưa xác nhận thu hồi phiên máy chủ; không tuyên bố thu hồi mọi thiết bị.",
+        "Người dùng chọn quay lại vì bản nháp chưa lưu: giữ reader và chưa kết thúc phiên."
+      ],
+      "post": "Phiên hiện tại kết thúc khi máy chủ xác nhận; không tự xóa ghi chú đã lưu hoặc phiên ở thiết bị khác.",
+      "rules": "BR01, BR08, BR12. Thử gọi API bằng phiên cũ sau đăng xuất; không gửi mật khẩu trong thao tác."
+    },
+    {
+      "id": "UC03",
+      "name": "Khôi phục mật khẩu",
+      "short": "Khôi phục mật khẩu",
+      "actors": "ADMIN, LECTURER, STUDENT; dịch vụ email hỗ trợ",
+      "fr": [
+        "FR01"
+      ],
+      "goal": "Đặt mật khẩu mới khi mất mật khẩu mà không cần cung cấp mật khẩu cổng trường.",
+      "pre": "Tài khoản có kênh email đã xác minh; dịch vụ gửi thư được cấu hình.",
+      "trigger": "Người dùng chọn quên mật khẩu.",
+      "steps": [
+        "Người dùng gửi email tài khoản.",
+        "Hệ thống trả phản hồi chung và, nếu tài khoản hợp lệ, tạo token một lần có thời hạn rồi gửi liên kết.",
+        "Người dùng mở liên kết và nhập mật khẩu mới đáp ứng chính sách.",
+        "Hệ thống kiểm tra token, thời hạn và trạng thái tài khoản.",
+        "Hệ thống cập nhật mật khẩu an toàn, tiêu thụ token và thu hồi các phiên cũ.",
+        "Thông báo thành công và yêu cầu đăng nhập lại."
+      ],
+      "alts": [
+        "Email không tồn tại: phản hồi tương tự để tránh dò tài khoản; không tạo tài khoản mới.",
+        "Token hết hạn, dùng lại hoặc không hợp lệ: từ chối và cho yêu cầu liên kết mới.",
+        "Gửi email lỗi: ghi trạng thái lỗi để xử lý/thử lại, không hiển thị token trong UI/log; tài khoản bị khóa vẫn không được mở khóa bởi đặt lại mật khẩu."
+      ],
+      "post": "Thành công có mật khẩu mới và token không còn dùng được; thất bại giữ mật khẩu cũ.",
+      "rules": "A01, BR01, BR11. Kiểm tra token dùng một lần, giới hạn tần suất và phiên cũ sau thay mật khẩu."
+    },
+    {
+      "id": "UC04",
+      "name": "Quản lý tài khoản và phân quyền",
+      "short": "Quản lý tài khoản và role",
+      "actors": "ADMIN",
+      "fr": [
+        "FR01"
+      ],
+      "goal": "Cấp, cập nhật, khóa tài khoản và gán role đúng người.",
+      "pre": "Quản trị viên đang hoạt động; có căn cứ xác minh người được cấp tài khoản theo A01.",
+      "trigger": "Quản trị viên mở quản lý người dùng và chọn tạo hoặc cập nhật.",
+      "steps": [
+        "Quản trị viên nhập hoặc tìm thông tin người dùng.",
+        "Hệ thống kiểm tra định danh trùng, role hợp lệ và trạng thái hiện tại.",
+        "Quản trị viên chọn role/trạng thái, khai báo lý do thay đổi khi cần.",
+        "Hệ thống kiểm tra quyền và điều kiện còn quản trị viên hoạt động.",
+        "Lưu thay đổi, thu hồi hoặc làm mất hiệu lực quyền phiên liên quan ngay khi khóa/đổi role, ghi nhật ký.",
+        "Hiển thị kết quả; tài khoản mới nhận cơ chế thiết lập mật khẩu an toàn."
+      ],
+      "alts": [
+        "Trùng định danh: từ chối tạo mới và dẫn đến bản ghi hiện có; không gộp người dùng tự động.",
+        "Khóa/hạ quyền ADMIN hoạt động cuối cùng: từ chối để tránh mất khả năng quản trị.",
+        "Client STUDENT/LECTURER tự gửi role nâng quyền hoặc sửa ID tài khoản khác: máy chủ từ chối, không cập nhật."
+      ],
+      "post": "Tài khoản và quyền thay đổi nhất quán; ghi chú/tài liệu không bị xóa theo thao tác khóa.",
+      "rules": "A01, BR01, BR02, BR11. Kiểm tra khóa tài khoản khi đang có phiên và thay role đồng thời."
+    },
+    {
+      "id": "UC05",
+      "name": "Quản lý danh mục học phần",
+      "short": "Quản lý danh mục môn",
+      "actors": "ADMIN",
+      "fr": [
+        "FR02"
+      ],
+      "goal": "Duy trì khoa, chương trình và học phần có định danh rõ để tổ chức học liệu.",
+      "pre": "Quản trị viên có phiên hợp lệ và quyền quản lý danh mục.",
+      "trigger": "Quản trị viên chọn tạo, sửa hoặc ngừng sử dụng một mục danh mục.",
+      "steps": [
+        "Nhập mã, tên và quan hệ khoa/chương trình/học phần.",
+        "Hệ thống kiểm tra trường bắt buộc, mã trùng trong danh mục và quan hệ tham chiếu.",
+        "Quản trị viên xem các tài liệu/phân công đang liên quan trước thay đổi.",
+        "Hệ thống lưu cập nhật và lịch sử; với mục đang được dùng, áp dụng ngừng sử dụng thay vì xóa dây chuyền.",
+        "Danh mục tìm kiếm và các màn hình liên quan phản ánh trạng thái mới."
+      ],
+      "alts": [
+        "Mã trùng hoặc quan hệ không hợp lệ: trả lỗi theo trường, giữ dữ liệu nhập.",
+        "Yêu cầu xóa mục đang có tài liệu/phân công: chặn xóa, cho ngừng sử dụng theo chính sách.",
+        "Hai quản trị viên cùng sửa: phát hiện bản ghi đã đổi và yêu cầu tải lại trước ghi đè."
+      ],
+      "post": "Danh mục nhất quán; lịch sử và các tài liệu liên quan được giữ.",
+      "rules": "BR01, BR11. Môn dùng chung có thể liên quan nhiều chương trình; không tự suy ra mã môn chính thức."
+    },
+    {
+      "id": "UC06",
+      "name": "Phân công giảng viên phụ trách môn",
+      "short": "Phân công giảng viên",
+      "actors": "ADMIN",
+      "fr": [
+        "FR02",
+        "FR11"
+      ],
+      "goal": "Xác định phạm vi giảng viên và bàn giao chủ quản lý học liệu khi cần.",
+      "pre": "Giảng viên có role LECTURER hoạt động, môn tồn tại và sử dụng được.",
+      "trigger": "Quản trị viên thêm/thu hồi phân công hoặc chọn bàn giao học liệu giảng viên.",
+      "steps": [
+        "Chọn giảng viên và một hoặc nhiều môn phù hợp.",
+        "Hệ thống hiển thị phân công và học liệu hiện có.",
+        "Quản trị viên xác nhận thêm/thu hồi cùng lý do khi cần.",
+        "Hệ thống kiểm tra trùng, lưu phân công và nhật ký.",
+        "Mọi yêu cầu quản lý sau đó kiểm tra phạm vi hiện tại, không chỉ dữ liệu lưu trong phiên cũ.",
+        "Khi bàn giao: chọn học liệu, giảng viên nhận và nhập lý do; hệ thống kiểm tra người nhận hoạt động, được giao tất cả môn liên quan.",
+        "Kiểm tra revision và chuyển chủ quản lý trong giao dịch; đưa phiên bản SUBMITTED về DRAFT, ghi audit và yêu cầu người nhận rà soát/gửi lại. Giữ phiên bản đã công bố, tác giả lịch sử và ghi chú."
+      ],
+      "alts": [
+        "Chọn tài khoản không phải giảng viên hoặc môn ngừng sử dụng: từ chối.",
+        "Phân công đã tồn tại: trả trạng thái hiện có, không tạo trùng.",
+        "Thu hồi khi có bản nháp/bài chờ công bố: chặn giảng viên sửa/gửi tiếp; quản trị viên cần xử lý người phụ trách trước công bố. Tài liệu đang công bố chưa tự bị gỡ.",
+        "Người nhận thiếu phân công, tài khoản ngừng hoạt động hoặc dữ liệu vừa đổi: từ chối bàn giao; không chuyển một phần.",
+        "Bài sinh viên đóng góp không được chuyển thành giáo trình bằng thao tác bàn giao."
+      ],
+      "post": "Phân công/chủ quản lý phản ánh thao tác đã xác nhận. Thu hồi đơn thuần không tự chuyển chủ hoặc gỡ bản công bố. Bản chờ duyệt bị rút khi bàn giao cần được người nhận gửi lại.",
+      "rules": "BR02, BR03, BR11. Thử API từ phiên giảng viên cũ ngay sau khi bị thu hồi phân công. BR16, BR17. Kiểm tra người cũ mất quyền sửa sau bàn giao, người nhận phải gửi lại và ghi chú vẫn gắn đúng phiên bản."
+    },
+    {
+      "id": "UC07",
+      "name": "Tìm kiếm và xem thông tin học liệu",
+      "short": "Tìm và xem học liệu",
+      "actors": "STUDENT; LECTURER và ADMIN theo quyền truy cập",
+      "fr": [
+        "FR03"
+      ],
+      "goal": "Tìm đúng tài liệu và đánh giá nguồn, phiên bản, quyền trước khi học.",
+      "pre": "Tài khoản hoạt động theo A03; có dữ liệu danh mục/tài liệu được phép hiển thị.",
+      "trigger": "Người dùng nhập truy vấn hoặc mở một môn.",
+      "steps": [
+        "Nhập mã/tên môn, tiêu đề hoặc tác giả; chọn loại tài liệu/năm khi cần.",
+        "Hệ thống chuẩn hóa truy vấn tiếng Việt và tìm trong metadata theo quyền hiện tại.",
+        "Trả danh sách phân trang với nguồn, loại, năm, phiên bản và nhãn phù hợp.",
+        "Người dùng chọn tài liệu.",
+        "Hệ thống kiểm tra lại quyền và hiển thị chi tiết, điều kiện đọc/tải cùng phiên bản hiện hành."
+      ],
+      "alts": [
+        "Không có kết quả: gợi ý bỏ bớt bộ lọc hoặc tìm tên khác; không tự sinh nội dung.",
+        "Tài liệu bị ẩn hoặc quyền đổi sau khi tìm: từ chối trang/file bảo vệ và nêu không còn khả dụng.",
+        "Truy vấn không hợp lệ hoặc tìm kiếm lỗi: thông báo rõ, giữ truy vấn để thử lại; không lộ metadata bản nháp ngoài quyền."
+      ],
+      "post": "Người dùng có kết quả/chi tiết hợp lệ; chưa tự tải file hoặc tạo ghi chú.",
+      "rules": "A03, BR01, BR13. Bản đầu tìm metadata, không cam kết tìm chữ trong mọi PDF. Thử truy vấn có/không dấu và bản đang chờ duyệt."
+    },
+    {
+      "id": "UC08",
+      "name": "Đọc giáo trình và tiếp tục đọc",
+      "short": "Đọc và tiếp tục đọc",
+      "actors": "STUDENT; LECTURER và ADMIN với nội dung được phép",
+      "fr": [
+        "FR04"
+      ],
+      "goal": "Đọc một phiên bản PDF và tiếp tục đúng vị trí ở lần sau.",
+      "pre": "Phiên bản đã được công bố, file an toàn và người dùng còn quyền đọc; phiên bản cũ chỉ mở khi chính sách còn cho phép.",
+      "trigger": "Người dùng chọn đọc hoặc tiếp tục đọc.",
+      "steps": [
+        "Máy chủ kiểm tra tài khoản, trạng thái hiển thị, phiên bản và quyền đọc.",
+        "Cấp nội dung hoặc URL có thời hạn cho đúng phiên bản.",
+        "Reader tải trang và tiến độ đã lưu của người dùng trên phiên bản đó.",
+        "Người dùng chuyển trang, zoom hoặc xoay; giao diện phản hồi việc tải trang.",
+        "Hệ thống lưu tiến độ sau thao tác phù hợp; lần sau dùng đúng phiên bản/tiến độ.",
+        "Khi có bản mới, thông báo lựa chọn mở bản mới hoặc tiếp tục bản cũ nếu còn quyền, không tự chuyển ghi chú."
+      ],
+      "alts": [
+        "PDF scan: vẫn đọc ảnh/trang và ghi chú theo trang; không hứa highlight chữ.",
+        "File lỗi/có mật khẩu hoặc mạng chậm: hiển thị lỗi/trạng thái tải, cho thử lại; không tạo tiến độ giả.",
+        "URL hết hạn hoặc tài liệu bị gỡ khi đang đọc: yêu cầu lại quyền; nếu không còn quyền thì dừng cấp nội dung mới, giữ ghi chú riêng đã lưu."
+      ],
+      "post": "Người dùng đọc nội dung được phép; tiến độ được lưu khi máy chủ xác nhận, không thay nội dung PDF.",
+      "rules": "BR01, BR04, BR07, BR14. Thử PDF chữ, scan, trang xoay, file lớn và phiên bản bị gỡ."
+    },
+    {
+      "id": "UC09",
+      "name": "Quản lý ghi chú và highlight cá nhân",
+      "short": "Ghi chú và highlight",
+      "actors": "STUDENT; LECTURER và ADMIN cho ghi chú của mình",
+      "fr": [
+        "FR05"
+      ],
+      "goal": "Lưu kiến thức riêng gắn đúng trang và phiên bản tài liệu.",
+      "pre": "Người dùng có quyền đọc phiên bản; ghi chú sửa/xóa thuộc chính người đó.",
+      "trigger": "Chọn thêm ghi chú, highlight chữ, sửa hoặc xóa ghi chú trong reader.",
+      "steps": [
+        "Người dùng chọn trang hoặc đoạn chữ có thể chọn và nhập nội dung.",
+        "Reader xác định phiên bản, trang và tọa độ trong hệ trang PDF; hiển thị bản nháp.",
+        "Gửi thay đổi với revision hiện tại; máy chủ kiểm tra sở hữu, quyền và dữ liệu.",
+        "Lưu thay đổi rồi trả ID/revision mới.",
+        "Giao diện chỉ hiển thị đã lưu sau xác nhận; tải lại/thiết bị khác đọc được bản đã lưu.",
+        "Khi sửa/xóa, áp dụng cùng kiểm tra sở hữu và revision; xóa không ảnh hưởng PDF gốc."
+      ],
+      "alts": [
+        "Không có lớp chữ: vô hiệu hóa highlight chữ, vẫn cho ghi chú theo trang.",
+        "Mất mạng hoặc hết phiên: giữ bản nháp trong phiên đang mở, thông báo chưa lưu và cho đăng nhập/thử lại; không cam kết tồn tại sau đóng trình duyệt.",
+        "Revision đã đổi trên thiết bị khác: báo xung đột, cho xem bản mới và chọn cách xử lý; ID của người khác bị từ chối."
+      ],
+      "post": "Ghi chú đã xác nhận thuộc đúng người/phiên bản; khi thất bại không ghi đè âm thầm dữ liệu đã lưu.",
+      "rules": "A05, BR07, BR08, BR12. Thử zoom/xoay/resize, hai thiết bị cùng sửa và API truy cập ghi chú người khác."
+    },
+    {
+      "id": "UC10",
+      "name": "Tải tài liệu theo quyền",
+      "short": "Tải file gốc",
+      "actors": "STUDENT, LECTURER, ADMIN theo quyền tài liệu",
+      "fr": [
+        "FR06"
+      ],
+      "goal": "Nhận file gốc của phiên bản được phép tải.",
+      "pre": "Tài khoản hoạt động; tài liệu được đọc và phiên bản cho phép tải.",
+      "trigger": "Người dùng chọn tải xuống.",
+      "steps": [
+        "Giao diện hiển thị điều kiện sử dụng và phiên bản sắp tải.",
+        "Người dùng xác nhận tải.",
+        "Máy chủ kiểm tra lại quyền đọc/tải, trạng thái công bố/hiển thị và an toàn file.",
+        "Cấp luồng tải hoặc URL ngắn hạn cho đúng file; đặt tên file phù hợp.",
+        "Trình duyệt nhận file gốc; nền tảng không ghép ghi chú cá nhân vào file."
+      ],
+      "alts": [
+        "downloadAllowed bị tắt hoặc tài liệu bị gỡ: từ chối cả yêu cầu gọi API trực tiếp.",
+        "URL hết hạn/mạng đứt: cho yêu cầu tải lại sau kiểm tra quyền, không tự mở quyền mới.",
+        "Bản ghi sách chỉ có nguồn ngoài: mở nguồn theo UC12, không giả lập file tải từ HUCEScholar."
+      ],
+      "post": "Lượt tải được cấp đúng quyền; không bảo đảm người dùng giữ bí mật hoặc không sao chép file sau tải.",
+      "rules": "A05, BR09, BR14. Việc cho đọc PDF trong trình duyệt không tạo bảo đảm DRM; không hứa tuyệt đối ngăn sao chép bằng ẩn nút tải."
+    },
+    {
+      "id": "UC11",
+      "name": "Quản lý thư viện cá nhân",
+      "short": "Thư viện cá nhân",
+      "actors": "STUDENT; LECTURER và ADMIN với dữ liệu của mình",
+      "fr": [
+        "FR08"
+      ],
+      "goal": "Sắp xếp tài liệu đã lưu, đang đọc và ghi chú của bản thân.",
+      "pre": "Người dùng có phiên hợp lệ.",
+      "trigger": "Chọn lưu/bỏ lưu tài liệu hoặc mở thư viện cá nhân.",
+      "steps": [
+        "Người dùng lưu một tài liệu được phép hoặc mở danh sách cá nhân.",
+        "Máy chủ kiểm tra chủ sở hữu, bảo đảm không tạo mục lưu trùng.",
+        "Hiển thị mục đã lưu, đang đọc, ghi chú và bài gửi của người dùng theo bộ lọc.",
+        "Người dùng chọn mở tài liệu/ghi chú; máy chủ kiểm tra quyền hiện tại.",
+        "Người dùng bỏ lưu nếu muốn; hệ thống chỉ bỏ quan hệ lưu của người đó."
+      ],
+      "alts": [
+        "Danh sách trống: giải thích cách tìm và lưu tài liệu.",
+        "Tài liệu bị gỡ: giữ thông báo không khả dụng, không cấp file; không xóa ghi chú âm thầm.",
+        "Bỏ lưu hoặc gửi lại thao tác nhiều lần: trả trạng thái nhất quán; không xóa tài liệu gốc, ghi chú hay tiến độ."
+      ],
+      "post": "Thư viện phản ánh thao tác của người dùng, không thay đổi dữ liệu cá nhân người khác.",
+      "rules": "BR01, BR08, BR14. Thử cùng tài liệu được lưu nhiều lần và truy cập thư viện bằng ID tài khoản khác."
+    },
+    {
+      "id": "UC12",
+      "name": "Tra cứu sách và mở nguồn",
+      "short": "Tra cứu sách",
+      "actors": "STUDENT, LECTURER, ADMIN; website nguồn ngoài hỗ trợ",
+      "fr": [
+        "FR09"
+      ],
+      "goal": "Tìm thông tin sách phù hợp và đến đúng nơi tra cứu/đọc.",
+      "pre": "Có bản ghi sách được phép hiển thị với nguồn rõ ràng.",
+      "trigger": "Người dùng tìm sách theo tiêu đề/tác giả hoặc chọn sách liên quan tới môn.",
+      "steps": [
+        "Hệ thống tìm trong danh mục sách và trả kết quả theo quyền.",
+        "Người dùng mở chi tiết, xem tác giả, năm, nguồn, môn liên quan và ngày kiểm tra.",
+        "Nếu có PDF được phép phục vụ, hệ thống đưa đến tài liệu tương ứng và kiểm tra quyền như UC08.",
+        "Nếu chỉ có liên kết ngoài, thông báo điều kiện nguồn và mở website đó.",
+        "Người dùng đăng nhập ở nguồn nếu được yêu cầu; nền tảng không nhận mật khẩu nguồn."
+      ],
+      "alts": [
+        "Liên kết lỗi hoặc nguồn timeout: nêu nguồn không truy cập được, cho báo lỗi; không suy ra sách đã bị xóa.",
+        "Nguồn yêu cầu đăng nhập/trả phí: quyền ở HUCEScholar không thay thế quyền tại nguồn.",
+        "Thiếu dữ liệu tồn kho hoặc toàn văn: không hiển thị con số/nút tải như đã được xác nhận."
+      ],
+      "post": "Người dùng nhận thông tin và đường dẫn đúng nguồn hoặc reader có quyền; chưa đồng bộ dữ liệu riêng từ nguồn.",
+      "rules": "A06, BR10, BR13. Ghi chú trực tiếp chỉ áp dụng PDF do HUCEScholar được phép phục vụ."
+    },
+    {
+      "id": "UC13",
+      "name": "Sinh viên gửi tài liệu bổ sung",
+      "short": "Gửi tài liệu bổ sung",
+      "actors": "STUDENT; dịch vụ kiểm tra file hỗ trợ",
+      "fr": [
+        "FR07"
+      ],
+      "goal": "Đóng góp PDF để quản trị viên xét công bố.",
+      "pre": "Sinh viên đã xác minh, tài khoản hoạt động và còn hạn mức gửi theo cấu hình.",
+      "trigger": "Sinh viên chọn gửi tài liệu.",
+      "steps": [
+        "Chọn PDF; nhập tiêu đề, môn, loại, nguồn và căn cứ chia sẻ.",
+        "Hệ thống kiểm tra dữ liệu, dung lượng/định dạng và mã băm; lưu bản nháp và file vào vùng riêng tư.",
+        "Chạy kiểm tra an toàn, hiển thị CHECKING rồi SAFE hoặc FAILED.",
+        "Khi SAFE và đủ thông tin, sinh viên gửi duyệt.",
+        "Máy chủ chuyển bản nháp sang SUBMITTED và ghi thời điểm.",
+        "Hiển thị bài gửi trong thư viện cá nhân; chưa đưa vào kho sinh viên đọc."
+      ],
+      "alts": [
+        "Sai file/vượt giới hạn/thông tin thiếu: trả lỗi rõ, giữ metadata đã nhập; đề xuất mặc định 50 MB và 5 lượt/ngày, được cấu hình lại.",
+        "Mã băm trùng: cảnh báo tài liệu hiện có; không tự xuất bản hoặc gộp quyền của hai nguồn.",
+        "Kiểm tra file lỗi hoặc dịch vụ chưa sẵn sàng: giữ cách ly, chưa cho gửi duyệt/công bố; upload đứt có cơ chế thử lại không tạo trùng bài gửi."
+      ],
+      "post": "Có bản nháp riêng tư hoặc bài chờ duyệt thuộc sinh viên; chỉ UC18 mới cho công bố theo A02.",
+      "rules": "A04, BR04, BR05, BR13. File chưa đạt kiểm tra không được phục vụ công khai dù biết khóa đối tượng."
+    },
+    {
+      "id": "UC14",
+      "name": "Theo dõi và chỉnh sửa bài gửi",
+      "short": "Theo dõi bài gửi",
+      "actors": "STUDENT",
+      "fr": [
+        "FR07",
+        "FR08"
+      ],
+      "goal": "Biết trạng thái đóng góp và hoàn thiện bài gửi của mình.",
+      "pre": "Bài gửi thuộc sinh viên đang đăng nhập.",
+      "trigger": "Sinh viên mở tài liệu đã gửi và chọn xem/chỉnh sửa.",
+      "steps": [
+        "Hệ thống hiển thị trạng thái kiểm tra, xét duyệt, phản hồi và lịch sử bài gửi.",
+        "Với DRAFT hoặc CHANGES_REQUIRED, sinh viên bổ sung thông tin/file theo phản hồi; bắt đầu sửa bản CHANGES_REQUIRED đưa bản đó về DRAFT.",
+        "Nếu đang SUBMITTED, sinh viên phải rút yêu cầu về DRAFT trước khi sửa.",
+        "Thay file yêu cầu kiểm tra an toàn lại; phiên bản đã APPROVED không bị ghi đè.",
+        "Sinh viên gửi duyệt lại khi đủ điều kiện và theo dõi kết quả mới."
+      ],
+      "alts": [
+        "Tài liệu của người khác: từ chối dù người dùng thay ID.",
+        "Quản trị viên vừa xử lý lúc sinh viên rút/sửa: phát hiện trạng thái đã đổi, tải lại và không ghi đè quyết định.",
+        "Bài REJECTED hoặc tài liệu đã công bố cần sửa: tạo bản nháp/phiên bản mới có tham chiếu lịch sử, không tự đổi thành APPROVED."
+      ],
+      "post": "Bài gửi được xem hoặc chỉnh sửa theo đúng trạng thái; phản hồi và lịch sử cũ được giữ.",
+      "rules": "A04, BR06, BR07, BR11. Bản nháp không trở thành tài liệu đọc chỉ do chỉnh metadata."
+    },
+    {
+      "id": "UC15",
+      "name": "Giảng viên tạo giáo trình",
+      "short": "Tạo giáo trình",
+      "actors": "LECTURER; dịch vụ kiểm tra file hỗ trợ",
+      "fr": [
+        "FR11"
+      ],
+      "goal": "Chuẩn bị giáo trình/bài giảng thuộc phạm vi môn được giao.",
+      "pre": "Giảng viên hoạt động, có phân công hợp lệ cho các môn gắn học liệu.",
+      "trigger": "Giảng viên chọn tạo học liệu trong không gian giảng viên.",
+      "steps": [
+        "Hệ thống hiển thị các môn đang được phân công.",
+        "Giảng viên chọn môn, nhập metadata, nguồn/căn cứ chia sẻ và chính sách đọc/tải dự kiến.",
+        "Upload PDF; máy chủ kiểm tra lại phân công rồi lưu bản nháp riêng tư với chủ quản lý.",
+        "Công cụ kiểm tra file xác định SAFE hoặc FAILED.",
+        "Giảng viên xem trước bản của mình theo quyền quản lý và sửa metadata khi còn DRAFT.",
+        "Khi đủ điều kiện, giảng viên chuyển sang UC17 để gửi công bố."
+      ],
+      "alts": [
+        "Môn ngoài phân công hoặc gắn thêm môn không được giao: từ chối tại backend.",
+        "File lỗi/trùng/vượt giới hạn hoặc kiểm tra an toàn chưa xong: giữ riêng tư và thông báo, không công bố.",
+        "Phân công bị thu hồi trong lúc upload: không cho sửa/gửi tiếp; giữ bản nháp để quản trị viên xử lý, không tự xóa file hoặc chuyển chủ."
+      ],
+      "post": "Có bản nháp thuộc giảng viên và môn hợp lệ; sinh viên chưa được truy cập.",
+      "rules": "BR03, BR04, BR13. Xem trước có quyền quản lý không đồng nghĩa tài liệu được công bố; thử API bằng ID môn khác."
+    },
+    {
+      "id": "UC16",
+      "name": "Giảng viên cập nhật phiên bản giáo trình",
+      "short": "Cập nhật phiên bản",
+      "actors": "LECTURER",
+      "fr": [
+        "FR11"
+      ],
+      "goal": "Cập nhật nội dung/metadata/quyền mà không làm hỏng phiên bản và ghi chú cũ.",
+      "pre": "Giảng viên đang được phân công, là chủ quản lý tài liệu; có bản hiện hành hoặc bản nháp được phép sửa.",
+      "trigger": "Giảng viên chọn cập nhật giáo trình.",
+      "steps": [
+        "Mở lịch sử phiên bản và chọn tạo phiên bản mới hoặc sửa bản nháp hợp lệ.",
+        "Hệ thống sao chép thông tin cần thiết, tạo định danh bản nháp mới khi thay phiên bản đã công bố.",
+        "Giảng viên cập nhật file/metadata/quyền; máy chủ kiểm tra phạm vi và trạng thái.",
+        "File mới được kiểm tra lại; ghi chú/tiến độ cũ giữ nguyên khóa phiên bản.",
+        "Giảng viên xem trước, ghi mô tả thay đổi và gửi công bố theo UC17.",
+        "Bản đang công bố tiếp tục có hiệu lực đến quyết định duyệt hoặc gỡ riêng."
+      ],
+      "alts": [
+        "Sửa học liệu của giảng viên khác hoặc ngoài phân công: từ chối.",
+        "Bản đang SUBMITTED: yêu cầu rút về DRAFT trước khi sửa; cập nhật đồng thời cần tải lại bản mới.",
+        "File mới lỗi hoặc bài bị từ chối: giữ bản cũ đang công bố và không gắn lại ghi chú sang bản mới."
+      ],
+      "post": "Có bản nháp mới hoặc chỉnh sửa hợp lệ; chưa đổi phiên bản hiện hành cho sinh viên.",
+      "rules": "BR03, BR06, BR07. Thay quyền tải cũng cần xét lại, không sửa âm thầm quyết định cũ."
+    },
+    {
+      "id": "UC17",
+      "name": "Gửi yêu cầu công bố giáo trình",
+      "short": "Gửi công bố",
+      "actors": "LECTURER",
+      "fr": [
+        "FR11",
+        "FR10"
+      ],
+      "goal": "Đưa một phiên bản đủ điều kiện vào hàng đợi quản trị viên xét duyệt.",
+      "pre": "Giảng viên còn quyền quản lý, bản ở DRAFT, file SAFE và thông tin nguồn đầy đủ. Bản CHANGES_REQUIRED về DRAFT khi bắt đầu chỉnh sửa trước khi gửi lại.",
+      "trigger": "Giảng viên chọn gửi công bố.",
+      "steps": [
+        "Hệ thống trình bày bản tóm tắt metadata, nguồn, file và quyền đề xuất.",
+        "Giảng viên kiểm tra và xác nhận yêu cầu.",
+        "Máy chủ kiểm tra lại phân công, sở hữu, an toàn file và trạng thái hiện tại.",
+        "Chuyển đúng phiên bản sang SUBMITTED, khóa chỉnh sửa trực tiếp và ghi lịch sử.",
+        "Hiển thị trạng thái chờ cùng khả năng rút yêu cầu trước khi có quyết định."
+      ],
+      "alts": [
+        "Thiếu nguồn/quyền, file chưa SAFE: trả lý do và giữ bản nháp.",
+        "Gửi lặp hoặc trạng thái vừa đổi: trả trạng thái mới nhất, không tạo nhiều yêu cầu cho cùng revision.",
+        "Muốn sửa sau gửi: rút về DRAFT bằng thao tác có kiểm tra đồng thời; yêu cầu đã bị xử lý không rút như chưa có quyết định."
+      ],
+      "post": "Có yêu cầu xét công bố cho phiên bản cụ thể; tài liệu chưa tự hiện cho sinh viên.",
+      "rules": "A02, BR03, BR06, BR11. Hệ thống không nhận role hay trạng thái APPROVED do client tự gửi."
+    },
+    {
+      "id": "UC18",
+      "name": "Duyệt công bố học liệu",
+      "short": "Duyệt công bố",
+      "actors": "ADMIN; LECTURER có thể được hỏi ý kiến chuyên môn",
+      "fr": [
+        "FR10",
+        "FR11",
+        "FR07"
+      ],
+      "goal": "Quyết định công bố, yêu cầu chỉnh sửa hoặc từ chối một phiên bản đã gửi.",
+      "pre": "Quản trị viên hợp lệ; yêu cầu SUBMITTED còn hiện hành, có thể xem file theo quyền duyệt.",
+      "trigger": "Quản trị viên mở hàng đợi và chọn một yêu cầu.",
+      "steps": [
+        "Xem đúng phiên bản, nguồn, quyền, kết quả kiểm tra và lịch sử.",
+        "Kiểm tra môn, nhãn tác giả/loại tài liệu và phân công chủ quản lý khi là giáo trình.",
+        "Chọn APPROVED, CHANGES_REQUIRED hoặc REJECTED; nhập lý do cần thiết.",
+        "Máy chủ kiểm tra revision và điều kiện SAFE, nguồn/quyền hợp lệ; chặn phiên bản đã bị rút.",
+        "Lưu quyết định và lịch sử trong giao dịch; khi duyệt, cập nhật phiên bản hiện hành nhưng không tự mở lại tài liệu đang HIDDEN.",
+        "Người gửi thấy kết quả trong không gian của mình; sinh viên chỉ thấy nội dung đáp ứng đầy đủ điều kiện truy cập."
+      ],
+      "alts": [
+        "Yêu cầu đã rút/sửa/xử lý bởi người khác: từ chối quyết định cũ, yêu cầu tải lại.",
+        "File không SAFE, thiếu căn cứ hoặc phân công không còn hợp lệ: không duyệt; yêu cầu bổ sung/xử lý chủ quản lý. Admin không sửa thay nội dung; dùng UC06 để bàn giao nếu cần rồi người nhận gửi lại.",
+        "Lỗi lưu quyết định: không cập nhật nửa chừng con trỏ phiên bản và trạng thái; thử lại không tạo quyết định trùng."
+      ],
+      "post": "Có quyết định đúng phiên bản và audit; không sửa ghi chú của người học.",
+      "rules": "A02, BR04, BR05, BR06, BR07, BR11, BR13. Nhãn đã duyệt đăng tải không tự xác nhận nội dung chuyên môn."
+    },
+    {
+      "id": "UC19",
+      "name": "Ẩn và khôi phục tài liệu",
+      "short": "Ẩn hoặc khôi phục",
+      "actors": "ADMIN",
+      "fr": [
+        "FR10"
+      ],
+      "goal": "Ngừng hoặc khôi phục khả năng truy cập nội dung theo quyết định có căn cứ.",
+      "pre": "Quản trị viên được phép xử lý; tài liệu tồn tại và có trạng thái hiện tại.",
+      "trigger": "Chọn ẩn vì lỗi/nguồn/quyền hoặc khôi phục sau xử lý.",
+      "steps": [
+        "Xem nội dung, lý do và trạng thái; thao tác áp dụng toàn tài liệu và tất cả phiên bản trong MVP.",
+        "Quản trị viên nhập lý do và xác nhận tác động.",
+        "Khi ẩn, máy chủ đổi trạng thái hiển thị, dừng cấp lượt đọc/tải mới và cập nhật kết quả tìm kiếm.",
+        "Khi khôi phục toàn tài liệu, kiểm tra bản hiện hành APPROVED, file SAFE, quyền hợp lệ và lý do gỡ đã giải quyết. Bản cũ chỉ đọc được nếu riêng nó còn đủ điều kiện.",
+        "Lưu quyết định cùng lịch sử; giữ ghi chú và mục lưu riêng để không mất dữ liệu người học."
+      ],
+      "alts": [
+        "URL file đã cấp: có thể còn hiệu lực đến hết thời hạn; không tuyên bố thu hồi file đã tải.",
+        "Bản REJECTED/không SAFE hoặc quyền chưa giải quyết: chặn khôi phục, yêu cầu quy trình duyệt/kiểm tra đúng.",
+        "Đối tượng vừa đổi trạng thái: phát hiện xung đột, không ghi đè quyết định mới."
+      ],
+      "post": "Khả năng truy cập mới của toàn tài liệu phản ánh quyết định; không xóa file hoặc ghi chú bằng thao tác ẩn.",
+      "rules": "BR11, BR14, BR15. Thử direct URL/API sau ẩn và bản được duyệt khi tài liệu vẫn đang bị gỡ."
+    },
+    {
+      "id": "UC20",
+      "name": "Gửi báo cáo tài liệu",
+      "short": "Báo cáo tài liệu",
+      "actors": "STUDENT, LECTURER; ADMIN cũng có thể ghi nhận sự cố",
+      "fr": [
+        "FR10"
+      ],
+      "goal": "Thông báo file lỗi, sai môn, nguồn/quyền không phù hợp hoặc nội dung cần kiểm tra.",
+      "pre": "Người dùng có phiên hợp lệ và được phép xem thông tin đối tượng báo cáo.",
+      "trigger": "Chọn báo cáo trên tài liệu hoặc bản ghi sách.",
+      "steps": [
+        "Chọn loại vấn đề và mô tả ngắn, chỉ rõ phiên bản/nguồn liên quan.",
+        "Hệ thống kiểm tra dữ liệu và hạn mức chống spam.",
+        "Lưu báo cáo gắn người gửi và đối tượng, không tự đính kèm ghi chú riêng.",
+        "Cấp mã báo cáo và trạng thái tiếp nhận.",
+        "Đưa vào hàng đợi xử lý của quản trị viên; người gửi có thể xem trạng thái của báo cáo mình."
+      ],
+      "alts": [
+        "Báo cáo tương tự vừa gửi: thông báo đã tiếp nhận hoặc liên kết báo cáo cũ, không tạo spam.",
+        "Đối tượng không còn truy cập được: ghi rõ không khả dụng; không mở thêm quyền xem file riêng.",
+        "Mô tả thiếu hoặc gửi thất bại: giữ nội dung nhập để sửa/thử lại, không thông báo đã nhận khi chưa lưu."
+      ],
+      "post": "Báo cáo được tiếp nhận hoặc người dùng biết lý do chưa gửi được; chưa tự gỡ nội dung chỉ vì một báo cáo.",
+      "rules": "BR01, BR08, BR11. Không yêu cầu người báo cáo cung cấp mật khẩu hay ghi chú cá nhân."
+    },
+    {
+      "id": "UC21",
+      "name": "Xử lý báo cáo",
+      "short": "Xử lý báo cáo",
+      "actors": "ADMIN",
+      "fr": [
+        "FR10"
+      ],
+      "goal": "Xác minh vấn đề và ghi lại cách xử lý phù hợp.",
+      "pre": "Quản trị viên có quyền; báo cáo tồn tại trong hàng đợi.",
+      "trigger": "Quản trị viên mở một hoặc nhóm báo cáo liên quan.",
+      "steps": [
+        "Xem loại vấn đề, mô tả, đối tượng/phiên bản và lịch sử; nhận xử lý khi cần.",
+        "Kiểm tra nguồn và file theo quyền quản trị; có thể hỏi người phụ trách về chuyên môn.",
+        "Chọn giữ nội dung, yêu cầu chỉnh sửa hoặc ẩn theo UC19, kèm lý do.",
+        "Lưu kết quả xử lý và trạng thái báo cáo, liên kết quyết định nội dung nếu có.",
+        "Người gửi xem kết quả được phép hiển thị; báo cáo trùng được liên kết để tránh xử lý mâu thuẫn."
+      ],
+      "alts": [
+        "Chưa đủ chứng cứ: giữ trạng thái cần xác minh và ghi việc cần bổ sung, không kết luận tùy ý.",
+        "Vấn đề nghiêm trọng: tạm ẩn nội dung với lý do trước khi hoàn tất xác minh.",
+        "Báo cáo đã được xử lý đồng thời: trả kết quả mới nhất, không tự khôi phục nội dung trái quyết định đang hiệu lực."
+      ],
+      "post": "Báo cáo có trạng thái/kết quả và audit; quyền truy cập nội dung đổi chỉ qua thao tác phù hợp.",
+      "rules": "BR08, BR11, BR14, BR15. Quyền xử lý báo cáo không mở quyền đọc ghi chú riêng của người báo cáo."
+    },
+    {
+      "id": "UC22",
+      "name": "Quản lý danh mục sách",
+      "short": "Quản lý danh mục sách",
+      "actors": "ADMIN",
+      "fr": [
+        "FR12",
+        "FR09"
+      ],
+      "goal": "Duy trì thư viện mini có thông tin, nguồn và liên kết rõ ràng.",
+      "pre": "Có thông tin được phép sử dụng; quản trị viên có quyền biên tập sách.",
+      "trigger": "Chọn tạo, cập nhật hoặc ngừng hiển thị một bản ghi sách.",
+      "steps": [
+        "Nhập tiêu đề, tác giả, năm nếu biết, nguồn, URL, ID nguồn và môn liên quan.",
+        "Hệ thống kiểm tra trường bắt buộc, URL an toàn và trùng định danh nguồn.",
+        "Nếu có toàn văn được phép, liên kết tới DocumentVersion đã được kiểm tra/công bố phù hợp; không coi URL nguồn là file nội bộ.",
+        "Quản trị viên xác nhận thông tin, ngày kiểm tra và căn cứ sử dụng.",
+        "Lưu bản ghi/audit và cập nhật danh mục theo trạng thái hiển thị."
+      ],
+      "alts": [
+        "Trùng ID nguồn hoặc ISBN/ấn bản cần đối chiếu: yêu cầu kiểm tra trước gộp, không hợp nhất các ấn bản khác nhau tự động.",
+        "URL nguồn lỗi hoặc chưa có quyền toàn văn: giữ thông tin đúng trạng thái, không thêm nút tải/reader giả.",
+        "Muốn đồng bộ hàng loạt/API: ngoài A06 của bản đầu, cần thỏa thuận và đặc tả kết nối riêng."
+      ],
+      "post": "Danh mục có bản ghi hợp lệ hoặc phản hồi lỗi cụ thể; chưa tạo quyền đọc/tải sách ngoài nền tảng.",
+      "rules": "A06, BR10, BR11, BR13. Chỉ nhập tay/biên tập danh mục trong MVP, không ngầm bổ sung tính năng crawl/import bắt buộc."
+    }
+  ],
+  "usecase_back": [
+    {
+      "title": "6 Đối chiếu yêu cầu và kịch bản nghiệm thu",
+      "blocks": [
+        {
+          "h2": "6 1 Ma trận yêu cầu và use case"
+        },
+        {
+          "p": "Mỗi FR có ít nhất một use case và mỗi use case có ít nhất một FR. Đây là truy vết yêu cầu, chưa phải bằng chứng tính năng đã được lập trình hoặc kiểm thử."
+        },
+        {
+          "table": {
+            "headers": [
+              "Yêu cầu",
+              "Nội dung",
+              "Use case"
+            ],
+            "widths": [
+              1.7,
+              7.3,
+              7.8
+            ],
+            "rows": []
+          }
+        },
+        {
+          "h2": "6 2 Kịch bản trọng yếu"
+        },
+        {
+          "table": {
+            "headers": [
+              "Mã",
+              "Kịch bản",
+              "Kết quả mong đợi",
+              "Use case"
+            ],
+            "widths": [
+              1.4,
+              5.4,
+              7.5,
+              2.5
+            ],
+            "rows": [
+              [
+                "AT01",
+                "Đăng nhập ba role, đăng xuất và dùng phiên cũ",
+                "Đúng quyền; phiên cũ bị từ chối sau xác nhận đăng xuất",
+                "01 02 04"
+              ],
+              [
+                "AT02",
+                "Đặt lại mật khẩu và dùng lại token",
+                "Token một lần; phiên cũ mất hiệu lực; không dò email",
+                "03"
+              ],
+              [
+                "AT03",
+                "Sinh viên tự gửi role ADMIN; khóa ADMIN cuối cùng",
+                "Từ chối; không mất quản trị viên hoạt động cuối cùng",
+                "04"
+              ],
+              [
+                "AT04",
+                "Giảng viên đổi ID môn/tài liệu người khác; thu hồi phân công; bàn giao khi đang chờ duyệt",
+                "Backend chặn sửa/gửi công bố ngoài phạm vi hiện tại; đổi chủ nguyên tử, bản chờ về DRAFT, giữ ghi chú",
+                "06 15 16 17"
+              ],
+              [
+                "AT05",
+                "Tìm có/không dấu, bộ lọc rỗng và bản chờ duyệt",
+                "Kết quả đúng metadata/quyền; trạng thái trống rõ; không lộ bản nháp",
+                "07"
+              ],
+              [
+                "AT06",
+                "Đọc PDF chữ, scan, trang xoay và file lỗi",
+                "Reader hợp lệ, fallback ghi chú theo trang, lỗi dễ hiểu",
+                "08 09"
+              ],
+              [
+                "AT07",
+                "Ghi chú rồi tải lại/đổi thiết bị; đổi zoom/xoay",
+                "Đúng người, phiên bản và vị trí; chỉ hiện đã lưu sau xác nhận",
+                "08 09"
+              ],
+              [
+                "AT08",
+                "Mất mạng và hai thiết bị cùng sửa ghi chú",
+                "Bản nháp trong phiên còn giữ, có xung đột; không ghi đè âm thầm",
+                "09"
+              ],
+              [
+                "AT09",
+                "Người khác, giảng viên hoặc ADMIN gọi API ghi chú riêng",
+                "Từ chối truy cập; log không chứa nội dung ghi chú",
+                "09 11"
+              ],
+              [
+                "AT10",
+                "Upload lỗi/không SAFE hoặc gọi file đang chờ duyệt",
+                "Không cấp file/công bố, dữ liệu nhập và trạng thái rõ",
+                "13 15 17 18"
+              ],
+              [
+                "AT11",
+                "Rút/sửa yêu cầu khi ADMIN đang duyệt",
+                "Chỉ quyết định đúng revision được lưu; không công bố bản đã rút",
+                "14 17 18"
+              ],
+              [
+                "AT12",
+                "Thay PDF, đổi số trang và duyệt bản mới",
+                "Ghi chú bản cũ không chuyển sang bản mới; con trỏ hiện hành nhất quán",
+                "08 09 16 18"
+              ],
+              [
+                "AT13",
+                "Tắt tải/ẩn tài liệu và gọi URL/API trực tiếp",
+                "Không cấp lượt mới; nêu giới hạn URL đã cấp và file đã tải",
+                "10 19"
+              ],
+              [
+                "AT14",
+                "Khôi phục bản REJECTED hoặc file FAILED",
+                "Từ chối, không vượt quy trình kiểm tra/duyệt",
+                "18 19"
+              ],
+              [
+                "AT15",
+                "Sách chỉ có nguồn ngoài, link lỗi và yêu cầu đăng nhập nguồn",
+                "Không giả quyền đọc/tải, không thu mật khẩu nguồn",
+                "12 22"
+              ],
+              [
+                "AT16",
+                "Lưu/bỏ lưu lặp; gửi/xử lý báo cáo trùng",
+                "Không trùng dữ liệu, không xóa ghi chú, kết quả xử lý có lịch sử",
+                "11 20 21"
+              ],
+              [
+                "AT17",
+                "Khôi phục backup database và kho file",
+                "Đúng file/phiên bản/người sở hữu, ghi chú còn liên kết",
+                "08 09 16"
+              ],
+              [
+                "AT18",
+                "Đo tìm kiếm 1.000 bản ghi với 30 người dùng giả lập",
+                "Đối chiếu mục tiêu NFR04; ghi cấu hình và đo PDF riêng",
+                "07 08"
+              ]
+            ]
+          }
+        },
+        {
+          "p": "AT01–AT18 là kịch bản thiết kế để triển khai kiểm thử sau này. Việc tài liệu liệt kê kết quả mong đợi không chứng minh hệ thống đã đạt. Khi kiểm thử thật phải lưu môi trường, dữ liệu, bước chạy và kết quả, phân biệt fixture với nội dung tồn tại lâu dài."
+        }
+      ]
+    },
+    {
+      "title": "7 Chính sách đã chốt và quản lý thay đổi",
+      "blocks": [
+        {
+          "table": {
+            "headers": [
+              "Quyết định",
+              "MVP đã chốt ngày 09/10/2026",
+              "Tác động khi thay đổi"
+            ],
+            "widths": [
+              5.2,
+              5.2,
+              6.4
+            ],
+            "rows": [
+              [
+                "Cấp/xác minh tài khoản",
+                "A01 do quản trị cấp/xác minh",
+                "Thêm đăng ký/xác minh/SSO; sửa UC01, UC03, UC04"
+              ],
+              [
+                "Giảng viên tự công bố",
+                "A02 quản trị duyệt",
+                "Sửa UC17/18, ma trận quyền và kiểm thử công bố"
+              ],
+              [
+                "Giới hạn theo lớp/môn đăng ký",
+                "A03 chưa giới hạn theo lớp",
+                "Thêm dữ liệu đăng ký và điều kiện UC07–UC12, quyền cấp file"
+              ],
+              [
+                "Sinh viên được upload",
+                "A04 gửi bổ sung có duyệt",
+                "Nếu bỏ hoặc đổi phạm vi, cập nhật UC13/14 và dữ liệu bài gửi"
+              ],
+              [
+                "Xuất PDF có ghi chú/offline",
+                "A05 tải bản gốc, online",
+                "Thêm chức năng, đồng bộ, xuất file và kiểm tra riêng tư"
+              ],
+              [
+                "Dữ liệu sách từ trường",
+                "A06 biên tập và liên kết",
+                "Nếu có API/CSV/quyền toàn văn, viết đặc tả tích hợp và kiểm thử riêng"
+              ]
+            ]
+          }
+        },
+        {
+          "p": "A01–A06 là cơ sở MVP đã chốt; bảng trên ghi tác động nếu sau này đổi phạm vi. BR16–BR17 là chi tiết thiết kế bổ sung. Mỗi thay đổi cần ghi người quyết định, ngày, lý do, FR/UC bị ảnh hưởng và tiêu chí nghiệm thu; cập nhật đồng thời proposal và use case."
+        },
+        {
+          "h2": "7 1 Tài liệu liên quan"
+        },
+        {
+          "p": "Project Proposal và Use Case Specification phiên bản 1.1 thống nhất phạm vi MVP. Business Rules and Publication Workflow trình bày ma trận quyền, chuyển trạng thái và bàn giao. Bản khởi động phiên bản 0.4 được đồng bộ chính sách. Chưa có API trường hoặc quyền dữ liệu toàn văn được xác nhận."
+        }
+      ]
+    }
+  ]
+}

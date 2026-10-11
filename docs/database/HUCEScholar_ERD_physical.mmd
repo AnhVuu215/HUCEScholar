@@ -1,0 +1,278 @@
+erDiagram
+    users {
+        bigint id PK
+        varchar email
+        varchar display_name
+        text password_hash
+        varchar role
+        varchar status
+        timestamptz verified_at
+        bigint verified_by FK
+        timestamptz created_at
+        timestamptz updated_at
+        integer revision
+    }
+    auth_sessions {
+        bigint id PK
+        bigint user_id FK
+        varchar token_hash
+        timestamptz created_at
+        timestamptz expires_at
+        timestamptz revoked_at
+    }
+    password_reset_tokens {
+        bigint id PK
+        bigint user_id FK
+        varchar token_hash
+        timestamptz created_at
+        timestamptz expires_at
+        timestamptz used_at
+    }
+    faculties {
+        bigint id PK
+        varchar code
+        varchar name
+        boolean is_active
+        timestamptz created_at
+    }
+    programs {
+        bigint id PK
+        bigint faculty_id FK
+        varchar code
+        varchar name
+        boolean is_active
+        timestamptz created_at
+    }
+    courses {
+        bigint id PK
+        bigint faculty_id FK
+        varchar code
+        varchar name
+        boolean is_active
+        timestamptz created_at
+        integer revision
+    }
+    program_courses {
+        bigint program_id PK,FK
+        bigint course_id PK,FK
+    }
+    lecturer_assignments {
+        bigint id PK
+        bigint lecturer_id FK
+        bigint course_id FK
+        bigint assigned_by FK
+        timestamptz assigned_at
+        timestamptz revoked_at
+        bigint revoked_by FK
+        text reason
+    }
+    documents {
+        bigint id PK
+        varchar kind
+        bigint created_by FK
+        bigint manager_id FK
+        varchar visibility
+        bigint current_version_id FK
+        timestamptz created_at
+        timestamptz updated_at
+        integer revision
+    }
+    files {
+        bigint id PK
+        bigint uploaded_by FK
+        varchar object_key
+        varchar original_name
+        varchar mime_type
+        bigint byte_size
+        char sha256
+        varchar scan_status
+        integer page_count
+        boolean has_text_layer
+        timestamptz checked_at
+        timestamptz created_at
+    }
+    document_versions {
+        bigint id PK
+        bigint document_id FK
+        integer version_no
+        bigint file_id FK
+        bigint created_by FK
+        varchar title
+        text authors
+        text description
+        varchar material_type
+        smallint publication_year
+        text source_reference
+        text rights_basis
+        timestamptz rights_valid_until
+        boolean download_allowed
+        varchar review_status
+        text change_summary
+        text search_text
+        timestamptz created_at
+        timestamptz updated_at
+        integer revision
+    }
+    version_courses {
+        bigint version_id PK,FK
+        bigint course_id PK,FK
+    }
+    publication_requests {
+        bigint id PK
+        bigint version_id FK
+        bigint submitted_by FK
+        integer submitted_revision
+        timestamptz submitted_at
+        varchar status
+        bigint resolved_by FK
+        timestamptz resolved_at
+        text reason
+        integer revision
+    }
+    ownership_transfers {
+        bigint id PK
+        bigint document_id FK
+        bigint from_user_id FK
+        bigint to_user_id FK
+        bigint performed_by FK
+        text reason
+        timestamptz created_at
+    }
+    visibility_events {
+        bigint id PK
+        bigint document_id FK
+        bigint performed_by FK
+        varchar from_visibility
+        varchar to_visibility
+        text reason
+        timestamptz created_at
+    }
+    annotations {
+        bigint id PK
+        bigint user_id FK
+        bigint version_id FK
+        integer page_number
+        varchar kind
+        text content
+        jsonb anchor
+        varchar color
+        timestamptz created_at
+        timestamptz updated_at
+        integer revision
+    }
+    reading_progress {
+        bigint user_id PK,FK
+        bigint version_id PK,FK
+        integer page_number
+        numeric page_offset
+        timestamptz updated_at
+        integer revision
+    }
+    saved_documents {
+        bigint user_id PK,FK
+        bigint document_id PK,FK
+        timestamptz created_at
+    }
+    books {
+        bigint id PK
+        varchar title
+        text authors
+        varchar publisher
+        smallint publication_year
+        varchar edition
+        varchar isbn
+        varchar source_provider
+        varchar external_id
+        text source_url
+        text metadata_rights_basis
+        bigint native_document_id FK
+        timestamptz checked_at
+        boolean is_active
+        bigint managed_by FK
+        timestamptz created_at
+        timestamptz updated_at
+        integer revision
+    }
+    book_courses {
+        bigint book_id PK,FK
+        bigint course_id PK,FK
+    }
+    reports {
+        bigint id PK
+        bigint reported_by FK
+        bigint document_id FK
+        bigint version_id FK
+        bigint book_id FK
+        varchar category
+        text description
+        varchar status
+        timestamptz created_at
+        timestamptz updated_at
+        integer revision
+    }
+    report_actions {
+        bigint id PK
+        bigint report_id FK
+        bigint performed_by FK
+        varchar action
+        text result
+        bigint visibility_event_id FK
+        timestamptz created_at
+    }
+    audit_events {
+        bigint id PK
+        bigint actor_id FK
+        varchar event_type
+        varchar entity_type
+        bigint entity_id
+        varchar reason_code
+        varchar request_id
+        timestamptz created_at
+    }
+    users |o..o{ users : verified_by
+    users ||..o{ auth_sessions : user_id
+    users ||..o{ password_reset_tokens : user_id
+    faculties ||..o{ programs : faculty_id
+    faculties ||..o{ courses : faculty_id
+    programs ||--o{ program_courses : program_id
+    courses ||--o{ program_courses : course_id
+    users ||..o{ lecturer_assignments : lecturer_id
+    users ||..o{ lecturer_assignments : assigned_by
+    courses ||..o{ lecturer_assignments : course_id
+    users |o..o{ lecturer_assignments : revoked_by
+    users ||..o{ documents : created_by
+    users ||..o{ documents : manager_id
+    document_versions |o..o| documents : current_version_id
+    users ||..o{ files : uploaded_by
+    documents ||..o{ document_versions : document_id
+    files ||..o{ document_versions : file_id
+    users ||..o{ document_versions : created_by
+    document_versions ||--o{ version_courses : version_id
+    courses ||--o{ version_courses : course_id
+    document_versions ||..o{ publication_requests : version_id
+    users ||..o{ publication_requests : submitted_by
+    users |o..o{ publication_requests : resolved_by
+    documents ||..o{ ownership_transfers : document_id
+    users ||..o{ ownership_transfers : from_user_id
+    users ||..o{ ownership_transfers : to_user_id
+    users ||..o{ ownership_transfers : performed_by
+    documents ||..o{ visibility_events : document_id
+    users ||..o{ visibility_events : performed_by
+    users ||..o{ annotations : user_id
+    document_versions ||..o{ annotations : version_id
+    users ||--o{ reading_progress : user_id
+    document_versions ||--o{ reading_progress : version_id
+    users ||--o{ saved_documents : user_id
+    documents ||--o{ saved_documents : document_id
+    documents |o..o{ books : native_document_id
+    users ||..o{ books : managed_by
+    books ||--o{ book_courses : book_id
+    courses ||--o{ book_courses : course_id
+    users ||..o{ reports : reported_by
+    documents |o..o{ reports : document_id
+    document_versions |o..o{ reports : version_id
+    books |o..o{ reports : book_id
+    reports ||..o{ report_actions : report_id
+    users ||..o{ report_actions : performed_by
+    visibility_events |o..o{ report_actions : visibility_event_id
+    users |o..o{ audit_events : actor_id
