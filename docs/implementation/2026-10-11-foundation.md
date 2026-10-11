@@ -38,12 +38,15 @@ Tài liệu thiết kế gốc, Word/ZIP/PNG và SQL giữ nguyên nội dung. R
 
 Playwright chạy server dev ở 3100/3101 và tự dừng. Ảnh QA ở `.local/`, không đưa vào source. Ảnh đầu sau anchor-scroll gây sai vị trí fixed element trong full-page screenshot; đã chụp lại từ đầu trang và xác nhận nội dung. Badge Next.js devtools trong ảnh là công cụ development, không có trong production build.
 
-Detector giao diện chỉ đưa advisory về một số cỡ chữ/màu ngoài schema wireframe; không có lỗi cơ học bắt buộc. Đây là mở rộng có phạm vi cho trang development, không sửa hệ thống token gốc chỉ để xóa cảnh báo. Independent review và documentation pass sẽ được ghi lại sau khi hoàn tất.
+Detector giao diện chỉ đưa advisory về một số cỡ chữ/màu ngoài schema wireframe; không có lỗi cơ học bắt buộc. Đây là mở rộng có phạm vi cho trang development, không sửa hệ thống token gốc chỉ để xóa cảnh báo.
+
+Rà soát code độc lập trên commit `dc5944e`: không có actionable findings, bao phủ 29/29 file được chọn cùng các env/test/docs và lockfile importers liên quan. Review giao diện độc lập: **disposition: ship**, không có material fixes, chỉ áp dụng cho trang foundation và bốn ảnh desktop/mobile/tablet/error. Documentation pass: **No changes**; giữ nguyên hệ thống wireframe, xác nhận các token/breakpoint bổ sung chỉ thuộc phạm vi `apps/web`.
+
+GitHub Actions đã chạy thành công trên Linux ở commit `dc5944e`: [Foundation checks — run 38128517037](https://github.com/AnhVuu215/HUCEScholar/actions/runs/38128517037). Đây là bằng chứng clean-checkout/frozen install, kiểm tra code, production build và Playwright trên runner GitHub, độc lập với kết quả Windows local. Phần khởi tạo được đưa vào [PR nháp #1](https://github.com/AnhVuu215/HUCEScholar/pull/1); chưa merge vào `main`.
 
 ## Giới hạn hiện tại
 
 - Docker daemon chưa chạy: chưa pull/start hoặc kiểm thử runtime hai container. Chưa có database dữ liệu ứng dụng.
-- CI được cấu hình; kết quả chạy trên GitHub sẽ được xác nhận sau push, không suy từ test local.
 - Chưa có tài khoản, session, phân quyền, Prisma migration, upload/scan, kiểm duyệt, PDF reader, ghi chú hoặc sách thật.
 - Chưa kiểm tra cài PWA trên Android/iOS hoặc đọc trên thiết bị vật lý. Test viewport không thay thế device testing.
 - Chưa có container web/API, Caddy, HTTPS hoặc deployment cloud. Compose hiện chỉ chuẩn bị dịch vụ phụ local.

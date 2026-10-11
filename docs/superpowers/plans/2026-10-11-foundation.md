@@ -33,9 +33,9 @@
 
 **Interfaces:** Produces baseline `main` commit and private origin `https://github.com/AnhVuu215/HUCEScholar.git`; implementation branch `codex/bootstrap` consumes this baseline.
 
-- [ ] Inspect tracked candidates for credentials, generated scratch files and oversized assets. Keep approved Word/ZIP/PNG deliverables.
-- [ ] Commit the baseline on `main`, push to private origin, create `codex/bootstrap` locally.
-- [ ] Verify remote URL, commit SHA and private repository visibility.
+- [x] Inspect tracked candidates for credentials, generated scratch files and oversized assets. Keep approved Word/ZIP/PNG deliverables.
+- [x] Commit the baseline on `main`, push to private origin, create `codex/bootstrap` locally.
+- [x] Verify remote URL, commit SHA and private repository visibility.
 
 ## Task 2: Runnable workspace and API
 
@@ -43,17 +43,17 @@
 
 **Interfaces:** `parseEnvironment(input: NodeJS.ProcessEnv): { host: string; port: number; nodeEnv: string }`; `GET /api/v1/health` returns `{ status: 'ok', service: 'hucescholar-api' }` with no-store. Web consumes this exact same-origin endpoint.
 
-- [ ] Pin dependencies and workspace scripts, install and save lockfile.
-- [ ] Write API tests first. Reject `PORT='1.5'`, `PORT='0'`, `PORT='65536'`, `PORT='3001oops'`, empty PORT, unsupported NODE_ENV; accept defaults and valid numeric port.
-- [ ] Run Jest and observe missing configuration/controller failure.
-- [ ] Implement strict startup config, loopback binding by default, Helmet and API prefix. Example behavior:
+- [x] Pin dependencies and workspace scripts, install and save lockfile.
+- [x] Write API tests first. Reject `PORT='1.5'`, `PORT='0'`, `PORT='65536'`, `PORT='3001oops'`, empty PORT, unsupported NODE_ENV; accept defaults and valid numeric port.
+- [x] Run Jest and observe missing configuration/controller failure.
+- [x] Implement strict startup config, loopback binding by default, Helmet and API prefix. Example behavior:
   ```ts
   expect(parseEnvironment({ PORT: '3001' }).port).toBe(3001);
   await request(app.getHttpServer()).get('/api/v1/health')
     .expect('Cache-Control', 'no-store').expect(200)
     .expect({ status: 'ok', service: 'hucescholar-api' });
   ```
-- [ ] Run API tests/typecheck/build. Configure CI with the same root checks; no Docker or external credentials required.
+- [x] Run API tests/typecheck/build. Configure CI with the same root checks; no Docker or external credentials required.
 
 ## Task 3: Responsive foundation page and handoff
 
@@ -61,18 +61,19 @@
 
 **Interfaces:** `/` is an explicitly labeled development entry page, not the student workspace. A status component fetches `/api/v1/health` with `cache: 'no-store'`, times out, validates the response, and retries on demand. Manifest contains no service worker or private caching.
 
-- [ ] Write Playwright expectations before implementation: healthy API, unavailable API with retry recovery, initial loading status, mobile/tablet no horizontal overflow. Example assertions:
+- [x] Write Playwright expectations before implementation: healthy API, unavailable API with retry recovery, initial loading status, mobile/tablet no horizontal overflow. Example assertions:
   ```ts
   await expect(page.getByRole('status')).toContainText('API đang hoạt động');
   await expect(page.getByRole('button', { name: 'Thử lại' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   ```
-- [ ] Build the existing navy visual grammar into a compact, truthful development page. Add working section links and status feedback; no fake login, fabricated materials or dead controls.
-- [ ] Add local Postgres/Redis Compose config using required env password interpolation, loopback ports, named volumes and healthchecks. Do not start paid/external services or initialize the schema implicitly.
-- [ ] Run lint, typecheck, Jest, production builds, Playwright against running web/API; inspect desktop/mobile screenshots once and address concrete defects.
-- [ ] Update product/stack status and README with PowerShell setup, exact scripts, current limits, Docker status and next milestone.
-- [ ] Commit changes, request one independent branch review, fix important findings, rerun affected checks and push branch.
+- [x] Build the existing navy visual grammar into a compact, truthful development page. Add working section links and status feedback; no fake login, fabricated materials or dead controls.
+- [x] Add local Postgres/Redis Compose config using required env password interpolation, loopback ports, named volumes and healthchecks. Do not start paid/external services or initialize the schema implicitly.
+- [x] Run lint, typecheck, Jest, production builds, Playwright against running web/API; inspect desktop/mobile screenshots once and address concrete defects.
+- [x] Update product/stack status and README with PowerShell setup, exact scripts, current limits, Docker status and next milestone.
+- [x] Commit changes, request one independent branch review, fix important findings, rerun affected checks and push branch.
 
 ## Execution decision
 
 The user explicitly requested starting implementation after selecting web + PWA and approving the stack. Execute this scoped foundation directly; retain baseline docs and commit implementation on a separate branch. A worktree would omit the initially untracked artifacts, so use this existing workspace and feature branch.
+
