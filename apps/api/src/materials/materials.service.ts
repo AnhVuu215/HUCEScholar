@@ -24,7 +24,15 @@ const selection = {
   review_status: true,
   revision: true,
   updated_at: true,
-  files: { select: { scan_status: true } },
+  files: {
+    select: {
+      scan_status: true,
+      original_name: true,
+      byte_size: true,
+      page_count: true,
+      has_text_layer: true,
+    },
+  },
   documents_document_versions_document_idTodocuments: { select: { kind: true } },
   version_courses: {
     select: {
@@ -147,6 +155,14 @@ export class MaterialsService {
         downloadAllowed: row.download_allowed,
         reviewStatus: row.review_status,
         fileState: row.files?.scan_status ?? 'MISSING',
+        pdf: row.files
+          ? {
+              name: row.files.original_name,
+              byteSize: Number(row.files.byte_size),
+              pageCount: row.files.page_count,
+              hasTextLayer: row.files.has_text_layer,
+            }
+          : null,
         revision: row.revision,
         updatedAt: row.updated_at.toISOString(),
         courses,
@@ -295,5 +311,21 @@ export class MaterialsService {
       await this.audit(tx, actorId, id, 'MATERIAL_DRAFT_UPDATED');
       return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
     });
+  }
+  async lockDraft(tx: Prisma.TransactionClient, actor: Profile, rawId: string, revision: number) {
+    const id = academicId(rawId);
+    const actorId = await this.begin(tx, actor);
+    await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${id} AND manager_id=${actorId} FOR UPDATE`;
+    const row = await this.read(tx, actor, id);
+    await tx.$queryRaw`SELECT id FROM hucescholar.document_versions WHERE id=${row.id} FOR UPDATE`;
+    if (row.revision !== revision)
+      throw conflict('STALE_REVISION', 'Bản nháp đã thay đổi. Mở lại trước khi tải PDF lên.');
+    if (row.review_status !== 'DRAFT') throw conflict('NOT_DRAFT', 'Chỉ thay PDF của bản nháp.');
+    await this.checkCourses(
+      tx,
+      actor,
+      row.version_courses.map((c) => c.courses.id),
+    );
+    return { actorId, row, id };
   }
 }

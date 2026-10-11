@@ -9,6 +9,12 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApplication } from '../src/configure-application';
 import { MaterialsService } from '../src/materials/materials.service';
+import { PrivateStore } from '../src/files/private-store';
+import { ScanQueue } from '../src/files/scan-queue';
+import { ScanProcessor } from '../src/files/scan-processor';
+import { PdfScanner } from '../src/files/pdf-scanner';
+import { createReadStream } from 'node:fs';
+import { DatabaseService } from '../src/database/database.module';
 
 type Browser = ReturnType<typeof request.agent>;
 const origin = 'http://127.0.0.1:3100';
@@ -90,6 +96,15 @@ describe('private material drafts', () => {
     }
   });
   afterAll(async () => {
+    if (app && db) {
+      const keys = (
+        await db.query(
+          'SELECT object_key FROM hucescholar.files WHERE uploaded_by=ANY($1::bigint[])',
+          [Object.values(users)],
+        )
+      ).rows;
+      for (const row of keys) await app.get(PrivateStore).remove(row.object_key);
+    }
     await app?.close();
     if (db) {
       const ids = Object.values(users);
@@ -102,6 +117,7 @@ describe('private material drafts', () => {
         [ids],
       );
       await db.query('DELETE FROM hucescholar.documents WHERE created_by=ANY($1::bigint[])', [ids]);
+      await db.query('DELETE FROM hucescholar.files WHERE uploaded_by=ANY($1::bigint[])', [ids]);
       await db.query('DELETE FROM hucescholar.audit_events WHERE actor_id=ANY($1::bigint[])', [
         ids,
       ]);
@@ -144,6 +160,224 @@ describe('private material drafts', () => {
     expect(result.status).toBe(201);
     return result.body.item;
   }
+  async function upload(
+    name: string,
+    id: string,
+    revision: number,
+    bytes = Buffer.from('%PDF-1.7\nsynthetic test'),
+    mime = 'application/pdf',
+  ) {
+    const agent = agents[name];
+    const csrf = (await agent.get('/api/v1/auth/csrf')).body.csrfToken;
+    return agent
+      .post(`/api/v1/material-drafts/${id}/pdf`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .set('If-Match', `"${revision}"`)
+      .set('X-File-Name', encodeURIComponent('Tài liệu kiểm thử.pdf'))
+      .set('Content-Type', mime)
+      .send(bytes);
+  }
+  it('attaches a private immutable PDF as CHECKING and increments revision', async () => {
+    const item = await create('student');
+    const result = await upload('student', item.id, item.revision);
+    expect(result.status).toBe(201);
+    expect(result.body.item).toMatchObject({
+      fileState: 'CHECKING',
+      revision: 2,
+      reviewStatus: 'DRAFT',
+    });
+    expect(JSON.stringify(result.body)).not.toMatch(/object_key|quarantine\/|sha256/);
+    const file = (
+      await db.query(
+        'SELECT f.* FROM hucescholar.files f JOIN hucescholar.document_versions v ON v.file_id=f.id WHERE v.document_id=$1',
+        [item.id],
+      )
+    ).rows[0];
+    expect(file.scan_status).toBe('CHECKING');
+    expect(Number(file.byte_size)).toBeGreaterThan(0);
+    expect(file.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(file.page_count).toBeNull();
+    const stale = await upload('student', item.id, 1);
+    expect(stale.status).toBe(409);
+  });
+  it('rejects other owners, admin, missing CSRF and invalid PDF bytes', async () => {
+    const item = await create('student');
+    expect((await upload('other', item.id, 1)).status).toBe(404);
+    expect((await upload('admin', item.id, 1)).status).toBe(403);
+    expect(
+      (
+        await agents.student
+          .post(`/api/v1/material-drafts/${item.id}/pdf`)
+          .set('Content-Type', 'application/pdf')
+          .send(Buffer.from('%PDF-1.7'))
+      ).status,
+    ).toBe(403);
+    expect((await upload('student', item.id, 1, Buffer.from('not a PDF'))).status).toBe(400);
+    expect(
+      (await upload('student', item.id, 1, Buffer.from('%PDF-1.7'), 'application/octet-stream'))
+        .status,
+    ).toBe(400);
+    expect(
+      (await agents.student.get(`/api/v1/material-drafts/${item.id}`)).body.item.fileState,
+    ).toBe('MISSING');
+  });
+  it('keeps a committed PDF CHECKING when enqueue fails for later reconciliation', async () => {
+    const item = await create('student');
+    const enqueue = jest
+      .spyOn(app.get(ScanQueue), 'enqueue')
+      .mockRejectedValueOnce(new Error('Unavailable'));
+    const result = await upload('student', item.id, 1);
+    enqueue.mockRestore();
+    expect(result.status).toBe(201);
+    expect(result.body.item.fileState).toBe('CHECKING');
+  });
+  it('rolls back PDF attachment and removes stored bytes when audit fails', async () => {
+    const item = await create('student');
+    const store = app.get(PrivateStore);
+    const remove = jest.spyOn(store, 'remove');
+    const audit = jest
+      .spyOn(app.get(MaterialsService), 'audit')
+      .mockRejectedValueOnce(new Error('Database unavailable'));
+    const result = await upload('student', item.id, 1);
+    audit.mockRestore();
+    expect(result.status).toBe(503);
+    expect(remove).toHaveBeenCalledTimes(1);
+    remove.mockRestore();
+    expect(
+      (await agents.student.get(`/api/v1/material-drafts/${item.id}`)).body.item.fileState,
+    ).toBe('MISSING');
+  });
+  async function uploadedFile(item: { id: string }) {
+    return (
+      await db.query(
+        'SELECT f.* FROM hucescholar.files f JOIN hucescholar.document_versions v ON v.file_id=f.id WHERE v.document_id=$1',
+        [item.id],
+      )
+    ).rows[0];
+  }
+  it('retains the private object when the database commit acknowledgment is lost', async () => {
+    const item = await create('student');
+    const database = app.get(DatabaseService);
+    const original = database.$transaction.bind(database);
+    let count = 0;
+    const transaction = jest
+      .spyOn(database, '$transaction')
+      .mockImplementation(async (callback) => {
+        const result = await original(callback);
+        if (++count === 2) throw new Error('Commit acknowledgment lost');
+        return result;
+      });
+    const remove = jest.spyOn(app.get(PrivateStore), 'remove');
+    try {
+      expect((await upload('student', item.id, 1)).status).toBe(503);
+      expect(remove).not.toHaveBeenCalled();
+    } finally {
+      transaction.mockRestore();
+      remove.mockRestore();
+    }
+    expect((await uploadedFile(item)).scan_status).toBe('CHECKING');
+  });
+  it('rechecks revision after storing bytes and preserves a concurrent metadata edit', async () => {
+    const item = await create('student');
+    const store = app.get(PrivateStore);
+    const original = store.put.bind(store);
+    const put = jest.spyOn(store, 'put').mockImplementationOnce(async (key, path, size) => {
+      await original(key, path, size);
+      expect(
+        (await write('student', { ...body(), title: 'Newer metadata', revision: 1 }, item.id))
+          .status,
+      ).toBe(200);
+    });
+    const remove = jest.spyOn(store, 'remove');
+    try {
+      expect((await upload('student', item.id, 1)).status).toBe(409);
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(
+        (await agents.student.get(`/api/v1/material-drafts/${item.id}`)).body.item,
+      ).toMatchObject({ title: 'Newer metadata', revision: 2, fileState: 'MISSING' });
+    } finally {
+      put.mockRestore();
+      remove.mockRestore();
+    }
+  });
+  it('persists complete SAFE evidence once and leaves replacement files independent (scanner test double)', async () => {
+    const item = await create('student');
+    expect((await upload('student', item.id, 1)).status).toBe(201);
+    const first = await uploadedFile(item);
+    expect((await upload('student', item.id, 2)).status).toBe(201);
+    const scan = jest
+      .spyOn(app.get(PdfScanner), 'scan')
+      .mockResolvedValue({ pageCount: 2, hasTextLayer: true });
+    try {
+      const processor = app.get(ScanProcessor);
+      await processor.process(first.id, false);
+      await processor.process(first.id, false);
+      expect(scan).toHaveBeenCalledTimes(1);
+      expect(
+        (
+          await db.query(
+            'SELECT scan_status,page_count,has_text_layer,checked_at FROM hucescholar.files WHERE id=$1',
+            [first.id],
+          )
+        ).rows[0],
+      ).toMatchObject({
+        scan_status: 'SAFE',
+        page_count: 2,
+        has_text_layer: true,
+        checked_at: expect.any(Date),
+      });
+      expect(
+        (await agents.student.get(`/api/v1/material-drafts/${item.id}`)).body.item.fileState,
+      ).toBe('CHECKING');
+    } finally {
+      scan.mockRestore();
+    }
+  });
+  it('retries scanner errors while CHECKING then records FAILED, never SAFE', async () => {
+    const item = await create('student');
+    await upload('student', item.id, 1);
+    const file = await uploadedFile(item);
+    const scan = jest
+      .spyOn(app.get(PdfScanner), 'scan')
+      .mockRejectedValue(new Error('Scanner offline'));
+    try {
+      await expect(app.get(ScanProcessor).process(file.id, false)).rejects.toThrow();
+      expect((await uploadedFile(item)).scan_status).toBe('CHECKING');
+      await expect(app.get(ScanProcessor).process(file.id, true)).rejects.toThrow();
+      expect((await uploadedFile(item)).scan_status).toBe('FAILED');
+    } finally {
+      scan.mockRestore();
+    }
+  });
+  it('rejects changed private bytes before scanning', async () => {
+    const item = await create('student');
+    await upload('student', item.id, 1);
+    const file = await uploadedFile(item);
+    const read = jest
+      .spyOn(app.get(PrivateStore), 'read')
+      .mockResolvedValue(createReadStream(__filename));
+    const scan = jest.spyOn(app.get(PdfScanner), 'scan');
+    try {
+      await expect(app.get(ScanProcessor).process(file.id, true)).rejects.toThrow();
+      expect(scan).not.toHaveBeenCalled();
+      expect((await uploadedFile(item)).scan_status).toBe('FAILED');
+    } finally {
+      read.mockRestore();
+      scan.mockRestore();
+    }
+  });
+  it('reconciles a committed CHECKING file whose queue job is missing', async () => {
+    const item = await create('student');
+    const enqueue = jest
+      .spyOn(app.get(ScanQueue), 'enqueue')
+      .mockRejectedValueOnce(new Error('Queue unavailable'));
+    await upload('student', item.id, 1);
+    enqueue.mockRestore();
+    const file = await uploadedFile(item);
+    await app.get(ScanProcessor).reconcile();
+    expect(await app.get(ScanQueue).queue.getJob(`file-${file.id}`)).toBeDefined();
+  });
   it('requires a session, author role and CSRF', async () => {
     await request(app.getHttpServer()).get('/api/v1/material-drafts').expect(401);
     await agents.admin.get('/api/v1/material-drafts').expect(403);

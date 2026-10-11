@@ -3,11 +3,18 @@ import { AuthenticatedRequest } from '../auth/auth.types';
 import { Roles, RolesGuard, SessionGuard } from '../auth/session.guard';
 import { DraftFieldsDto, DraftListDto, UpdateDraftDto } from './materials.dto';
 import { MaterialsService } from './materials.service';
+import { DraftPdfService } from './draft-pdf.service';
 @Controller('material-drafts')
 @UseGuards(SessionGuard, RolesGuard)
 @Roles('LECTURER', 'STUDENT')
 export class MaterialsController {
-  constructor(private readonly materials: MaterialsService) {}
+  constructor(
+    private readonly materials: MaterialsService,
+    private readonly pdf: DraftPdfService,
+  ) {}
+  @Post(':id/pdf') upload(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.pdf.upload(req.user, id, req);
+  }
   @Get('courses') courses(@Req() req: AuthenticatedRequest, @Query() query: DraftListDto) {
     return this.materials.courses(req.user, query);
   }
