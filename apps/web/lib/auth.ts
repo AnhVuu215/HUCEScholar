@@ -20,14 +20,18 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest(path: string, options: RequestInit = {}): Promise<Response> {
+export async function apiRequest(
+  path: string,
+  options: RequestInit = {},
+  timeoutMs = 8_000,
+): Promise<Response> {
   const response = await fetch(`/api/v1${path}`, {
     ...options,
     credentials: 'same-origin',
     cache: 'no-store',
     signal: options.signal
-      ? AbortSignal.any([options.signal, AbortSignal.timeout(8_000)])
-      : AbortSignal.timeout(8_000),
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(timeoutMs)])
+      : AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) {
     let code: string | undefined;

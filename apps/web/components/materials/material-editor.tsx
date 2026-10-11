@@ -10,15 +10,18 @@ import {
   type MaterialDraft,
 } from '../../lib/materials';
 import { CatalogPicker, type CatalogChoice } from '../academic/catalog-picker';
+import { DraftPdf } from './draft-pdf';
 
 export function MaterialEditor({
   id,
   close,
   saved,
+  updated,
 }: {
   id?: string;
   close: () => void;
   saved: () => void;
+  updated: (item: MaterialDraft) => void;
 }) {
   const [initial, setInitial] = useState<MaterialDraft | null>(null);
   const [loading, setLoading] = useState(!!id);
@@ -69,7 +72,7 @@ export function MaterialEditor({
         </button>
       </section>
     );
-  return <DraftForm initial={initial} close={close} saved={saved} />;
+  return <DraftForm initial={initial} close={close} saved={saved} updated={updated} />;
 }
 function fieldsFor(initial: MaterialDraft | null): DraftFields {
   return {
@@ -87,11 +90,16 @@ function DraftForm({
   initial,
   close,
   saved,
+  updated,
 }: {
   initial: MaterialDraft | null;
   close: () => void;
   saved: () => void;
+  updated: (item: MaterialDraft) => void;
 }) {
+  const [current, setCurrent] = useState(initial);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfSelected, setPdfSelected] = useState(false);
   const [fields, setFields] = useState(() => fieldsFor(initial));
   const [courses, setCourses] = useState<CatalogChoice[]>(
     () =>
@@ -110,8 +118,9 @@ function DraftForm({
   const discardPrompt = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const errorMessage = useRef<HTMLParagraphElement>(null);
-  const dirty = JSON.stringify(fields) !== JSON.stringify(fieldsFor(initial));
-  const editable = !initial || initial.editable;
+  const metadataDirty = JSON.stringify(fields) !== JSON.stringify(fieldsFor(current));
+  const dirty = metadataDirty || pdfSelected || pdfBusy;
+  const editable = !current || current.editable;
   useEffect(() => {
     heading.current?.focus();
   }, []);
@@ -150,6 +159,7 @@ function DraftForm({
         return;
       event.preventDefault();
       event.stopPropagation();
+      if (pdfBusy) return;
       setDestination(logout ? null : link!.href);
       setLogoutButton(logout);
       setConfirm(true);
@@ -161,7 +171,7 @@ function DraftForm({
       window.removeEventListener('beforeunload', leave);
       document.removeEventListener('click', navigate, true);
     };
-  }, [dirty]);
+  }, [dirty, pdfBusy]);
   function update<K extends keyof DraftFields>(key: K, value: DraftFields[K]) {
     leaveAllowed.current = false;
     setFields((v) => ({ ...v, [key]: value }));
@@ -175,7 +185,7 @@ function DraftForm({
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (pending || !editable) return;
+    if (pending || pdfBusy || !editable) return;
     if (!fields.courseIds.length) {
       fail('Thêm ít nhất một môn học liên quan trước khi lưu.');
       return;
@@ -183,7 +193,7 @@ function DraftForm({
     setPending(true);
     setError('');
     try {
-      await saveDraft(fields, initial ?? undefined);
+      await saveDraft(fields, current ?? undefined);
       saved();
     } catch (failure) {
       fail(materialError(failure));
@@ -196,12 +206,12 @@ function DraftForm({
         {initial ? 'Thông tin bản nháp' : 'Bản nháp mới'}
       </h2>
       <p className="field-hint">
-        {initial ? `Phiên bản ${initial.versionNo} · Lần lưu ${initial.revision}. ` : ''}Lưu thông
+        {current ? `Phiên bản ${current.versionNo} · Lần lưu ${current.revision}. ` : ''}Lưu thông
         tin trước khi thêm PDF. Bản nháp chỉ xuất hiện trong không gian của bạn.
       </p>
       {!editable && (
         <p role="alert" className="form-error">
-          {initial?.editBlock === 'ASSIGNMENT_REQUIRED'
+          {current?.editBlock === 'ASSIGNMENT_REQUIRED'
             ? 'Bạn không còn phân công hợp lệ ở tất cả môn liên quan. Metadata được giữ lại; cần quản trị viên kiểm tra phân công trước khi sửa.'
             : 'Phiên bản không còn ở trạng thái nháp, không thể sửa tại đây.'}
         </p>
@@ -212,7 +222,7 @@ function DraftForm({
         </p>
       )}
       <form onSubmit={(event) => void submit(event)}>
-        <fieldset disabled={pending || !editable} className="draft-fields">
+        <fieldset disabled={pending || pdfBusy || !editable} className="draft-fields">
           <legend className="sr-only">Metadata học liệu</legend>
           <div className="user-fields">
             <div className="form-field draft-wide">
@@ -351,8 +361,7 @@ function DraftForm({
             <span>Đề nghị cho phép tải sau khi được duyệt</span>
           </label>
           <p className="field-hint">
-            Lựa chọn này chưa cấp quyền tải. Upload, kiểm tra PDF và gửi duyệt sẽ được bổ sung ở
-            bước tiếp theo.
+            Lựa chọn này chưa cấp quyền tải. Gửi duyệt và công bố là các bước tiếp theo.
           </p>
         </fieldset>
         {confirm && (
@@ -410,14 +419,14 @@ function DraftForm({
         )}
         <div className="user-form-actions">
           {editable && (
-            <button className="primary-button" disabled={pending}>
+            <button className="primary-button" disabled={pending || pdfBusy || pdfSelected}>
               {pending ? 'Đang lưu…' : 'Lưu bản nháp'}
             </button>
           )}
           <button
             type="button"
             className="secondary-button"
-            disabled={pending}
+            disabled={pending || pdfBusy}
             onClick={() => {
               setDestination(null);
               setLogoutButton(null);
@@ -431,6 +440,25 @@ function DraftForm({
           </button>
         </div>
       </form>
+      {current && (
+        <DraftPdf
+          current={current}
+          metadataDirty={metadataDirty || pending}
+          changed={(item) => {
+            updated(item);
+            setCurrent(item);
+            setFields(fieldsFor(item));
+            setCourses(
+              item.courses.map((c) => ({
+                id: c.id,
+                label: `${c.code} · ${c.name}${c.active ? '' : ' (đã ngừng)'}`,
+              })),
+            );
+          }}
+          busy={setPdfBusy}
+          selectionChanged={setPdfSelected}
+        />
+      )}
     </section>
   );
 }

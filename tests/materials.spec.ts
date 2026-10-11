@@ -77,8 +77,98 @@ async function fill(page: Page, code: string) {
     .selectOption({ label: `${code} · Môn minh họa kiểm thử học liệu` });
   await page.getByRole('button', { name: 'Thêm môn', exact: true }).click();
 }
+test('student attaches a synthetic private PDF and sees its technical status', async ({ page }) => {
+  const code = await seed(page, 'student');
+  await login(page, 'student');
+  await fill(page, code);
+  await page.getByRole('button', { name: 'Lưu bản nháp', exact: true }).click();
+  await page
+    .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
+    .click();
+  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
+    name: 'synthetic.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7\nSynthetic test PDF'),
+  });
+  await page.getByLabel('Tác giả', { exact: false }).fill('Thay đổi sau khi chọn file');
+  await page.getByRole('button', { name: 'Bỏ file đã chọn', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lưu bản nháp', exact: true })).toBeEnabled();
+  await page.getByLabel('Tác giả', { exact: false }).fill('Tác giả kiểm thử');
+  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
+    name: 'synthetic.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7\nSynthetic test PDF'),
+  });
+  await page.getByRole('button', { name: 'Tải PDF lên', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'PDF đang kiểm tra' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: code })).toContainText('PDF đang kiểm tra');
+  await expect(page.getByText('synthetic.pdf', { exact: false }).first()).toBeVisible();
+  await expect(page.getByText('Lần lưu 2', { exact: false })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Đọc PDF', exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const response = await page.request.get('/api/v1/material-drafts?search=' + code);
+  const item = (await response.json()).items[0];
+  const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+  expect(
+    (
+      await page.request.patch(`/api/v1/material-drafts/${item.id}`, {
+        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+        data: {
+          title: item.title,
+          authors: 'Tác giả ở tab khác',
+          description: item.description,
+          materialType: item.materialType,
+          sourceReference: item.sourceReference,
+          rightsBasis: item.rightsBasis,
+          downloadAllowed: item.downloadAllowed,
+          courseIds: item.courses.map((c: { id: string }) => c.id),
+          revision: item.revision,
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
+  await expect(page.getByLabel('Tác giả', { exact: false })).toHaveValue('Tác giả ở tab khác');
+  await capture(page, 'draft-pdf-checking');
+  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
+    name: 'retry.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7\nSynthetic retry'),
+  });
+  await page.route('**/material-drafts/*/pdf', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'UPLOAD_UNCERTAIN' }),
+    }),
+  );
+  await page.getByRole('button', { name: 'Tải PDF lên', exact: true }).click();
+  await expect(page.locator('.draft-pdf [role="alert"]')).toContainText(
+    'Chưa xác nhận được kết quả upload',
+  );
+  await expect(page.getByLabel('Tác giả', { exact: false })).toHaveValue('Tác giả ở tab khác');
+  await expect(page.getByRole('button', { name: 'Tải PDF lên', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Bỏ file đã chọn', exact: true }).click();
+  await expect(page.locator('.draft-pdf [role="alert"]')).toContainText('Cập nhật trạng thái');
+  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
+    name: 'retry-again.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7\nSynthetic retry again'),
+  });
+  await expect(page.locator('.draft-pdf [role="alert"]')).toContainText('Cập nhật trạng thái');
+  await expect(page.getByRole('button', { name: 'Tải PDF lên', exact: true })).toBeDisabled();
+  await capture(page, 'draft-pdf-retry');
+  await page.unroute('**/material-drafts/*/pdf');
+  await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
+  await expect(page.locator('.draft-pdf [role="alert"]')).toHaveCount(0);
+});
 async function capture(page: Page, name: string) {
-  if (process.env.CAPTURE_MATERIALS_UI !== '1') return;
+  if (
+    process.env.CAPTURE_MATERIALS_UI !== '1' &&
+    !(process.env.CAPTURE_PDF_UI === '1' && name.startsWith('draft-pdf'))
+  )
+    return;
   mkdirSync('.impeccable/review/materials', { recursive: true });
   for (const [device, width, height] of [
     ['desktop', 1440, 1000],

@@ -16,6 +16,7 @@ if (
 const config: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
+  experimental: { proxyClientMaxBodySize: '50mb', proxyTimeout: 120_000 },
   async headers() {
     return [
       {

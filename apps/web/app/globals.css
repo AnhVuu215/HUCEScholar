@@ -919,3 +919,19 @@ h2 {
     margin-top: 32px;
   }
 }
+/* Private draft PDF extends the existing utility editor. */
+.draft-pdf {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.draft-pdf h3 {
+  margin: 0 0 12px;
+}
+.draft-pdf input[type='file'] {
+  max-width: 100%;
+  min-width: 0;
+}
+.draft-file-name {
+  overflow-wrap: anywhere;
+}

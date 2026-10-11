@@ -1,4 +1,4 @@
-import { apiRequest, ApiError } from './auth';
+import { apiRequest, ApiError, csrfToken } from './auth';
 import { academicError, academicWrite } from './academic';
 
 export const materialTypes = {
@@ -14,6 +14,12 @@ export interface MaterialDraft {
   id: string;
   versionId: string;
   versionNo: number;
+  pdf: {
+    name: string;
+    byteSize: number;
+    pageCount: number | null;
+    hasTextLayer: boolean | null;
+  } | null;
   kind: 'LECTURER_MATERIAL' | 'STUDENT_SUPPLEMENT';
   title: string;
   authors: string;
@@ -71,6 +77,13 @@ function isDraft(value: unknown): value is MaterialDraft {
       String(d.reviewStatus),
     ) &&
     ['MISSING', 'CHECKING', 'SAFE', 'FAILED'].includes(String(d.fileState)) &&
+    (d.pdf === null ||
+      (!!d.pdf &&
+        typeof d.pdf === 'object' &&
+        'name' in d.pdf &&
+        typeof d.pdf.name === 'string' &&
+        'byteSize' in d.pdf &&
+        Number.isSafeInteger(d.pdf.byteSize))) &&
     typeof d.downloadAllowed === 'boolean' &&
     typeof d.editable === 'boolean' &&
     (d.editBlock === null || typeof d.editBlock === 'string') &&
@@ -121,6 +134,24 @@ export async function saveDraft(body: DraftFields, current?: MaterialDraft) {
       `/material-drafts${current ? `/${current.id}` : ''}`,
       { ...body, ...(current ? { revision: current.revision } : {}) },
       current ? 'PATCH' : 'POST',
+    ),
+  );
+}
+export async function uploadDraftPdf(current: MaterialDraft, file: File) {
+  return readItem(
+    await apiRequest(
+      `/material-drafts/${current.id}/pdf`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/pdf',
+          'X-CSRF-Token': await csrfToken(),
+          'X-File-Name': encodeURIComponent(file.name),
+          'If-Match': `"${current.revision}"`,
+        },
+        body: file,
+      },
+      120_000,
     ),
   );
 }

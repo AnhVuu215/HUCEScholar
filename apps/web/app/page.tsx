@@ -75,10 +75,10 @@ export default function HomePage() {
           className="content-section next-section"
           aria-labelledby="next-heading"
         >
-          <h2 id="next-heading">Mốc tiếp theo: tải PDF và kiểm duyệt</h2>
+          <h2 id="next-heading">Mốc tiếp theo: gửi duyệt và công bố</h2>
           <p>
-            Nối bản nháp với upload riêng tư, kiểm tra PDF và gửi kiểm duyệt trước khi bổ sung trình
-            đọc và ghi chú.
+            Bản nháp đã có upload PDF riêng tư và kiểm tra kỹ thuật. Tiếp theo là gửi kiểm duyệt,
+            công bố rồi bổ sung trình đọc và ghi chú.
           </p>
           <ul className="role-list">
             <li>

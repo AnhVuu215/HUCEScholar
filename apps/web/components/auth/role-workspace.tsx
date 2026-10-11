@@ -22,9 +22,9 @@ const upcoming: Record<Role, string> = {
   ADMIN:
     'Bạn có thể quản lý tài khoản, danh mục đào tạo và phân công giảng viên. Kiểm duyệt sẽ được bổ sung cùng luồng học liệu.',
   LECTURER:
-    'Bạn có thể xem phân công và chuẩn bị bản nháp học liệu. Upload PDF, quản lý phiên bản và gửi công bố là các bước tiếp theo.',
+    'Bạn có thể xem phân công, chuẩn bị bản nháp và tải PDF lên để kiểm tra. Quản lý phiên bản và gửi công bố là các bước tiếp theo.',
   STUDENT:
-    'Bạn có thể chuẩn bị bản nháp tài liệu bổ sung. Upload PDF, kho tài liệu theo môn, trình đọc và ghi chú riêng sẽ được bổ sung sau.',
+    'Bạn có thể chuẩn bị bản nháp tài liệu bổ sung và tải PDF lên để kiểm tra. Gửi duyệt, kho tài liệu theo môn, trình đọc và ghi chú riêng sẽ được bổ sung sau.',
 };
 
 export function RoleWorkspace({
@@ -250,7 +250,7 @@ export function RoleWorkspace({
                   <p>
                     {state.user.role === 'ADMIN'
                       ? 'Bạn có thể cấp và quản lý tài khoản giảng viên, sinh viên. Chưa có học liệu thật trong hệ thống.'
-                      : 'Mở Học liệu của tôi để chuẩn bị bản nháp riêng. Chưa có PDF hoặc học liệu được công bố trong hệ thống.'}
+                      : 'Mở Học liệu của tôi để chuẩn bị bản nháp riêng và đính kèm PDF. Chưa có học liệu được công bố trong hệ thống.'}
                   </p>
                 </section>
               </>

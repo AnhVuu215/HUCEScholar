@@ -48,7 +48,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
           {role === 'LECTURER'
             ? 'Bản nháp học liệu cho các môn bạn phụ trách.'
             : 'Tài liệu bổ sung của bạn, tách biệt với giáo trình giảng viên.'}{' '}
-          Hiện có thể lưu thông tin; upload PDF và gửi duyệt chưa được mở.
+          Lưu thông tin, mở lại bản nháp rồi đính kèm PDF để kiểm tra. Gửi duyệt chưa được mở.
         </p>
         <button
           ref={create}
@@ -72,6 +72,13 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
           key={editor.id ?? 'new'}
           id={editor.id}
           close={close}
+          updated={(item) =>
+            setData((value) =>
+              value
+                ? { ...value, items: value.items.map((row) => (row.id === item.id ? item : row)) }
+                : value,
+            )
+          }
           saved={() => {
             setNotice('Đã lưu bản nháp. Chưa công bố cho người học.');
             close();
