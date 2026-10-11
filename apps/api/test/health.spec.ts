@@ -2,14 +2,14 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { AppModule } from '../src/app.module';
+import { HealthController } from '../src/health.controller';
 import { configureApplication } from '../src/configure-application';
 
 describe('HTTP liveness', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const module = await Test.createTestingModule({ controllers: [HealthController] }).compile();
     app = module.createNestApplication();
     configureApplication(app);
     await app.init();

@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !**/.env.example
+!**/.env.bootstrap.example
 *.pem
 *.key
 
@@ -13,6 +14,7 @@ dist/
 coverage/
 *.tsbuildinfo
 next-env.d.ts
+apps/api/src/generated/
 
 # Local verification and tools
 .tools/

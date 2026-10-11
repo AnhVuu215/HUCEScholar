@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Đã chốt công nghệ MVP ngày 11/10/2026: web responsive + PWA cho desktop, điện thoại và máy tính bảng; người dùng chọn chưa phát hành app native trong MVP. Next.js/React + TypeScript + Tailwind CSS; NestJS REST API; PostgreSQL + Prisma với migration SQL tùy chỉnh; PDF.js; Amazon S3 private; BullMQ/Redis và worker kiểm tra file ClamAV/Poppler; Docker Compose. Chi tiết, ranh giới và điều kiện kiểm chứng ở docs/HUCEScholar-tech-stack.md. Mốc khởi tạo đã có workspace apps/web và apps/api, trang trạng thái kết nối local, manifest cơ bản và cấu hình CI. Chưa có nghiệp vụ backend, auth, database hoặc reader thật; HTML/CSS/JavaScript tĩnh trong design/ vẫn chỉ là prototype thiết kế.
+Đã chốt công nghệ MVP ngày 11/10/2026: web responsive + PWA cho desktop, điện thoại và máy tính bảng; người dùng chọn chưa phát hành app native trong MVP. Next.js/React + TypeScript + Tailwind CSS; NestJS REST API; PostgreSQL + Prisma với migration SQL tùy chỉnh; PDF.js; Amazon S3 private; BullMQ/Redis và worker kiểm tra file ClamAV/Poppler; Docker Compose. Chi tiết, ranh giới và điều kiện kiểm chứng ở docs/HUCEScholar-tech-stack.md. Đã có workspace apps/web và apps/api, migration PostgreSQL 23 bảng, đăng nhập/đăng xuất bằng cookie phiên, phân quyền ba vai trò tại API, màn hình tài khoản responsive và kiểm thử tự động. Chưa có quản lý tài khoản qua UI, học liệu thật, upload, reader, dịch vụ file/mail hoặc service worker PWA. HTML/CSS/JavaScript tĩnh trong design/ vẫn chỉ là prototype thiết kế.
 
 ## Users
 
@@ -34,7 +34,7 @@ Tên đã chốt: HUCEScholar. Giao diện tiếng Việt. Chưa có bộ nhận
 
 ## Evidence on Hand
 
-Proposal, use case và quy tắc nghiệp vụ 1.1; ERD và schema tham chiếu trong docs/. Chưa có khảo sát, dữ liệu sách thật, tài liệu được trường cấp quyền hay backend sản phẩm. Toàn bộ nội dung prototype phải được ghi rõ là minh họa.
+Proposal, use case và quy tắc nghiệp vụ 1.1; ERD và schema tham chiếu trong docs/. Database và auth đã có triển khai local; bằng chứng và ranh giới ở docs/implementation/2026-10-11-database-auth.md. Chưa có khảo sát, dữ liệu sách thật, tài liệu được trường cấp quyền hoặc triển khai vận hành. Toàn bộ nội dung prototype và tài khoản kiểm thử phải được ghi rõ là minh họa.
 
 ## Product Principles
 

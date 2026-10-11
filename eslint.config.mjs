@@ -4,7 +4,16 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import { fileURLToPath } from 'node:url';
 
 export default [
-  { ignores: ['**/node_modules/**', '**/.next/**', '**/dist/**', 'design/**', 'docs/**'] },
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/.next/**',
+      '**/dist/**',
+      'apps/api/src/generated/**',
+      'design/**',
+      'docs/**',
+    ],
+  },
   ...tseslint.configs.recommended,
   {
     files: ['apps/web/**/*.{ts,tsx}'],

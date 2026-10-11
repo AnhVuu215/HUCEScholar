@@ -6,7 +6,7 @@
     "dev": "next dev --hostname 127.0.0.1 --port 3000",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1 --port 3000",
-    "lint": "eslint app components next.config.ts",
+    "lint": "eslint app components lib next.config.ts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

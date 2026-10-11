@@ -1,98 +1,106 @@
 # HUCEScholar
 
-Nền tảng học liệu điện tử dành cho sinh viên HUCE, phát triển theo hướng web responsive và PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên.
+Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hướng web responsive + PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên. Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường.
 
-Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường. Chưa có dữ liệu học liệu thật hoặc tích hợp thư viện trường.
+Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên và phân quyền ba vai trò tại API; giao diện tài khoản dùng trên desktop, điện thoại và tablet. **Chưa có học liệu thật, upload, reader, quản lý tài khoản qua UI hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
 
 ## Tài liệu
 
 - [Tech stack và kiến trúc MVP](docs/HUCEScholar-tech-stack.md)
 - [Mô hình dữ liệu và SQL tham chiếu](docs/database/README.md)
+- [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)
+- [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)
 - [Prototype thiết kế](design/wireframe/README.md)
-- [Proposal, use case và bộ tài liệu bàn giao](docs/deliverables/)
-- [Quy tắc sản phẩm](PRODUCT.md)
-- [Thiết kế giao diện hiện có](DESIGN.md)
+- [Proposal, use case và tài liệu bàn giao](docs/deliverables/)
+- [Quy tắc sản phẩm](PRODUCT.md), [thiết kế prototype](DESIGN.md)
 
-HTML trong `design/` và `docs/deliverables/` là prototype dùng dữ liệu minh họa. Không dùng prototype để chứng minh chức năng đăng nhập, phân quyền, PDF hoặc lưu dữ liệu đã hoạt động.
+## Chạy local trên Windows / PowerShell
 
-## Lộ trình triển khai
-
-1. Repository, workspace Next.js/NestJS, cấu hình local và CI.
-2. Migration PostgreSQL giữ nguyên ràng buộc; tài khoản và phiên đăng nhập.
-3. Catalog, upload, kiểm tra file và kiểm duyệt.
-4. PDF reader, ghi chú riêng, tiến độ đọc và kiểm tra trên nhiều thiết bị.
-5. PWA, kiểm thử hành trình và triển khai HTTPS.
-
-Mỗi mốc có kiểm tra riêng trước khi chuyển tiếp. Không cam kết đọc offline trong MVP.
-
-## Chạy trên Windows / PowerShell
-
-Yêu cầu **Node.js 24.19.x LTS** và **pnpm 11.25.0**. Phiên bản runtime nằm trong `.node-version`; package được pin và có `pnpm-lock.yaml`. Không cần Docker để chạy mốc khởi tạo.
+Yêu cầu **Node.js 24.19.x LTS**, **pnpm 11.25.0** và Docker Desktop đang chạy. Runtime và dependencies được pin trong repository.
 
 ```powershell
 pnpm install --frozen-lockfile
+pnpm setup:local
+pnpm infra:up
+pnpm --filter @hucescholar/api db:migrate
 pnpm dev
 ```
 
-Mở **http://127.0.0.1:3000**. API ở `http://127.0.0.1:3001/api/v1/health`. Dừng cả hai bằng `Ctrl+C`.
+Mở [http://127.0.0.1:3000/login](http://127.0.0.1:3000/login). API health ở `http://127.0.0.1:3001/api/v1/health`. Dừng web/API bằng `Ctrl+C`. Root `/` giữ trang tiến độ dự án và kiểm tra API.
 
-Trang đầu là **trang khởi tạo dành cho phát triển**, kiểm tra kết nối web–API thực tế. Chưa có đăng nhập, dữ liệu học liệu, migration, upload hoặc reader thật. Manifest là bước chuẩn bị PWA; chưa có service worker hay xác nhận cài đặt trên thiết bị.
+`setup:local` tạo `infra/.env` và `apps/api/.env` với password/CSRF secret ngẫu nhiên, giữ nguyên file đã có và không in secret. PostgreSQL mặc định **55432**, Redis **56379**, chỉ bind `127.0.0.1`; không đụng PostgreSQL khác trên 5432. `pnpm infra:down` giữ named volumes; không thêm `-v` khi cần giữ dữ liệu.
 
-Mặc định dùng loopback, không mở ra mạng LAN. Nếu cần cấu hình khác:
+Đổi web/API origin cần sửa `APP_ORIGIN` (origin truy cập trình duyệt) và `API_PROXY_TARGET` (server web gọi Nest). Next rewrites đọc đích API khi build; thay đích sau build cần build lại. Không đặt secret vào `NEXT_PUBLIC_*`. Mặc định phát triển local qua HTTP, không phải production HTTPS.
+
+## Tạo quản trị viên đầu tiên
+
+Không có đăng ký công khai hoặc mật khẩu mặc định. Chỉ làm khi database chưa có ADMIN:
 
 ```powershell
-Copy-Item apps/api/.env.example apps/api/.env
-Copy-Item apps/web/.env.example apps/web/.env.local
+Copy-Item apps/api/.env.bootstrap.example apps/api/.env.bootstrap
+# Điền BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_NAME và mật khẩu riêng 16–128 ký tự.
+# Không truyền mật khẩu qua command argument, không commit file thật.
+pnpm --filter @hucescholar/api build
+pnpm --filter @hucescholar/api db:bootstrap-admin
+Remove-Item -LiteralPath apps/api/.env.bootstrap
 ```
 
-Sửa `PORT`/`HOST` của API và `API_PROXY_TARGET` của web cho khớp. `API_PROXY_TARGET` là cấu hình server, được đọc cả khi build; thay đổi đích API sau build cần build lại. Không đặt secret trong biến `NEXT_PUBLIC_*`.
+CLI tạo account ACTIVE/verified và audit trong transaction; gọi lại không ghi đè tài khoản/mật khẩu. Đây chỉ là bootstrap ADMIN đầu tiên. UI cấp tài khoản giảng viên/sinh viên sẽ ở mốc tiếp theo; tài khoản E2E ở database test không dùng để đăng nhập ứng dụng local.
 
-## Kiểm tra và production build local
+## Kiểm tra
 
 ```powershell
 pnpm format:check
 pnpm check
+pnpm test:setup
+pnpm test:integration
 pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-`pnpm check` chạy lint, typecheck, Jest và build hai ứng dụng. Playwright tự chạy web/API ở cổng 3100/3101 rồi dừng; cần giữ hai cổng này trống. Có thể dùng Chrome đã cài bằng biến `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` trỏ tới executable của Chrome.
+`pnpm check` chạy lint, typecheck, unit Jest và build; không cần kết nối DB để chạy unit/build. Prisma client được sinh trước typecheck/build/dev và không commit. `test:setup` cần PostgreSQL/Redis đang chạy, tạo/migrate **hucescholar_test**, cập nhật ba account `e2e-*@example.test` với mật khẩu ngẫu nhiên, ghi env bị Git bỏ qua vào `.local/test.env`. Không dùng credential thật trong kiểm thử.
 
-Sau `pnpm build`, mở hai terminal riêng:
+Integration và browser dùng riêng database `_test` + Redis **DB 15**, không chạy đồng thời vì suite reset vùng rate-limit test. Browser global setup flush DB 15 dành riêng cho dự án; không dùng DB 15 này cho việc khác. Test setup không drop database; các fixture nghiệp vụ SQL kết thúc rollback. Playwright tự chạy web/API ở 3100/3101 rồi dừng; giữ hai cổng trống. Trace tắt để tránh ghi lại mật khẩu/cookie.
+
+Có thể dùng Chrome đã cài:
 
 ```powershell
+$env:PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+pnpm test:e2e
+```
+
+Browser kiểm tra reflow desktop/mobile/tablet bằng Chrome; chưa chứng minh Safari/iOS/Android hoặc cài PWA trên thiết bị thật.
+
+## Build và chạy bản build local
+
+```powershell
+pnpm build
 # Terminal 1
 pnpm --filter @hucescholar/api start
-
 # Terminal 2
 pnpm --filter @hucescholar/web start
 ```
 
-Đây là kiểm tra build local, chưa phải cấu hình triển khai production/HTTPS. CI trong `.github/workflows/ci.yml` chạy trên push vào `main`, `codex/**` và pull request.
+Bản build local dùng env phát triển hiện có. Production yêu cầu HTTPS, cookie Secure/host-prefixed, tách DB migration/runtime role và cấu hình proxy được kiểm tra. `TRUSTED_PROXY_IPS` mặc định trống. Next rewrite local dùng chung bucket IP loopback; triển khai nhiều người dùng phải route `/api` trực tiếp Caddy→Nest, ghi đè forwarded IP và chỉ tin exact IP của Caddy. Chi tiết trong nhật ký auth. Chưa deploy cloud.
 
-## Dịch vụ phụ local (mốc database tiếp theo)
+CI dùng PostgreSQL/Redis ephemeral trên runner và chạy format, lint, typecheck, unit, build, integration và E2E. Không dùng trust auth của CI cho local/production.
 
-`infra/compose.yaml` chuẩn bị PostgreSQL 18.6 và Redis 8.8.3, pin tag từ image chính thức. Chưa có Prisma migration hoặc tự tạo bảng. Web/API hiện tại chưa sử dụng hai dịch vụ này.
+## Lộ trình còn lại
 
-Khi Docker Desktop đã chạy:
+1. Quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên.
+2. Catalog, upload, kiểm tra file và kiểm duyệt.
+3. PDF reader, ghi chú riêng theo phiên bản, tiến độ đọc.
+4. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
 
-```powershell
-Copy-Item infra/.env.example infra/.env
-# Điền POSTGRES_PASSWORD và REDIS_PASSWORD riêng cho local trong infra/.env.
-pnpm infra:up
-```
-
-Cổng database/Redis chỉ publish lên `127.0.0.1`. `pnpm infra:down` dừng dịch vụ và giữ named volumes; không thêm `-v` trừ khi muốn xóa dữ liệu local. Không dùng cấu hình Compose này như một bản triển khai production đã được kiểm chứng.
-
-## Cấu trúc
+Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
 
 ```text
-apps/web/       Next.js App Router, giao diện và manifest
-apps/api/       NestJS, cấu hình startup và HTTP health
-tests/          Hành trình web/API bằng Playwright
-infra/          Dịch vụ PostgreSQL/Redis local
-design/         Prototype và công cụ thiết kế được giữ nguyên
-docs/           Proposal, use case, nghiệp vụ, schema và nhật ký triển khai
+apps/web/       Next.js App Router, login và không gian tài khoản
+apps/api/       NestJS, Prisma, auth/CSRF/session/role guards
+scripts/        Cấu hình local và database/test fixture riêng
+apps/api/prisma SQL migrations và mapping 23 model
+infra/          PostgreSQL/Redis local
+tests/          Hành trình Playwright (không ghi credential vào trace)
+design/         Prototype được giữ riêng
+docs/           Proposal, use case, schema và nhật ký triển khai
 ```
-
-[Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md).

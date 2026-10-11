@@ -9,7 +9,9 @@ test('web reaches the real API through its own origin', async ({ page, request }
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'HUCEScholar', exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('API đang hoạt động');
-  await expect(page.getByText('Chưa có đăng nhập, học liệu thật hoặc lưu dữ liệu.')).toBeVisible();
+  await expect(
+    page.getByText('Đã có đăng nhập và lưu phiên. Chưa có học liệu thật.'),
+  ).toBeVisible();
 });
 
 test('API network failure has an accessible retry that recovers', async ({ page }) => {

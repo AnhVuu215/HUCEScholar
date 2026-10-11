@@ -16,9 +16,12 @@
     "test:e2e": "playwright test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "format": "prettier --write .",
-    "format:check": "prettier --check apps tests infra .github *.json *.yaml *.mjs",
+    "format:check": "prettier --check apps tests scripts infra .github *.json *.yaml *.mjs",
     "infra:up": "docker compose --env-file infra/.env -f infra/compose.yaml up -d",
-    "infra:down": "docker compose --env-file infra/.env -f infra/compose.yaml down"
+    "infra:down": "docker compose --env-file infra/.env -f infra/compose.yaml down",
+    "setup:local": "node scripts/setup-local.mjs",
+    "test:setup": "node scripts/test-environment.mjs",
+    "test:integration": "pnpm --filter @hucescholar/api test:integration"
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "16.4.0",

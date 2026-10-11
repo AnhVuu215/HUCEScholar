@@ -15,6 +15,15 @@ if (
 
 const config: NextConfig = {
   poweredByHeader: false,
+  devIndicators: false,
+  async headers() {
+    return [
+      {
+        source: '/workspace/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+      },
+    ];
+  },
   async rewrites() {
     return [{ source: '/api/v1/:path*', destination: `${target.origin}/api/v1/:path*` }];
   },

@@ -8,3 +8,6 @@ allowBuilds:
   '@nestjs/core': false
   unrs-resolver: true
   '@parcel/watcher': true
+  '@prisma/engines': true
+  prisma: true
+  argon2: true
