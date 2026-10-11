@@ -67,12 +67,20 @@ try {
     timeCost: 2,
     parallelism: 1,
   });
-  for (const role of ['ADMIN', 'LECTURER', 'STUDENT']) {
+  // Keep independent browser suites below the real per-account login limit.
+  const accounts = [
+    ['admin', 'ADMIN'],
+    ['catalog-admin', 'ADMIN'],
+    ['assignments-admin', 'ADMIN'],
+    ['lecturer', 'LECTURER'],
+    ['student', 'STUDENT'],
+  ];
+  for (const [account, role] of accounts) {
     await fixture.query(
       `INSERT INTO hucescholar.users(email,display_name,password_hash,role,status,verified_at)
       VALUES($1,$2,$3,$4,'ACTIVE',now()) ON CONFLICT(email) DO UPDATE SET password_hash=excluded.password_hash,
       role=excluded.role,status='ACTIVE',verified_at=now()`,
-      [`e2e-${role.toLowerCase()}@example.test`, `${role} — tài khoản kiểm thử`, hash, role],
+      [`e2e-${account}@example.test`, `${role} — tài khoản kiểm thử`, hash, role],
     );
   }
 } finally {

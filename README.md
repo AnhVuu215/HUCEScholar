@@ -2,7 +2,7 @@
 
 Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hướng web responsive + PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên. Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường.
 
-Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò và quản lý tài khoản giảng viên/sinh viên qua UI Admin. Giao diện dùng trên desktop, điện thoại và tablet. **Chưa có học liệu thật, upload, reader, danh mục/phân công hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
+Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên xem được phân công của mình. Giao diện dùng trên desktop, điện thoại và tablet. **Chưa có học liệu thật, upload, reader hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
 
 ## Tài liệu
 
@@ -10,6 +10,7 @@ Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hư�
 - [Mô hình dữ liệu và SQL tham chiếu](docs/database/README.md)
 - [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)
 - [Quản lý tài khoản và giới hạn hiện tại](docs/implementation/2026-10-11-account-management.md)
+- [Danh mục đào tạo và phân công](docs/implementation/2026-10-11-academic-catalog.md)
 - [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)
 - [Prototype thiết kế](design/wireframe/README.md)
 - [Proposal, use case và tài liệu bàn giao](docs/deliverables/)
@@ -50,6 +51,12 @@ CLI tạo account ACTIVE/verified và audit trong transaction; gọi lại khôn
 
 Danh sách hỗ trợ tìm tên/email, lọc vai trò/trạng thái và phân trang. Sửa tên/email, khóa/mở khóa sử dụng revision chống ghi đè. Xung đột cho tải thông tin mới để đối chiếu trong khi giữ nội dung đang nhập. Khóa hoặc đổi email thu hồi mọi phiên của tài khoản; mở khóa không phục hồi cookie cũ. Role của tài khoản được giữ nguyên; ADMIN chỉ đọc ở chức năng này. Không xóa tài khoản.
 
+## Danh mục và phân công
+
+Admin mở `/workspace/admin/catalog/faculties`, tạo khoa → ngành/môn thuộc khoa, rồi chọn các ngành sử dụng môn. Môn có thể dùng chung khác khoa. Khoa phụ trách giữ cố định sau khi tạo; ngừng sử dụng giữ lịch sử. Không thể ngừng khoa còn ngành/môn hoạt động hoặc ngừng môn còn phân công hiện hành.
+
+Tại `/workspace/admin/assignments`, chọn giảng viên hoạt động/đã xác minh và môn, cấp phân công hoặc thu hồi kèm lý do. Giảng viên mở `/workspace/lecturer/assignments` xem phân công riêng. Thu hồi không xóa học liệu hoặc tự bàn giao; quyền học liệu sẽ được triển khai ở mốc tiếp theo. Danh mục local để trống, không tự nhập mã/sách HUCE giả.
+
 ## Kiểm tra
 
 ```powershell
@@ -63,7 +70,7 @@ pnpm test:e2e
 
 `pnpm check` chạy lint, typecheck, unit Jest và build; không cần kết nối DB để chạy unit/build. Prisma client được sinh trước typecheck/build/dev và không commit. `test:setup` cần PostgreSQL/Redis đang chạy, tạo/migrate **hucescholar_test**, cập nhật ba account `e2e-*@example.test` với mật khẩu ngẫu nhiên, ghi env bị Git bỏ qua vào `.local/test.env`. Không dùng credential thật trong kiểm thử.
 
-Integration và browser dùng riêng database `_test` + Redis **DB 15**, không chạy đồng thời vì suite reset vùng rate-limit test. Browser global setup flush DB 15 dành riêng cho dự án; không dùng DB 15 này cho việc khác. Test setup không drop database; các fixture nghiệp vụ SQL kết thúc rollback. Playwright tự chạy web/API ở 3100/3101 rồi dừng; giữ hai cổng trống. Trace tắt để tránh ghi lại mật khẩu/cookie.
+Integration và browser dùng riêng database `_test` + Redis **DB 15**, không chạy đồng thời vì suite reset vùng rate-limit test. Browser global setup flush DB 15 dành riêng cho dự án; không dùng DB 15 này cho việc khác. Test setup không drop database. Ca kiểm tra schema SQL dùng rollback; fixture API được dọn sau suite; dữ liệu synthetic do Playwright tạo chỉ tồn tại trong database test. Playwright tự chạy web/API ở 3100/3101 rồi dừng; giữ hai cổng trống. Trace tắt để tránh ghi lại mật khẩu/cookie.
 
 Có thể dùng Chrome đã cài:
 
@@ -90,16 +97,15 @@ CI dùng PostgreSQL/Redis ephemeral trên runner và chạy format, lint, typech
 
 ## Lộ trình còn lại
 
-1. Danh mục khoa/ngành/môn và phân công giảng viên.
-2. Catalog, upload, kiểm tra file và kiểm duyệt.
-3. PDF reader, ghi chú riêng theo phiên bản, tiến độ đọc.
-4. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
+1. Học liệu, upload, kiểm tra file và kiểm duyệt.
+2. PDF reader, ghi chú riêng theo phiên bản, tiến độ đọc.
+3. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
 
 Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
 
 ```text
-apps/web/       Next.js App Router, login, không gian và quản lý tài khoản
-apps/api/       NestJS, Prisma, auth/CSRF/session/role guards, UsersModule
+apps/web/       Next.js App Router, login, tài khoản, danh mục và phân công
+apps/api/       NestJS, Prisma, auth/CSRF/session/role guards, Users/Academic modules
 scripts/        Cấu hình local và database/test fixture riêng
 apps/api/prisma SQL migrations và mapping 23 model
 infra/          PostgreSQL/Redis local

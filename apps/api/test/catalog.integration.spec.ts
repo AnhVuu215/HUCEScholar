@@ -48,6 +48,7 @@ describe('academic catalog', () => {
     }
     const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = module.createNestApplication();
+    app.useLogger(false);
     configureApplication(app);
     await app.init();
     await app.listen(0, '127.0.0.1');
@@ -57,6 +58,10 @@ describe('academic catalog', () => {
   afterAll(async () => {
     await app?.close();
     if (db) {
+      await db.query(
+        'DELETE FROM hucescholar.lecturer_assignments WHERE lecturer_id=ANY($1::bigint[])',
+        [ids],
+      );
       await db.query('DELETE FROM hucescholar.audit_events WHERE actor_id=ANY($1::bigint[])', [
         ids,
       ]);
@@ -113,6 +118,166 @@ describe('academic catalog', () => {
       revision: number;
     };
   }
+  async function course(suffix: string) {
+    const parent = await faculty(suffix);
+    const result = await write('courses', {
+      code: `${prefix}-${suffix}`,
+      name: `Môn ${suffix}`,
+      facultyId: parent.id,
+    });
+    expect(result.status).toBe(201);
+    return result.body.item as { id: string; code: string; name: string; revision: number };
+  }
+  async function assignment(body: object, id?: string, browser = admin) {
+    const token = await csrf(browser);
+    return browser[id ? 'patch' : 'post'](`/api/v1/admin/assignments${id ? `/${id}/revoke` : ''}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', token)
+      .send(body);
+  }
+  it('restricts assignments and scopes lecturer reads to their own ID', async () => {
+    const item = await course('OWN');
+    await request(app.getHttpServer()).get('/api/v1/admin/assignments').expect(401);
+    const lecturer = request.agent(app.getHttpServer());
+    await login(lecturer, 'LECTURER');
+    await lecturer.get('/api/v1/admin/assignments').expect(403);
+    expect((await assignment({}, undefined, lecturer)).status).toBe(403);
+    const student = request.agent(app.getHttpServer());
+    await login(student, 'STUDENT');
+    await student.get('/api/v1/lecturer/assignments').expect(403);
+    const created = await assignment({ lecturerId: ids[1], courseId: item.id });
+    expect(created.status).toBe(201);
+    const other = await db.query(
+      "INSERT INTO hucescholar.users(email,display_name,password_hash,role,status,verified_at) SELECT $1,'Other lecturer',password_hash,'LECTURER','ACTIVE',now() FROM hucescholar.users WHERE id=$2 RETURNING id",
+      [`${prefix.toLowerCase()}-other@example.test`, ids[1]],
+    );
+    ids.push(other.rows[0].id);
+    expect((await assignment({ lecturerId: other.rows[0].id, courseId: item.id })).status).toBe(
+      201,
+    );
+    const own = await lecturer.get(`/api/v1/lecturer/assignments?search=${item.code}`).expect(200);
+    expect(own.body.items).toHaveLength(1);
+    expect(own.body.items[0]).toMatchObject({ lecturerId: ids[1], courseId: item.id });
+    await lecturer.get(`/api/v1/lecturer/assignments?lecturerId=${ids[2]}`).expect(400);
+    await admin.post('/api/v1/admin/assignments').send({}).expect(403);
+  });
+  it('rejects non-lecturers, locked accounts and stopped courses', async () => {
+    const item = await course('ELIGIBLE');
+    expect((await assignment({ lecturerId: ids[2], courseId: item.id })).body.code).toBe(
+      'INVALID_LECTURER',
+    );
+    await db.query("UPDATE hucescholar.users SET status='LOCKED' WHERE id=$1", [ids[1]]);
+    try {
+      expect((await assignment({ lecturerId: ids[1], courseId: item.id })).body.code).toBe(
+        'INVALID_LECTURER',
+      );
+    } finally {
+      await db.query("UPDATE hucescholar.users SET status='ACTIVE' WHERE id=$1", [ids[1]]);
+    }
+    expect(
+      (
+        await write(
+          `courses/${item.id}`,
+          { code: item.code, name: item.name, active: false, revision: 1 },
+          'patch',
+        )
+      ).status,
+    ).toBe(200);
+    expect((await assignment({ lecturerId: ids[1], courseId: item.id })).body.code).toBe(
+      'INACTIVE_COURSE',
+    );
+    expect(
+      (await assignment({ lecturerId: '9223372036854775808', courseId: item.id })).status,
+    ).toBe(400);
+  });
+  it('serializes assignment versus course stop and rolls back assignment if audit fails', async () => {
+    const item = await course('RACE');
+    const results = await Promise.all([
+      assignment({ lecturerId: ids[1], courseId: item.id }),
+      write(
+        `courses/${item.id}`,
+        { code: item.code, name: item.name, active: false, revision: 1 },
+        'patch',
+      ),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(expect.arrayContaining([409]));
+    expect(results.some((r) => r.status === 200 || r.status === 201)).toBe(true);
+    const violations = await db.query(
+      'SELECT count(*)::int n FROM hucescholar.lecturer_assignments a JOIN hucescholar.courses c ON c.id=a.course_id WHERE c.id=$1 AND NOT c.is_active AND a.revoked_at IS NULL',
+      [item.id],
+    );
+    expect(violations.rows[0].n).toBe(0);
+    const rollback = await course('ASSIGN-ROLL');
+    const spy = jest
+      .spyOn(app.get(AcademicService), 'audit')
+      .mockRejectedValueOnce(new Error('Simulated audit outage'));
+    try {
+      expect((await assignment({ lecturerId: ids[1], courseId: rollback.id })).status).toBe(500);
+      expect(
+        (
+          await db.query(
+            'SELECT count(*)::int n FROM hucescholar.lecturer_assignments WHERE course_id=$1',
+            [rollback.id],
+          )
+        ).rows[0].n,
+      ).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it('serializes duplicate assignment, retains revocation history and requires explicit revoke before stopping a course', async () => {
+    const item = await course('HISTORY');
+    const body = { lecturerId: ids[1], courseId: item.id };
+    const concurrent = await Promise.all([assignment(body), assignment(body)]);
+    expect(concurrent.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(concurrent.find((r) => r.status === 409)?.body.code).toBe('ALREADY_ASSIGNED');
+    const created = concurrent.find((r) => r.status === 201)!.body.item;
+    expect(
+      (
+        await write(
+          `courses/${item.id}`,
+          { code: item.code, name: item.name, active: false, revision: 1 },
+          'patch',
+        )
+      ).body.code,
+    ).toBe('ACTIVE_ASSIGNMENTS');
+    expect((await assignment({ reason: ' ' }, created.id)).status).toBe(400);
+    const revoked = await Promise.all([
+      assignment({ reason: 'Đổi phân công học kỳ' }, created.id),
+      assignment({ reason: 'Không ghi đè lịch sử' }, created.id),
+    ]);
+    expect(revoked.map((r) => r.status).sort()).toEqual([200, 409]);
+    const again = await assignment(body);
+    expect(again.status).toBe(201);
+    expect(again.body.item.id).not.toBe(created.id);
+    const history = await admin.get(`/api/v1/admin/assignments?courseId=${item.id}`).expect(200);
+    expect(history.body.total).toBe(2);
+    expect(
+      history.body.items.filter((r: { revokedAt: string | null }) => r.revokedAt !== null),
+    ).toHaveLength(1);
+    const audit = await db.query(
+      "SELECT count(*)::int n FROM hucescholar.audit_events WHERE actor_id=$1 AND entity_type='LECTURER_ASSIGNMENT' AND entity_id=$2 AND event_type='ASSIGNMENT_REVOKED'",
+      [ids[0], created.id],
+    );
+    expect(audit.rows[0].n).toBe(1);
+    expect((await assignment({ reason: 'Kết thúc phụ trách' }, again.body.item.id)).status).toBe(
+      200,
+    );
+    expect(
+      (
+        await write(
+          `courses/${item.id}`,
+          { code: item.code, name: item.name, active: false, revision: 1 },
+          'patch',
+        )
+      ).status,
+    ).toBe(200);
+    const filtered = await admin
+      .get(`/api/v1/admin/assignments?courseId=${item.id}&status=REVOKED&limit=1&page=2`)
+      .expect(200);
+    expect(filtered.body).toMatchObject({ total: 2, limit: 1, page: 2 });
+    expect(filtered.body.items).toHaveLength(1);
+  });
   it('restricts catalog reads and writes to ADMIN, with CSRF on mutations', async () => {
     await request(app.getHttpServer()).get('/api/v1/admin/catalog/faculties').expect(401);
     for (const role of ['LECTURER', 'STUDENT']) {

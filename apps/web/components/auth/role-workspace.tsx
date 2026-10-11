@@ -20,7 +20,7 @@ type State =
   | { kind: 'error' };
 const upcoming: Record<Role, string> = {
   ADMIN:
-    'Quản lý danh mục và phân công giảng viên là phần triển khai tiếp theo. Kiểm duyệt sẽ được bổ sung cùng luồng học liệu.',
+    'Bạn có thể quản lý tài khoản, danh mục đào tạo và phân công giảng viên. Kiểm duyệt sẽ được bổ sung cùng luồng học liệu.',
   LECTURER:
     'Không gian biên soạn, quản lý phiên bản và gửi công bố giáo trình sẽ được bổ sung cùng luồng học liệu.',
   STUDENT:
@@ -38,7 +38,7 @@ export function RoleWorkspace({
   children?: ReactNode;
   title?: string;
   description?: string;
-  activeSection?: 'users' | 'catalog';
+  activeSection?: 'users' | 'catalog' | 'assignments';
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -141,7 +141,6 @@ export function RoleWorkspace({
               Quản lý tài khoản
             </Link>
           )}
-          <Link href="/">Tiến độ dự án</Link>
           {state.kind === 'ready' && state.user.role === 'ADMIN' && (
             <Link
               href="/workspace/admin/catalog/faculties"
@@ -150,6 +149,15 @@ export function RoleWorkspace({
               Danh mục đào tạo
             </Link>
           )}
+          {state.kind === 'ready' && state.user.role !== 'STUDENT' && (
+            <Link
+              href={`/workspace/${state.user.role.toLowerCase()}/assignments`}
+              aria-current={activeSection === 'assignments' ? 'page' : undefined}
+            >
+              {state.user.role === 'ADMIN' ? 'Phân công giảng viên' : 'Phân công của tôi'}
+            </Link>
+          )}
+          <Link href="/">Tiến độ dự án</Link>
         </nav>
         <p className="sidebar-note">
           Dự án độc lập đang phát triển. Chưa phải hệ thống chính thức của trường.

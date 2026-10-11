@@ -22,6 +22,7 @@ apps/api/src/generated/
 .local/
 test-results/
 playwright-report/
+.impeccable/review/
 **/_qa/
 **/__pycache__/
 *.log

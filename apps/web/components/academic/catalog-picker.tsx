@@ -82,6 +82,7 @@ export function CatalogPicker({
       <select
         id={id}
         required={required}
+        aria-describedby={value ? `${id}-selected` : undefined}
         value={value?.id ?? ''}
         onChange={(e) =>
           onChange(
@@ -100,6 +101,11 @@ export function CatalogPicker({
           </option>
         ))}
       </select>
+      {value && (
+        <p id={`${id}-selected`} className="field-hint catalog-selected">
+          Đã chọn: {value.label}
+        </p>
+      )}
       {loading ? (
         <p role="status" className="field-hint">
           Đang tìm danh mục…

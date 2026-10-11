@@ -1,12 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
+import { captureCatalog } from './catalog-capture';
 
 test('admin creates a course and links/unlinks a program from another faculty', async ({
   page,
 }) => {
   const code = `CRS-${randomBytes(5).toString('hex').toUpperCase()}`;
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('e2e-admin@example.test');
+  await page.getByLabel('Email', { exact: true }).fill('e2e-catalog-admin@example.test');
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await expect(page).toHaveURL('/workspace/admin');
@@ -56,6 +57,7 @@ test('admin creates a course and links/unlinks a program from another faculty', 
     .getByLabel('Ngành sử dụng', { exact: true })
     .selectOption({ label: `${code} · Ngành dùng chung` });
   await page.getByRole('button', { name: 'Thêm vào danh sách', exact: true }).click();
+  await captureCatalog(page, 'course-programs');
   await page.getByRole('button', { name: 'Lưu liên kết', exact: true }).click();
   await expect(
     page.getByRole('main').getByRole('status').filter({ hasText: 'Đã lưu các ngành' }),
@@ -73,7 +75,7 @@ test('admin creates a program under a searched faculty and preserves a stale dra
 }) => {
   const code = `PRG-${randomBytes(5).toString('hex').toUpperCase()}`;
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('e2e-admin@example.test');
+  await page.getByLabel('Email', { exact: true }).fill('e2e-catalog-admin@example.test');
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await page.getByRole('link', { name: 'Danh mục đào tạo', exact: true }).click();
@@ -127,7 +129,7 @@ test('admin creates a program under a searched faculty and preserves a stale dra
 test('admin creates, finds, edits and stops a faculty', async ({ page }) => {
   const code = `WEB-${randomBytes(5).toString('hex').toUpperCase()}`;
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('e2e-admin@example.test');
+  await page.getByLabel('Email', { exact: true }).fill('e2e-catalog-admin@example.test');
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await page.getByRole('link', { name: 'Danh mục đào tạo', exact: true }).click();

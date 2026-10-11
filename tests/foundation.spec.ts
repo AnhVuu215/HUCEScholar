@@ -10,7 +10,7 @@ test('web reaches the real API through its own origin', async ({ page, request }
   await expect(page.getByRole('heading', { name: 'HUCEScholar', exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('API đang hoạt động');
   await expect(
-    page.getByText('Đã có đăng nhập, lưu phiên và quản lý tài khoản. Chưa có học liệu thật.'),
+    page.getByText('Đã có tài khoản, danh mục đào tạo và phân công. Chưa có học liệu thật.'),
   ).toBeVisible();
 });
 

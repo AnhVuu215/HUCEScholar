@@ -104,6 +104,12 @@ export function academicError(error: unknown): string {
         'Môn đã ngừng sử dụng. Kích hoạt lại môn trước khi thêm liên kết hoặc phân công.',
       ACTIVE_ASSIGNMENTS:
         'Môn còn phân công giảng viên hiện hành. Thu hồi các phân công đó trước khi ngừng môn.',
+      INVALID_LECTURER:
+        'Giảng viên không còn hoạt động hoặc chưa được xác minh. Kiểm tra tài khoản và chọn lại.',
+      ALREADY_ASSIGNED:
+        'Giảng viên đã có phân công hiện hành cho môn này. Đóng form và tải lại danh sách để kiểm tra.',
+      ALREADY_REVOKED:
+        'Phân công đã được thu hồi bởi một yêu cầu khác. Đóng form để tải lại danh sách.',
     };
     if (error.code && codes[error.code]) return codes[error.code];
     if (error.status === 400)

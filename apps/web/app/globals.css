@@ -45,7 +45,8 @@ button {
   font: inherit;
   cursor: pointer;
 }
-input {
+input,
+textarea {
   font: inherit;
   caret-color: var(--accent);
 }
@@ -58,6 +59,7 @@ select:focus-visible,
   outline-offset: 4px;
 }
 input:focus-visible,
+textarea:focus-visible,
 .form-error:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 4px;
@@ -127,7 +129,8 @@ button:disabled {
   margin-bottom: 8px;
   font-weight: 600;
 }
-.form-field input {
+.form-field input,
+.form-field textarea {
   min-height: 48px;
   width: 100%;
   border: 1px solid #b8c9de;
@@ -682,9 +685,27 @@ h2 {
   margin-block: 8px 24px;
   border-bottom: 1px solid var(--line);
 }
+.assignment-history p {
+  margin-top: 8px;
+  font-size: 0.8125rem;
+}
+.assignment-table th:first-child {
+  width: 30%;
+}
+.assignment-table th:last-child {
+  width: 18%;
+}
+.form-field textarea {
+  resize: vertical;
+  min-height: 120px;
+  font: inherit;
+}
 .catalog-linked-list {
   padding: 0;
   list-style: none;
+}
+.catalog-selected {
+  overflow-wrap: anywhere;
 }
 .catalog-linked-list li {
   display: flex;
