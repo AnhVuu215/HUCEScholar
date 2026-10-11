@@ -131,7 +131,7 @@ model document_versions {
   id                                                           BigInt                @id @default(autoincrement())
   document_id                                                  BigInt                @unique(map: "ux_one_working_version", where: raw("((review_status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'CHANGES_REQUIRED'::character varying])::text[]))"))
   version_no                                                   Int
-  file_id                                                      BigInt
+  file_id                                                      BigInt?
   created_by                                                   BigInt
   title                                                        String                @db.VarChar(300)
   authors                                                      String                @default("")
@@ -151,7 +151,7 @@ model document_versions {
   annotations                                                  annotations[]
   users                                                        users                 @relation(fields: [created_by], references: [id], onUpdate: NoAction)
   documents_document_versions_document_idTodocuments           documents             @relation("document_versions_document_idTodocuments", fields: [document_id], references: [id], onUpdate: NoAction)
-  files                                                        files                 @relation(fields: [file_id], references: [id], onUpdate: NoAction)
+  files                                                        files?                @relation(fields: [file_id], references: [id], onUpdate: NoAction)
   /// Prisma cannot infer the composite FK uniqueness from documents.id; SQL remains authoritative.
   documents_documents_id_current_version_idTodocument_versions documents[]           @relation("documents_id_current_version_idTodocument_versions")
   publication_requests                                         publication_requests?
