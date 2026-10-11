@@ -10,6 +10,8 @@ web
 
 Đã chốt công nghệ MVP ngày 11/10/2026: web responsive + PWA cho desktop, điện thoại và máy tính bảng; người dùng chọn chưa phát hành app native trong MVP. Next.js/React + TypeScript + Tailwind CSS; NestJS REST API; PostgreSQL + Prisma với migration SQL tùy chỉnh; PDF.js; Amazon S3 private; BullMQ/Redis và worker kiểm tra file ClamAV/Poppler; Docker Compose. Chi tiết, ranh giới và điều kiện kiểm chứng ở docs/HUCEScholar-tech-stack.md. Đã có workspace apps/web và apps/api, migration PostgreSQL 23 bảng, đăng nhập/đăng xuất bằng cookie phiên, phân quyền ba vai trò tại API, màn hình tài khoản responsive, UI Admin cấp/sửa/khóa/mở khóa tài khoản giảng viên/sinh viên và kiểm thử tự động. Đã có danh mục khoa/ngành/môn, liên kết ngành dùng chung và phân công/thu hồi có lịch sử; giảng viên xem phân công riêng. Chưa có học liệu thật, upload, reader, dịch vụ file/mail hoặc service worker PWA. HTML/CSS/JavaScript tĩnh trong design/ vẫn chỉ là prototype thiết kế.
 
+Đã bổ sung metadata bản nháp riêng cho giảng viên/sinh viên: tạo/tìm/mở/sửa, môn liên quan, nguồn và căn cứ quyền; giảng viên phải còn phân công khi lưu. Bản chưa có PDF vẫn là DRAFT và không được công bố. Chưa triển khai upload/kiểm tra file/gửi duyệt; xem docs/implementation/2026-10-11-material-drafts.md.
+
 ## Users
 
 Sinh viên HUCE cần tìm và dùng học liệu trong quá trình học, đặc biệt khi ôn thi. Giảng viên biên soạn, cập nhật và gửi công bố giáo trình trong phạm vi phân công. Quản trị viên quản lý tài khoản, danh mục, phân công, kiểm duyệt và bàn giao.

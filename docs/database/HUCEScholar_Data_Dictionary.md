@@ -4,6 +4,8 @@ Phiên bản thiết kế 1.0 ngày 10/10/2026. Cơ sở nghiệp vụ 1.1.
 
 23 bảng; 184 trường. SQL là phương án tham chiếu PostgreSQL, chưa phải database triển khai.
 
+**Ghi chú triển khai 11/10/2026:** các bảng bên dưới mô tả baseline thiết kế 1.0. Migration ứng dụng đã bổ sung revision khoa/ngành và migration `202610110005_material_draft_without_file` cho phép `document_versions.file_id` null chỉ khi DRAFT (CHECK bắt buộc file ở mọi trạng thái khác). Prisma schema/migrations là nguồn triển khai hiện tại; không chạy lại SQL baseline lên database ứng dụng. API bản nháp yêu cầu 1–20 môn ngay khi lưu. Chi tiết: [bản nháp học liệu](../implementation/2026-10-11-material-drafts.md).
+
 ## Quyết định thiết kế
 
 ### Tách tài liệu và phiên bản

@@ -2,7 +2,7 @@
 
 Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hướng web responsive + PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên. Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường.
 
-Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên xem được phân công của mình. Giao diện dùng trên desktop, điện thoại và tablet. **Chưa có học liệu thật, upload, reader hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
+Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo, tìm và sửa metadata bản nháp riêng. Giao diện dùng trên desktop, điện thoại và tablet. **Chưa có PDF thật, upload, công bố, reader hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
 
 ## Tài liệu
 
@@ -11,6 +11,7 @@ Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hư�
 - [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)
 - [Quản lý tài khoản và giới hạn hiện tại](docs/implementation/2026-10-11-account-management.md)
 - [Danh mục đào tạo và phân công](docs/implementation/2026-10-11-academic-catalog.md)
+- [Bản nháp học liệu](docs/implementation/2026-10-11-material-drafts.md)
 - [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)
 - [Prototype thiết kế](design/wireframe/README.md)
 - [Proposal, use case và tài liệu bàn giao](docs/deliverables/)
@@ -55,7 +56,13 @@ Danh sách hỗ trợ tìm tên/email, lọc vai trò/trạng thái và phân tr
 
 Admin mở `/workspace/admin/catalog/faculties`, tạo khoa → ngành/môn thuộc khoa, rồi chọn các ngành sử dụng môn. Môn có thể dùng chung khác khoa. Khoa phụ trách giữ cố định sau khi tạo; ngừng sử dụng giữ lịch sử. Không thể ngừng khoa còn ngành/môn hoạt động hoặc ngừng môn còn phân công hiện hành.
 
-Tại `/workspace/admin/assignments`, chọn giảng viên hoạt động/đã xác minh và môn, cấp phân công hoặc thu hồi kèm lý do. Giảng viên mở `/workspace/lecturer/assignments` xem phân công riêng. Thu hồi không xóa học liệu hoặc tự bàn giao; quyền học liệu sẽ được triển khai ở mốc tiếp theo. Danh mục local để trống, không tự nhập mã/sách HUCE giả.
+Tại `/workspace/admin/assignments`, chọn giảng viên hoạt động/đã xác minh và môn, cấp phân công hoặc thu hồi kèm lý do. Giảng viên mở `/workspace/lecturer/assignments` xem phân công riêng. Thu hồi chặn sửa bản nháp nhưng không xóa học liệu hoặc tự bàn giao. Danh mục local để trống, không tự nhập mã/sách HUCE giả.
+
+## Bản nháp học liệu
+
+Giảng viên mở `/workspace/lecturer/materials`, sinh viên mở `/workspace/student/materials` hoặc chọn **Học liệu của tôi**. Tạo bản nháp, nhập tiêu đề/loại/nguồn/căn cứ quyền, thêm 1–20 môn rồi lưu. Tác giả/mô tả có thể để trống. Bản sinh viên mang loại riêng, không sửa giáo trình giảng viên; Admin không biên soạn ở luồng này.
+
+Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. **Chưa có upload PDF, gửi duyệt hoặc đọc/tải**; lựa chọn cho phép tải chỉ là đề nghị cho bước công bố sau này.
 
 ## Kiểm tra
 
@@ -68,7 +75,7 @@ pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-`pnpm check` chạy lint, typecheck, unit Jest và build; không cần kết nối DB để chạy unit/build. Prisma client được sinh trước typecheck/build/dev và không commit. `test:setup` cần PostgreSQL/Redis đang chạy, tạo/migrate **hucescholar_test**, cập nhật ba account `e2e-*@example.test` với mật khẩu ngẫu nhiên, ghi env bị Git bỏ qua vào `.local/test.env`. Không dùng credential thật trong kiểm thử.
+`pnpm check` chạy lint, typecheck, unit Jest và build; không cần kết nối DB để chạy unit/build. Prisma client được sinh trước typecheck/build/dev và không commit. `test:setup` cần PostgreSQL/Redis đang chạy, tạo/migrate **hucescholar_test**, cập nhật các account tổng hợp `e2e-*@example.test` theo từng suite với mật khẩu ngẫu nhiên, ghi env bị Git bỏ qua vào `.local/test.env`. Không dùng credential thật trong kiểm thử.
 
 Integration và browser dùng riêng database `_test` + Redis **DB 15**, không chạy đồng thời vì suite reset vùng rate-limit test. Browser global setup flush DB 15 dành riêng cho dự án; không dùng DB 15 này cho việc khác. Test setup không drop database. Ca kiểm tra schema SQL dùng rollback; fixture API được dọn sau suite; dữ liệu synthetic do Playwright tạo chỉ tồn tại trong database test. Playwright tự chạy web/API ở 3100/3101 rồi dừng; giữ hai cổng trống. Trace tắt để tránh ghi lại mật khẩu/cookie.
 
@@ -97,7 +104,7 @@ CI dùng PostgreSQL/Redis ephemeral trên runner và chạy format, lint, typech
 
 ## Lộ trình còn lại
 
-1. Học liệu, upload, kiểm tra file và kiểm duyệt.
+1. Upload PDF riêng tư, kiểm tra file, gửi/rút và kiểm duyệt học liệu; nối vào bản nháp đã có.
 2. PDF reader, ghi chú riêng theo phiên bản, tiến độ đọc.
 3. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
 
