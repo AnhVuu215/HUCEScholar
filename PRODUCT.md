@@ -34,6 +34,8 @@ Tập trung trải nghiệm tìm học liệu, đọc tài liệu điện tử v
 
 Tên đã chốt: HUCEScholar. Giao diện tiếng Việt. Chưa có bộ nhận diện hoặc logo chính thức được duyệt; không dùng huy hiệu trường để ngụ ý quan hệ chính thức.
 
+Landing `/` tham khảo cách tổ chức nội dung NEU Reader nhưng dùng bố cục và bìa minh họa riêng, tông xanh HUCE-inspired hiện hữu; không dùng tài sản hoặc dữ liệu NEU. Hướng dẫn theo vai trò dẫn tới đăng nhập thật, trình bày rõ trạng thái phát triển. Trang tiến độ kỹ thuật ở `/project`.
+
 ## Evidence on Hand
 
 Proposal, use case và quy tắc nghiệp vụ 1.1; ERD và schema tham chiếu trong docs/. Database và auth đã có triển khai local; bằng chứng và ranh giới ở docs/implementation/2026-10-11-database-auth.md. Chưa có khảo sát, dữ liệu sách thật, tài liệu được trường cấp quyền hoặc triển khai vận hành. Toàn bộ nội dung prototype và tài khoản kiểm thử phải được ghi rõ là minh họa.

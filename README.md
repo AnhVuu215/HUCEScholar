@@ -4,6 +4,8 @@ Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hư�
 
 Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF vào kho riêng tư và xem kết quả kiểm tra nền. Giao diện dùng trên desktop, điện thoại và tablet. **Chưa có học liệu được cấp quyền thật, gửi duyệt, công bố, reader hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
 
+Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng dẫn theo vai trò. Trang tiến độ cùng kiểm tra kết nối API nằm ở `/project`. Bìa minh họa không phải học liệu đã được công bố. Chi tiết: [landing page](docs/implementation/2026-10-12-landing-page.md).
+
 ## Tài liệu
 
 - [Tech stack và kiến trúc MVP](docs/HUCEScholar-tech-stack.md)
