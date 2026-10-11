@@ -1,6 +1,6 @@
 # HUCEScholar — Tech stack và kiến trúc MVP
 
-Ngày quyết định: 11/10/2026. Trạng thái: chốt công nghệ MVP; đã có workspace Next.js/NestJS, migration PostgreSQL và đăng nhập/phân quyền local, chưa triển khai vận hành. Bằng chứng: [mốc khởi tạo](implementation/2026-10-11-foundation.md), [database và auth](implementation/2026-10-11-database-auth.md).
+Ngày quyết định: 11/10/2026. Trạng thái: chốt công nghệ MVP; đã có workspace Next.js/NestJS, migration PostgreSQL, đăng nhập/phân quyền và quản lý tài khoản local, chưa triển khai vận hành. Bằng chứng: [mốc khởi tạo](implementation/2026-10-11-foundation.md), [database và auth](implementation/2026-10-11-database-auth.md), [quản lý tài khoản](implementation/2026-10-11-account-management.md).
 
 Người dùng đã chọn **web responsive + PWA cho MVP**. Một giao diện dùng trên máy tính, điện thoại và máy tính bảng; có thể thêm vào màn hình chính trên thiết bị/trình duyệt hỗ trợ. Chưa phát hành ứng dụng native trên App Store/Google Play. Việc cài PWA không đồng nghĩa đọc PDF offline.
 

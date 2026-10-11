@@ -12,7 +12,10 @@ export interface Profile {
 }
 
 export class ApiError extends Error {
-  constructor(public readonly status: number) {
+  constructor(
+    public readonly status: number,
+    public readonly code?: string,
+  ) {
     super(`Request failed (${status}).`);
   }
 }
@@ -26,7 +29,17 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
       ? AbortSignal.any([options.signal, AbortSignal.timeout(8_000)])
       : AbortSignal.timeout(8_000),
   });
-  if (!response.ok) throw new ApiError(response.status);
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const body: unknown = await response.json();
+      if (body && typeof body === 'object' && 'code' in body && typeof body.code === 'string')
+        code = body.code;
+    } catch {
+      /* A non-JSON failure still uses the HTTP status. */
+    }
+    throw new ApiError(response.status, code);
+  }
   return response;
 }
 

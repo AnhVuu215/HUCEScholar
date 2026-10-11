@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   ApiError,
@@ -20,14 +20,26 @@ type State =
   | { kind: 'error' };
 const upcoming: Record<Role, string> = {
   ADMIN:
-    'Cấp tài khoản, quản lý danh mục và phân công giảng viên là phần triển khai tiếp theo. Kiểm duyệt sẽ được bổ sung cùng luồng học liệu.',
+    'Quản lý danh mục và phân công giảng viên là phần triển khai tiếp theo. Kiểm duyệt sẽ được bổ sung cùng luồng học liệu.',
   LECTURER:
     'Không gian biên soạn, quản lý phiên bản và gửi công bố giáo trình sẽ được bổ sung cùng luồng học liệu.',
   STUDENT:
     'Kho tài liệu theo môn và danh mục sách là phần triển khai tiếp theo. Trình đọc, ghi chú riêng và đóng góp tài liệu sẽ được bổ sung sau đó.',
 };
 
-export function RoleWorkspace({ role }: { role: Role }) {
+export function RoleWorkspace({
+  role,
+  children,
+  title,
+  description,
+  activeSection,
+}: {
+  role: Role;
+  children?: ReactNode;
+  title?: string;
+  description?: string;
+  activeSection?: 'users';
+}) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [logoutPending, setLogoutPending] = useState(false);
@@ -114,8 +126,19 @@ export function RoleWorkspace({ role }: { role: Role }) {
         </p>
         <nav aria-label="Điều hướng không gian">
           {state.kind === 'ready' && (
-            <Link href={workspacePath(state.user.role)} aria-current="page">
+            <Link
+              href={workspacePath(state.user.role)}
+              aria-current={activeSection ? undefined : 'page'}
+            >
               Tài khoản của tôi
+            </Link>
+          )}
+          {state.kind === 'ready' && state.user.role === 'ADMIN' && (
+            <Link
+              href="/workspace/admin/users"
+              aria-current={activeSection === 'users' ? 'page' : undefined}
+            >
+              Quản lý tài khoản
             </Link>
           )}
           <Link href="/">Tiến độ dự án</Link>
@@ -160,8 +183,8 @@ export function RoleWorkspace({ role }: { role: Role }) {
           <>
             <header className="account-heading">
               <div>
-                <h1>Không gian {roleLabels[state.user.role].toLowerCase()}</h1>
-                <p className="intro">Chào {state.user.displayName}.</p>
+                <h1>{title ?? `Không gian ${roleLabels[state.user.role].toLowerCase()}`}</h1>
+                <p className="intro">{description ?? `Chào ${state.user.displayName}.`}</p>
               </div>
               <button
                 type="button"
@@ -177,32 +200,37 @@ export function RoleWorkspace({ role }: { role: Role }) {
                 {logoutError}
               </p>
             )}
-            <section className="account-details" aria-labelledby="account-title">
-              <h2 id="account-title">Tài khoản của bạn</h2>
-              <dl className="scope-list">
-                <div>
-                  <dt>Họ tên</dt>
-                  <dd>{state.user.displayName}</dd>
-                </div>
-                <div>
-                  <dt>Email</dt>
-                  <dd>{state.user.email}</dd>
-                </div>
-                <div>
-                  <dt>Vai trò</dt>
-                  <dd>{roleLabels[state.user.role]}</dd>
-                </div>
-              </dl>
-            </section>
-            <section className="content-section" aria-labelledby="upcoming-title">
-              <h2 id="upcoming-title">Không gian đang được hoàn thiện</h2>
-              <p>{upcoming[state.user.role]}</p>
-              <p>
-                Hiện tại bạn có thể kiểm tra tài khoản và đăng xuất. Chưa có học liệu thật trong hệ
-                thống.
-              </p>
-            </section>
-            <footer className="page-footer">HUCEScholar · Mốc 2 — Tài khoản và dữ liệu</footer>
+            {children ?? (
+              <>
+                <section className="account-details" aria-labelledby="account-title">
+                  <h2 id="account-title">Tài khoản của bạn</h2>
+                  <dl className="scope-list">
+                    <div>
+                      <dt>Họ tên</dt>
+                      <dd>{state.user.displayName}</dd>
+                    </div>
+                    <div>
+                      <dt>Email</dt>
+                      <dd>{state.user.email}</dd>
+                    </div>
+                    <div>
+                      <dt>Vai trò</dt>
+                      <dd>{roleLabels[state.user.role]}</dd>
+                    </div>
+                  </dl>
+                </section>
+                <section className="content-section" aria-labelledby="upcoming-title">
+                  <h2 id="upcoming-title">Không gian đang được hoàn thiện</h2>
+                  <p>{upcoming[state.user.role]}</p>
+                  <p>
+                    {state.user.role === 'ADMIN'
+                      ? 'Bạn có thể cấp và quản lý tài khoản giảng viên, sinh viên. Chưa có học liệu thật trong hệ thống.'
+                      : 'Hiện tại bạn có thể kiểm tra tài khoản và đăng xuất. Chưa có học liệu thật trong hệ thống.'}
+                  </p>
+                </section>
+              </>
+            )}
+            <footer className="page-footer">HUCEScholar · Đang phát triển</footer>
           </>
         )}
       </main>

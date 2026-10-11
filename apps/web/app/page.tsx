@@ -34,7 +34,7 @@ export default function HomePage() {
           <h1>HUCEScholar</h1>
           <p className="intro">Nền tảng học liệu điện tử dành cho sinh viên HUCE.</p>
           <p className="development-note">
-            Bản phát triển với database, đăng nhập và phân quyền ba vai trò.
+            Bản phát triển với database, đăng nhập, phân quyền và quản lý tài khoản.
           </p>
         </header>
 
@@ -45,7 +45,9 @@ export default function HomePage() {
         <section id="pham-vi" className="content-section" aria-labelledby="scope-heading">
           <h2 id="scope-heading">Phạm vi hiện tại</h2>
           <p>Web responsive và API đã được khởi tạo theo kiến trúc đã chốt.</p>
-          <p className="scope-disclosure">Đã có đăng nhập và lưu phiên. Chưa có học liệu thật.</p>
+          <p className="scope-disclosure">
+            Đã có đăng nhập, lưu phiên và quản lý tài khoản. Chưa có học liệu thật.
+          </p>
           <dl className="scope-list">
             <div>
               <dt>Thiết bị</dt>
@@ -73,10 +75,10 @@ export default function HomePage() {
           className="content-section next-section"
           aria-labelledby="next-heading"
         >
-          <h2 id="next-heading">Mốc tiếp theo: tài khoản và kho học liệu</h2>
+          <h2 id="next-heading">Mốc tiếp theo: danh mục và phân công</h2>
           <p>
-            Bổ sung quản lý tài khoản, danh mục và phân công trước khi xây dựng kho học liệu, tải
-            file và kiểm duyệt.
+            Bổ sung danh mục khoa, ngành, môn học và phân công giảng viên trước khi xây dựng kho học
+            liệu, tải file và kiểm duyệt.
           </p>
           <ul className="role-list">
             <li>
@@ -93,7 +95,7 @@ export default function HomePage() {
             </li>
           </ul>
         </section>
-        <footer className="page-footer">HUCEScholar · Mốc 2 — Tài khoản và dữ liệu</footer>
+        <footer className="page-footer">HUCEScholar · Đang phát triển</footer>
       </main>
     </div>
   );

@@ -8,6 +8,7 @@ import { RolesGuard, SessionGuard } from './session.guard';
 import { WorkspaceController } from './workspace.controller';
 
 @Module({
+  exports: [AuthService, SessionGuard, RolesGuard],
   controllers: [AuthController, WorkspaceController],
   providers: [
     AuthService,

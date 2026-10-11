@@ -72,6 +72,7 @@ export class AuthService implements OnModuleInit {
         !current ||
         current.status !== 'ACTIVE' ||
         !current.verified_at ||
+        current.email !== candidate.email ||
         current.password_hash !== candidate.password_hash
       )
         throw reject();
