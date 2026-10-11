@@ -72,6 +72,9 @@ try {
     ['admin', 'ADMIN'],
     ['catalog-admin', 'ADMIN'],
     ['assignments-admin', 'ADMIN'],
+    ['drafts-admin', 'ADMIN'],
+    ['drafts-lecturer', 'LECTURER'],
+    ['drafts-student', 'STUDENT'],
     ['lecturer', 'LECTURER'],
     ['student', 'STUDENT'],
   ];

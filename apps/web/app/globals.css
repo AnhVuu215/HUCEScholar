@@ -707,6 +707,53 @@ h2 {
 .catalog-selected {
   overflow-wrap: anywhere;
 }
+.draft-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.draft-wide {
+  grid-column: 1 / -1;
+}
+.draft-courses {
+  margin-block: 28px;
+}
+.draft-courses h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.draft-courses > .secondary-button {
+  margin-top: 12px;
+}
+.draft-discard {
+  padding-block: 20px;
+  border-top: 1px solid var(--line);
+}
+.draft-course-summary {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+.draft-course-summary li + li {
+  margin-top: 8px;
+}
+.materials-table th:first-child {
+  width: 32%;
+}
+.materials-table th:last-child {
+  width: 15%;
+}
+.materials-table td {
+  overflow-wrap: anywhere;
+}
+.materials-table .user-identity span {
+  display: block;
+}
+.draft-filters {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
 .catalog-linked-list li {
   display: flex;
   align-items: center;

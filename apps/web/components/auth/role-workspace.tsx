@@ -22,9 +22,9 @@ const upcoming: Record<Role, string> = {
   ADMIN:
     'Bạn có thể quản lý tài khoản, danh mục đào tạo và phân công giảng viên. Kiểm duyệt sẽ được bổ sung cùng luồng học liệu.',
   LECTURER:
-    'Không gian biên soạn, quản lý phiên bản và gửi công bố giáo trình sẽ được bổ sung cùng luồng học liệu.',
+    'Bạn có thể xem phân công và chuẩn bị bản nháp học liệu. Upload PDF, quản lý phiên bản và gửi công bố là các bước tiếp theo.',
   STUDENT:
-    'Kho tài liệu theo môn và danh mục sách là phần triển khai tiếp theo. Trình đọc, ghi chú riêng và đóng góp tài liệu sẽ được bổ sung sau đó.',
+    'Bạn có thể chuẩn bị bản nháp tài liệu bổ sung. Upload PDF, kho tài liệu theo môn, trình đọc và ghi chú riêng sẽ được bổ sung sau.',
 };
 
 export function RoleWorkspace({
@@ -38,7 +38,7 @@ export function RoleWorkspace({
   children?: ReactNode;
   title?: string;
   description?: string;
-  activeSection?: 'users' | 'catalog' | 'assignments';
+  activeSection?: 'users' | 'catalog' | 'assignments' | 'materials';
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -157,6 +157,14 @@ export function RoleWorkspace({
               {state.user.role === 'ADMIN' ? 'Phân công giảng viên' : 'Phân công của tôi'}
             </Link>
           )}
+          {state.kind === 'ready' && state.user.role !== 'ADMIN' && (
+            <Link
+              href={`/workspace/${state.user.role.toLowerCase()}/materials`}
+              aria-current={activeSection === 'materials' ? 'page' : undefined}
+            >
+              Học liệu của tôi
+            </Link>
+          )}
           <Link href="/">Tiến độ dự án</Link>
         </nav>
         <p className="sidebar-note">
@@ -206,6 +214,7 @@ export function RoleWorkspace({
                 type="button"
                 className="secondary-button"
                 disabled={logoutPending}
+                data-workspace-logout
                 onClick={() => void logout()}
               >
                 {logoutPending ? 'Đang đăng xuất…' : 'Đăng xuất'}
@@ -241,7 +250,7 @@ export function RoleWorkspace({
                   <p>
                     {state.user.role === 'ADMIN'
                       ? 'Bạn có thể cấp và quản lý tài khoản giảng viên, sinh viên. Chưa có học liệu thật trong hệ thống.'
-                      : 'Hiện tại bạn có thể kiểm tra tài khoản và đăng xuất. Chưa có học liệu thật trong hệ thống.'}
+                      : 'Mở Học liệu của tôi để chuẩn bị bản nháp riêng. Chưa có PDF hoặc học liệu được công bố trong hệ thống.'}
                   </p>
                 </section>
               </>

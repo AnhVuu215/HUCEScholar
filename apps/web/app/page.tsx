@@ -34,7 +34,7 @@ export default function HomePage() {
           <h1>HUCEScholar</h1>
           <p className="intro">Nền tảng học liệu điện tử dành cho sinh viên HUCE.</p>
           <p className="development-note">
-            Bản phát triển với tài khoản, danh mục đào tạo và phân công giảng viên.
+            Bản phát triển với tài khoản, danh mục đào tạo, phân công và bản nháp học liệu.
           </p>
         </header>
 
@@ -46,7 +46,7 @@ export default function HomePage() {
           <h2 id="scope-heading">Phạm vi hiện tại</h2>
           <p>Web responsive và API đã được khởi tạo theo kiến trúc đã chốt.</p>
           <p className="scope-disclosure">
-            Đã có tài khoản, danh mục đào tạo và phân công. Chưa có học liệu thật.
+            Đã có tài khoản, danh mục, phân công và bản nháp học liệu. Chưa có PDF được công bố.
           </p>
           <dl className="scope-list">
             <div>
@@ -75,10 +75,10 @@ export default function HomePage() {
           className="content-section next-section"
           aria-labelledby="next-heading"
         >
-          <h2 id="next-heading">Mốc tiếp theo: quản lý học liệu</h2>
+          <h2 id="next-heading">Mốc tiếp theo: tải PDF và kiểm duyệt</h2>
           <p>
-            Xây dựng hồ sơ học liệu, tải file an toàn, quản lý phiên bản và gửi kiểm duyệt trước khi
-            bổ sung trình đọc và ghi chú.
+            Nối bản nháp với upload riêng tư, kiểm tra PDF và gửi kiểm duyệt trước khi bổ sung trình
+            đọc và ghi chú.
           </p>
           <ul className="role-list">
             <li>

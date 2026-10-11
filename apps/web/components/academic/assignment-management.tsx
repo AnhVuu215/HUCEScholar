@@ -56,7 +56,7 @@ export function AssignmentManagement({ own = false }: { own?: boolean }) {
       <div className="users-toolbar">
         <p className="users-guidance">
           {own
-            ? 'Các môn bạn được phân công và lịch sử thu hồi. Luồng biên soạn học liệu sẽ được bổ sung ở bước tiếp theo.'
+            ? 'Các môn bạn được phân công và lịch sử thu hồi. Mở Học liệu của tôi để chuẩn bị bản nháp theo các môn hiện hành.'
             : 'Phân công giảng viên đã xác minh cho môn đang hoạt động. Thu hồi giữ lại lịch sử; phân công lại tạo một bản ghi mới.'}
         </p>
         {!own && (

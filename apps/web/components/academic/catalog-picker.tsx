@@ -9,12 +9,17 @@ export function CatalogPicker({
   value,
   onChange,
   required = true,
+  loadItems,
 }: {
   kind: CatalogKind;
   label: string;
   value: CatalogChoice | null;
   onChange: (value: CatalogChoice | null) => void;
   required?: boolean;
+  loadItems?: (
+    params: URLSearchParams,
+    signal: AbortSignal,
+  ) => Promise<{ items: { id: string; code: string; name: string }[]; total: number }>;
 }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -26,15 +31,16 @@ export function CatalogPicker({
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      void catalogList(
-        kind,
-        new URLSearchParams({
-          status: 'ACTIVE',
-          search: search.trim(),
-          page: String(page),
-          limit: '20',
-        }),
-        controller.signal,
+      const params = new URLSearchParams({
+        search: search.trim(),
+        page: String(page),
+        limit: '20',
+      });
+      if (!loadItems) params.set('status', 'ACTIVE');
+      void (
+        loadItems
+          ? loadItems(params, controller.signal)
+          : catalogList(kind, params, controller.signal)
       )
         .then((result) => {
           if (!controller.signal.aborted) {
@@ -56,7 +62,7 @@ export function CatalogPicker({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [kind, search, page, attempt]);
+  }, [kind, search, page, attempt, loadItems]);
   const id = `picker-${kind}`;
   function resetResults() {
     setLoading(true);
