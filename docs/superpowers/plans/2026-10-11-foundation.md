@@ -6,7 +6,7 @@
 
 **Architecture:** pnpm workspace with `apps/web` (Next.js) and `apps/api` (NestJS). Next.js proxies `/api/v1` to the local API; backend remains the business authority. Preserve the approved product/specification artifacts as the baseline.
 
-**Tech Stack:** Node 22.21 LTS, pnpm 11.25, Next.js 16, React 19, Tailwind 4, NestJS 11, TypeScript 5.9, Jest/Supertest and Playwright. Exact package versions and dependency graph are pinned during scaffold.
+**Tech Stack:** Node 24.19 LTS, pnpm 11.25, Next.js 16, React 19, Tailwind 4, NestJS 11, TypeScript 5.9, Jest/Supertest and Playwright. Exact package versions and dependency graph are pinned during scaffold. Node 24 is the actual pnpm runtime here; ESLint 10 avoids the deprecated ESLint 9 major.
 
 **Spec:** `docs/HUCEScholar-tech-stack.md`, `PRODUCT.md`, `design/wireframe/DESIGN_BRIEF.md`.
 

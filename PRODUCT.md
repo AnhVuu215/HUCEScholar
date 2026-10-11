@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Đã chốt công nghệ MVP ngày 11/10/2026: web responsive + PWA cho desktop, điện thoại và máy tính bảng; người dùng chọn chưa phát hành app native trong MVP. Next.js/React + TypeScript + Tailwind CSS; NestJS REST API; PostgreSQL + Prisma với migration SQL tùy chỉnh; PDF.js; Amazon S3 private; BullMQ/Redis và worker kiểm tra file ClamAV/Poppler; Docker Compose. Chi tiết, ranh giới và điều kiện kiểm chứng ở docs/HUCEScholar-tech-stack.md. Chưa scaffold/cài dependencies/triển khai ứng dụng; HTML/CSS/JavaScript tĩnh hiện có vẫn chỉ là prototype thiết kế.
+Đã chốt công nghệ MVP ngày 11/10/2026: web responsive + PWA cho desktop, điện thoại và máy tính bảng; người dùng chọn chưa phát hành app native trong MVP. Next.js/React + TypeScript + Tailwind CSS; NestJS REST API; PostgreSQL + Prisma với migration SQL tùy chỉnh; PDF.js; Amazon S3 private; BullMQ/Redis và worker kiểm tra file ClamAV/Poppler; Docker Compose. Chi tiết, ranh giới và điều kiện kiểm chứng ở docs/HUCEScholar-tech-stack.md. Mốc khởi tạo đã có workspace apps/web và apps/api, trang trạng thái kết nối local, manifest cơ bản và cấu hình CI. Chưa có nghiệp vụ backend, auth, database hoặc reader thật; HTML/CSS/JavaScript tĩnh trong design/ vẫn chỉ là prototype thiết kế.
 
 ## Users
 

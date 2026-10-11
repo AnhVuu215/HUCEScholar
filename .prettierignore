@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+design/
+docs/
+DESIGN.md
+PRODUCT.md
+node_modules/
+.next/
+dist/
+.superpowers/
+.local/
