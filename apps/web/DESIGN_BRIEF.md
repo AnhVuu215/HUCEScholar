@@ -1,14 +1,22 @@
-# Foundation entry page
+# HUCEScholar public landing
 
-Mode: Read, with an operational API connection check. Route: `/`.
+Mode: Persuade. Route `/`; technical status retained at `/project` with its own brief.
+Audience: HUCE students and lecturers seeking shared learning materials. Primary action: login with an issued account. No public signup, app download, public catalog or reader is implemented here.
 
-This development entry point communicates the actual milestone state and links to the implemented login. It is not the student catalog. Preserve the wireframe's navy visual grammar for this scoped page. The real login/workspace extension is specified in app/login/DESIGN_BRIEF.md.
+## Direction contract
 
-- Inherit navy #001e42, accent #0056a6, ground #f3f6fa, Segoe UI/Arial, 244px sidebar and mobile reflow from the v2 wireframe. This is an explicit scope extension for the foundation, not a replacement identity.
-- Heading, connection status, truthful database/auth scope, then next milestone. No book data, fake login or official HUCE marks.
-- Connection has loading, healthy, failure and retry states. Text accompanies color. Retry is keyboard accessible; request is bounded to 8 seconds and cancelled on unmount.
-- Only the API process is checked. No claim of database, storage, mail, queue or whole-product readiness.
-- No animation is needed for a status/check page. No raster assets are shipped. The simple H mark is authored SVG/text, not the HUCE logo.
-- Root manifest is groundwork only. No service worker, offline cache or installability guarantee at this milestone.
+THESIS: A learning shelf with the clarity of a civil-engineering publication. User pinned NEU Reader as reference, adapted rather than copied. Keep legible navigation, learning-material subject and guide; replace centered gradient/device montage with an asymmetric typographic shelf.
 
-Verification and finish findings are recorded in `docs/implementation/2026-10-11-foundation.md` after the checks run.
+OWN-WORLD: Existing HUCE-inspired navy #001e42, action blue #0056a6, pale blue and white grounds. Self-host Be Vietnam Pro for this public page only; preserve working screens. Flat geometric book jackets, precise linework, modest control corners, generous reading space. No official HUCE logo or borrowed NEU assets.
+
+STORY: Understand the platform, see illustrative subjects, discover what works today, choose a role guide, sign in. Examples are labeled; unfinished reading/notes and publication remain explicit.
+
+FIRST VIEWPORT: Horizontal header, navigation and login. Left: large learning promise, short explanation, login CTA. Right: three authored typographic book jackets at varied heights. Mobile keeps headline/CTA first then compact shelf. No invented metrics.
+
+FORM: Reference-pinned landing within incumbent navy identity, code-led. No concept roll or approved comp for this concrete reference request. Signature interaction: role guide switches explanations in place with pressed buttons, keyboard access and a named live region. No decorative entrance animation.
+
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Scope and evidence
+
+Subjects/covers are illustrative, not an available HUCE catalog. No shipping rasters. Be Vietnam Pro from Google Fonts, SIL OFL included. Root DESIGN.md and sidecar remain historical wireframe artifacts; scoped production decisions live here and landing.css. Verify 1440, actual 1253, 768, 390 and 320 widths; guide, FAQ, login and preserved project health retry.
