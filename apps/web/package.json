@@ -1,0 +1,25 @@
+{
+  "name": "@hucescholar/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node ../../scripts/pdfjs-assets.mjs && next dev --hostname 127.0.0.1 --port 3000",
+    "build": "node ../../scripts/pdfjs-assets.mjs && next build",
+    "start": "next start --hostname 127.0.0.1 --port 3000",
+    "lint": "eslint app components lib next.config.ts",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.4.0",
+    "pdfjs-dist": "6.4.299",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "postcss": "8.5.23",
+    "tailwindcss": "4.3.3"
+  }
+}

@@ -4,6 +4,8 @@ Phiên bản thiết kế 1.0 ngày 10/10/2026. Cơ sở nghiệp vụ 1.1.
 
 23 bảng; 184 trường. SQL là phương án tham chiếu PostgreSQL, chưa phải database triển khai.
 
+**Ghi chú triển khai 11/10/2026:** các bảng bên dưới mô tả baseline thiết kế 1.0. Migration ứng dụng đã bổ sung revision khoa/ngành và migration `202610110005_material_draft_without_file` cho phép `document_versions.file_id` null chỉ khi DRAFT (CHECK bắt buộc file ở mọi trạng thái khác). Prisma schema/migrations là nguồn triển khai hiện tại; không chạy lại SQL baseline lên database ứng dụng. API bản nháp yêu cầu 1–20 môn ngay khi lưu. Chi tiết: [bản nháp học liệu](../implementation/2026-10-11-material-drafts.md).
+
 ## Quyết định thiết kế
 
 ### Tách tài liệu và phiên bản
@@ -90,6 +92,8 @@ Ràng buộc: `CHECK (expires_at > created_at)`; `CHECK (used_at IS NULL OR used
 
 Khoa hoặc đơn vị quản lý học phần.
 
+Triển khai migration `202610110003_faculty_revision` bổ sung `revision integer NOT NULL DEFAULT 1 CHECK (revision > 0)` để phát hiện cập nhật đồng thời. Mỗi lần sửa qua API tăng 1.
+
 | Trường | Kiểu | Khóa | Null | Ý nghĩa |
 |---|---|---|---|---|
 | id | bigint | PK | Không | Khóa chính do database cấp |
@@ -101,6 +105,8 @@ Khoa hoặc đơn vị quản lý học phần.
 ## programs
 
 Ngành hoặc chương trình thuộc một khoa.
+
+Triển khai migration `202610110004_program_revision` bổ sung revision dương, mặc định 1; API tăng mỗi lần sửa để phát hiện cập nhật đồng thời.
 
 | Trường | Kiểu | Khóa | Null | Ý nghĩa |
 |---|---|---|---|---|

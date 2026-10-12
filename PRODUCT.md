@@ -8,7 +8,9 @@ web
 
 ## Stack
 
-Đã chốt công nghệ MVP ngày 11/10/2026: web responsive + PWA cho desktop, điện thoại và máy tính bảng; người dùng chọn chưa phát hành app native trong MVP. Next.js/React + TypeScript + Tailwind CSS; NestJS REST API; PostgreSQL + Prisma với migration SQL tùy chỉnh; PDF.js; Amazon S3 private; BullMQ/Redis và worker kiểm tra file ClamAV/Poppler; Docker Compose. Chi tiết, ranh giới và điều kiện kiểm chứng ở docs/HUCEScholar-tech-stack.md. Chưa scaffold/cài dependencies/triển khai ứng dụng; HTML/CSS/JavaScript tĩnh hiện có vẫn chỉ là prototype thiết kế.
+Đã chốt công nghệ MVP ngày 11/10/2026: web responsive + PWA cho desktop, điện thoại và máy tính bảng; người dùng chọn chưa phát hành app native trong MVP. Next.js/React + TypeScript + Tailwind CSS; NestJS REST API; PostgreSQL + Prisma với migration SQL tùy chỉnh; PDF.js; Amazon S3 private; BullMQ/Redis và worker kiểm tra file ClamAV/Poppler; Docker Compose. Chi tiết, ranh giới và điều kiện kiểm chứng ở docs/HUCEScholar-tech-stack.md. Đã có workspace apps/web và apps/api, migration PostgreSQL 23 bảng, đăng nhập/đăng xuất bằng cookie phiên, phân quyền ba vai trò tại API, màn hình tài khoản responsive, UI Admin cấp/sửa/khóa/mở khóa tài khoản giảng viên/sinh viên và kiểm thử tự động. Đã có danh mục khoa/ngành/môn, liên kết ngành dùng chung và phân công/thu hồi có lịch sử; giảng viên xem phân công riêng. Chưa có học liệu được cấp quyền thật, ghi chú, dịch vụ mail hoặc service worker PWA. HTML/CSS/JavaScript tĩnh trong design/ vẫn chỉ là prototype thiết kế.
+
+Đã bổ sung metadata bản nháp riêng cho giảng viên/sinh viên, upload PDF private, BullMQ worker ClamAV/Poppler và trạng thái kỹ thuật độc lập kiểm duyệt. Local dùng filesystem ngoài webroot, production bắt buộc S3 private nhưng chưa kiểm chứng cloud. Bản chưa có PDF vẫn là DRAFT. Đã có gửi/rút, lịch sử, admin xem PDF SAFE và quyết định yêu cầu sửa/từ chối/duyệt bản hiện hành nguyên tử. Chủ mở lại CHANGES_REQUIRED để sửa/gửi lại; APPROVED/REJECTED bất biến. Đã có kho học liệu tìm tiêu đề/tác giả, lọc môn/loại/nguồn, trình đọc PDF.js chuyển trang/zoom/xoay/chọn chữ và tải theo quyền; file API hỗ trợ byte Range private. Chưa có tạo phiên bản kế tiếp, ghi chú, lưu tiến độ hoặc offline. Xem docs/implementation/2026-10-12-learning-library.md.
 
 ## Users
 
@@ -32,9 +34,11 @@ Tập trung trải nghiệm tìm học liệu, đọc tài liệu điện tử v
 
 Tên đã chốt: HUCEScholar. Giao diện tiếng Việt. Chưa có bộ nhận diện hoặc logo chính thức được duyệt; không dùng huy hiệu trường để ngụ ý quan hệ chính thức.
 
+Landing `/` tham khảo cách tổ chức nội dung NEU Reader nhưng dùng bố cục và bìa minh họa riêng, tông xanh HUCE-inspired hiện hữu; không dùng tài sản hoặc dữ liệu NEU. Hướng dẫn theo vai trò dẫn tới đăng nhập thật, trình bày rõ trạng thái phát triển. Trang tiến độ kỹ thuật ở `/project`.
+
 ## Evidence on Hand
 
-Proposal, use case và quy tắc nghiệp vụ 1.1; ERD và schema tham chiếu trong docs/. Chưa có khảo sát, dữ liệu sách thật, tài liệu được trường cấp quyền hay backend sản phẩm. Toàn bộ nội dung prototype phải được ghi rõ là minh họa.
+Proposal, use case và quy tắc nghiệp vụ 1.1; ERD và schema tham chiếu trong docs/. Database và auth đã có triển khai local; bằng chứng và ranh giới ở docs/implementation/2026-10-11-database-auth.md. Chưa có khảo sát, dữ liệu sách thật, tài liệu được trường cấp quyền hoặc triển khai vận hành. Toàn bộ nội dung prototype và tài khoản kiểm thử phải được ghi rõ là minh họa.
 
 ## Product Principles
 

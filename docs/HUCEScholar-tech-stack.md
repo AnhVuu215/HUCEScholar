@@ -1,6 +1,6 @@
 # HUCEScholar — Tech stack và kiến trúc MVP
 
-Ngày quyết định: 11/10/2026. Trạng thái: chốt công nghệ cho MVP; chưa khởi tạo hoặc triển khai ứng dụng.
+Ngày quyết định: 11/10/2026. Trạng thái: chốt công nghệ MVP; đã có workspace Next.js/NestJS, migration PostgreSQL, đăng nhập/phân quyền, quản lý tài khoản, danh mục đào tạo, phân công, bản nháp, upload PDF riêng tư, gửi/rút, admin kiểm duyệt bản hiện hành, kho học liệu và reader PDF.js theo quyền. Chưa triển khai vận hành. Bằng chứng: [mốc khởi tạo](implementation/2026-10-11-foundation.md), [database và auth](implementation/2026-10-11-database-auth.md), [quản lý tài khoản](implementation/2026-10-11-account-management.md), [danh mục và phân công](implementation/2026-10-11-academic-catalog.md), [upload PDF](implementation/2026-10-11-private-pdf-upload.md).
 
 Người dùng đã chọn **web responsive + PWA cho MVP**. Một giao diện dùng trên máy tính, điện thoại và máy tính bảng; có thể thêm vào màn hình chính trên thiết bị/trình duyệt hỗ trợ. Chưa phát hành ứng dụng native trên App Store/Google Play. Việc cài PWA không đồng nghĩa đọc PDF offline.
 
@@ -55,7 +55,7 @@ Trình duyệt desktop / mobile / tablet / PWA đã cài
 
 Module dự kiến: Auth & Users; Academic Catalog & Assignments; Documents & Versions; Publication & Moderation; Files; Annotations & Reading Progress; Saved Library & Books; Reports; Transfers & Audit.
 
-Phương án tổ chức khi bắt đầu code, chưa phải thư mục ứng dụng đã tồn tại:
+Phương án tổ chức tổng thể. Hiện mới có `apps/web`, `apps/api`, `tests` và `infra`; các module/worker trong cây dưới đây vẫn là kế hoạch:
 
 ```text
 apps/web/       Next.js
@@ -106,7 +106,7 @@ design/         prototype và nguồn thiết kế đã có
 3. Làm một luồng xuyên suốt: tài khoản được cấp → upload → kiểm tra file → gửi/duyệt → tìm → đọc → ghi chú → mở lại trên thiết bị khác. Sau đó mới mở rộng CRUD và nghiệp vụ phụ.
 4. Kiểm thử người dùng không đọc được ghi chú của người khác, không duyệt file CHECKING/FAILED, không thay phiên bản đã khóa và không đọc tài liệu bị ẩn. Kiểm tra phục hồi job, lưu ghi chú lỗi, xung đột revision, Range/zoom trên mobile và cài PWA qua HTTPS.
 
-Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Chưa cài dependencies, chuyển prototype sang Next.js, thay schema hoặc deploy trong lần chốt này.
+Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; Đã có gửi/rút và admin kiểm duyệt/bản hiện hành; Đã có kho học liệu, reader PDF.js và tải theo quyền; S3 thật, ghi chú/lưu tiến độ và deploy còn ở các mốc tiếp theo. Xem [kiểm duyệt](implementation/2026-10-12-admin-moderation.md).
 
 ## 9. Nguồn kỹ thuật chính thức đã đối chiếu
 
