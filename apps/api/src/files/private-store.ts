@@ -10,6 +10,10 @@ import { copyFile, mkdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
+export interface ByteRange {
+  start: number;
+  end: number;
+}
 
 @Injectable()
 export class PrivateStore implements OnModuleDestroy {
@@ -42,14 +46,34 @@ export class PrivateStore implements OnModuleDestroy {
       await copyFile(source, path, constants.COPYFILE_EXCL);
     }
   }
-  async read(key: string): Promise<Readable> {
+  async read(key: string, range?: ByteRange): Promise<Readable> {
     const path = this.path(key);
-    if (!this.s3) return createReadStream(path);
+    if (
+      range &&
+      (!Number.isSafeInteger(range.start) ||
+        !Number.isSafeInteger(range.end) ||
+        range.start < 0 ||
+        range.end < range.start)
+    )
+      throw new Error('Invalid private byte range.');
+    if (!this.s3) return createReadStream(path, range);
     const object = await this.s3.send(
-      new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      new GetObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+        ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}),
+      }),
       { abortSignal: AbortSignal.timeout(30_000) },
     );
     if (!(object.Body instanceof Readable)) throw new Error('Private object unavailable.');
+    if (
+      range &&
+      (!object.ContentRange?.startsWith(`bytes ${range.start}-${range.end}/`) ||
+        object.ContentLength !== range.end - range.start + 1)
+    ) {
+      object.Body.destroy();
+      throw new Error('Private range response mismatch.');
+    }
     return object.Body;
   }
   async remove(key: string) {

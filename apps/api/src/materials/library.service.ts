@@ -1,0 +1,231 @@
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+  StreamableFile,
+} from '@nestjs/common';
+import { once } from 'node:events';
+import type { Response } from 'express';
+import { DatabaseService } from '../database/database.module';
+import { Prisma } from '../generated/prisma/client';
+import { academicId } from '../academic/academic.service';
+import { Profile } from '../auth/auth.types';
+import { PrivateStore, type ByteRange } from '../files/private-store';
+import { LibraryListDto } from './library.dto';
+
+const selection = {
+  id: true,
+  document_id: true,
+  version_no: true,
+  title: true,
+  authors: true,
+  description: true,
+  material_type: true,
+  source_reference: true,
+  rights_basis: true,
+  rights_valid_until: true,
+  download_allowed: true,
+  updated_at: true,
+  files: { select: { id: true, byte_size: true, page_count: true, has_text_layer: true } },
+  version_courses: { select: { courses: { select: { id: true, code: true, name: true } } } },
+  documents_document_versions_document_idTodocuments: {
+    select: { kind: true, current_version_id: true },
+  },
+} satisfies Prisma.document_versionsSelect;
+type LibraryRow = Prisma.document_versionsGetPayload<{ select: typeof selection }>;
+const available = (): Prisma.document_versionsWhereInput => ({
+  review_status: 'APPROVED',
+  files: { scan_status: 'SAFE' },
+  documents_document_versions_document_idTodocuments: { visibility: 'VISIBLE' },
+  OR: [{ rights_valid_until: null }, { rights_valid_until: { gt: new Date() } }],
+});
+function serialize(v: LibraryRow) {
+  return {
+    documentId: String(v.document_id),
+    versionId: String(v.id),
+    versionNo: v.version_no,
+    title: v.title,
+    authors: v.authors,
+    description: v.description,
+    materialType: v.material_type,
+    kind: v.documents_document_versions_document_idTodocuments.kind,
+    current: v.documents_document_versions_document_idTodocuments.current_version_id === v.id,
+    sourceReference: v.source_reference,
+    rightsBasis: v.rights_basis,
+    rightsValidUntil: v.rights_valid_until?.toISOString() ?? null,
+    downloadAllowed: v.download_allowed,
+    pageCount: v.files!.page_count,
+    hasTextLayer: v.files!.has_text_layer,
+    byteSize: Number(v.files!.byte_size),
+    courses: v.version_courses.map(({ courses: c }) => ({
+      id: String(c.id),
+      code: c.code,
+      name: c.name,
+    })),
+  };
+}
+// A single byte range only; malformed, multi-range and unsatisfiable requests fail closed.
+function byteRange(value: string, size: number): ByteRange | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value);
+  if (!match || (!match[1] && !match[2])) return null;
+  const max = BigInt(size);
+  if (!match[1]) {
+    const suffix = BigInt(match[2]);
+    if (suffix === 0n) return null;
+    return { start: Number(suffix >= max ? 0n : max - suffix), end: size - 1 };
+  }
+  const start = BigInt(match[1]);
+  const end = match[2] ? BigInt(match[2]) : max - 1n;
+  if (start >= max || end < start) return null;
+  return { start: Number(start), end: Number(end >= max ? max - 1n : end) };
+}
+@Injectable()
+export class LibraryService {
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly store: PrivateStore,
+  ) {}
+  async courses() {
+    const rows = await this.db.version_courses.findMany({
+      where: {
+        document_versions: {
+          AND: [
+            available(),
+            {
+              documents_documents_id_current_version_idTodocument_versions: {
+                some: { visibility: 'VISIBLE' },
+              },
+            },
+          ],
+        },
+      },
+      distinct: ['course_id'],
+      select: { courses: { select: { id: true, code: true, name: true } } },
+      orderBy: { course_id: 'asc' },
+    });
+    return {
+      items: rows.map(({ courses: c }) => ({ id: String(c.id), code: c.code, name: c.name })),
+    };
+  }
+  async list(query: LibraryListDto) {
+    const where: Prisma.document_versionsWhereInput = {
+      AND: [
+        available(),
+        {
+          documents_documents_id_current_version_idTodocument_versions: {
+            some: { visibility: 'VISIBLE', ...(query.kind ? { kind: query.kind } : {}) },
+          },
+          ...(query.materialType ? { material_type: query.materialType } : {}),
+          ...(query.courseId
+            ? { version_courses: { some: { course_id: academicId(query.courseId) } } }
+            : {}),
+          ...(query.search
+            ? {
+                OR: [
+                  { title: { contains: query.search, mode: 'insensitive' } },
+                  { authors: { contains: query.search, mode: 'insensitive' } },
+                ],
+              }
+            : {}),
+        },
+      ],
+    };
+    return this.db.$transaction(
+      async (tx) => ({
+        items: (
+          await tx.document_versions.findMany({
+            where,
+            select: selection,
+            orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
+            skip: (query.page - 1) * query.limit,
+            take: query.limit,
+          })
+        ).map(serialize),
+        total: await tx.document_versions.count({ where }),
+        page: query.page,
+        limit: query.limit,
+      }),
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  private async readable(tx: Prisma.TransactionClient, id: bigint) {
+    const row = await tx.document_versions.findFirst({
+      where: { AND: [{ id }, available()] },
+      select: selection,
+    });
+    if (!row)
+      throw new NotFoundException('Học liệu không còn khả dụng hoặc bạn không có quyền đọc.');
+    return row;
+  }
+  async get(rawId: string) {
+    return this.db.$transaction(
+      async (tx) => ({ item: serialize(await this.readable(tx, academicId(rawId))) }),
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  async file(
+    actor: Profile,
+    rawId: string,
+    download: boolean,
+    range: string | undefined,
+    response: Response,
+  ) {
+    const id = academicId(rawId),
+      actorId = academicId(actor.id);
+    // Document-first locks serialize new grants with hide/version decisions; checked bytes already granted cannot be recalled.
+    const file = await this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
+      const user = await tx.users.findUnique({ where: { id: actorId } });
+      if (!user || user.status !== 'ACTIVE' || !user.verified_at)
+        throw new ForbiddenException('Tài khoản không còn quyền đọc.');
+      const target = await tx.document_versions.findUnique({
+        where: { id },
+        select: { document_id: true, file_id: true },
+      });
+      if (!target) throw new NotFoundException('Không tìm thấy học liệu.');
+      await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${target.document_id} FOR SHARE`;
+      await tx.$queryRaw`SELECT id FROM hucescholar.document_versions WHERE id=${id} FOR SHARE`;
+      if (target.file_id)
+        await tx.$queryRaw`SELECT id FROM hucescholar.files WHERE id=${target.file_id} FOR SHARE`;
+      const row = await this.readable(tx, id);
+      if (download && !row.download_allowed)
+        throw new ForbiddenException({
+          code: 'DOWNLOAD_NOT_ALLOWED',
+          message: 'Nguồn tài liệu chỉ cho phép đọc trong hệ thống.',
+        });
+      return await tx.files.findUniqueOrThrow({ where: { id: row.files!.id } });
+    });
+    const size = Number(file.byte_size);
+    response.setHeader('Accept-Ranges', 'bytes');
+    const selected = range ? byteRange(range, size) : undefined;
+    if (selected === null) {
+      response.status(416);
+      response.setHeader('Content-Range', `bytes */${size}`);
+      response.setHeader('Content-Length', '0');
+      return new StreamableFile(Buffer.alloc(0));
+    }
+    try {
+      const stream = await this.store.read(file.object_key, selected);
+      const disconnect = () => stream.destroy();
+      response.once('close', disconnect);
+      stream.once('close', () => response.off('close', disconnect));
+      if (response.destroyed) {
+        stream.destroy();
+        return new StreamableFile(Buffer.alloc(0));
+      }
+      if ('pending' in stream && stream.pending) await once(stream, 'open');
+      if (selected) {
+        response.status(206);
+        response.setHeader('Content-Range', `bytes ${selected.start}-${selected.end}/${size}`);
+      }
+      return new StreamableFile(stream, {
+        type: 'application/pdf',
+        disposition: `${download ? 'attachment' : 'inline'}; filename="material.pdf"`,
+        length: selected ? selected.end - selected.start + 1 : size,
+      });
+    } catch {
+      throw new ServiceUnavailableException('Chưa mở được PDF. Kiểm tra kết nối rồi thử lại.');
+    }
+  }
+}

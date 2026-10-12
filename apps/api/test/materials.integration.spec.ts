@@ -14,6 +14,8 @@ import { ScanQueue } from '../src/files/scan-queue';
 import { ScanProcessor } from '../src/files/scan-processor';
 import { PdfScanner } from '../src/files/pdf-scanner';
 import { createReadStream } from 'node:fs';
+import { get as httpGet } from 'node:http';
+import type { Readable } from 'node:stream';
 import { DatabaseService } from '../src/database/database.module';
 
 type Browser = ReturnType<typeof request.agent>;
@@ -808,6 +810,225 @@ describe('private material drafts', () => {
     outcome,
     rightsConfirmed: true,
     reason: 'Đã kiểm tra nguồn và nội dung minh họa',
+  });
+  it('library lists only readable current versions and filters without leaking private metadata', async () => {
+    const item = await submitted();
+    expect((await review(item.requestId, decision())).status).toBe(201);
+    const hidden = await submitted();
+    expect((await review(hidden.requestId, decision())).status).toBe(201);
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [hidden.id]);
+    const draft = await safeDraft();
+    const choices = await agents.student.get('/api/v1/library/courses').expect(200);
+    expect(choices.body.items.some((c: { id: string }) => c.id === courses[0])).toBe(true);
+    for (const role of ['admin', 'student', 'lecturer']) {
+      const list = await agents[role]
+        .get(
+          `/api/v1/library?courseId=${courses[0]}&kind=STUDENT_SUPPLEMENT&materialType=EXERCISE&search=minh&limit=100`,
+        )
+        .expect(200);
+      expect(
+        list.body.items.some((v: { versionId: string }) => v.versionId === item.versionId),
+      ).toBe(true);
+      expect(
+        list.body.items.some((v: { versionId: string }) =>
+          [hidden.versionId, draft.versionId].includes(v.versionId),
+        ),
+      ).toBe(false);
+      expect(JSON.stringify(list.body)).not.toMatch(
+        /object_key|quarantine\/|sha256|rightsConfirmed/,
+      );
+      await agents[role].get(`/api/v1/library/versions/${hidden.versionId}`).expect(404);
+      await agents[role].get(`/api/v1/library/versions/${draft.versionId}/pdf`).expect(404);
+    }
+    await request(app.getHttpServer()).get('/api/v1/library').expect(401);
+    for (const query of [
+      'page=0',
+      'courseId=oops',
+      'kind=ADMIN',
+      'materialType=BAD',
+      'visibility=HIDDEN',
+    ])
+      await agents.student.get(`/api/v1/library?${query}`).expect(400);
+    const page = await agents.student.get('/api/v1/library?limit=1').expect(200);
+    expect(page.body.items).toHaveLength(1);
+    await agents.student.get('/api/v1/library/versions/9223372036854775808').expect(400);
+  });
+  it('library streams exact private byte ranges and separately enforces download permission', async () => {
+    const item = await submitted();
+    expect((await review(item.requestId, decision())).status).toBe(201);
+    const path = `/api/v1/library/versions/${item.versionId}`;
+    const full = await agents.student.get(`${path}/pdf`).expect(200);
+    expect(full.headers['cache-control']).toContain('no-store');
+    expect(full.headers['accept-ranges']).toBe('bytes');
+    const size = Number(full.headers['content-length']);
+    const part = await agents.student.get(`${path}/pdf`).set('Range', 'bytes=0-4').expect(206);
+    expect(part.body.toString()).toBe('%PDF-');
+    expect(part.headers['content-range']).toBe(`bytes 0-4/${size}`);
+    expect(part.headers['content-length']).toBe('5');
+    const suffix = await agents.student.get(`${path}/pdf`).set('Range', 'bytes=-4').expect(206);
+    expect(suffix.body.equals(full.body.subarray(size - 4))).toBe(true);
+    const open = await agents.student.get(`${path}/pdf`).set('Range', 'bytes=5-').expect(206);
+    expect(open.body.equals(full.body.subarray(5))).toBe(true);
+    for (const range of [
+      `bytes=${size}-`,
+      'bytes=4-2',
+      'bytes=0-1,3-4',
+      'bytes=-0',
+      'items=0-1',
+      'bytes=99999999999999999999999-',
+    ]) {
+      const result = await agents.student.get(`${path}/pdf`).set('Range', range).expect(416);
+      expect(result.headers['content-range']).toBe(`bytes */${size}`);
+    }
+    await agents.admin.get(`${path}/download`).expect(403);
+    await agents.student.get(`${path}/download`).expect(403);
+    const allowed = await create('student');
+    const updated = await write(
+      'student',
+      { ...body(), downloadAllowed: true, revision: 1 },
+      allowed.id,
+    );
+    await upload('student', allowed.id, updated.body.item.revision);
+    await db.query(
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=1,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE document_id=$1)",
+      [allowed.id],
+    );
+    await publication('student', allowed.id, 'submit', { revision: 3 });
+    const pending = (
+      await db.query(
+        "SELECT id FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+        [allowed.versionId],
+      )
+    ).rows[0];
+    expect((await review(pending.id, { ...decision(), submittedRevision: 4 })).status).toBe(201);
+    const download = await agents.lecturer
+      .get(`/api/v1/library/versions/${allowed.versionId}/download`)
+      .expect(200);
+    expect(download.headers['content-disposition']).toContain('attachment;');
+  });
+  it('library rechecks hidden, unsafe and expired versions for each new request, including admins', async () => {
+    const item = await submitted();
+    expect((await review(item.requestId, decision())).status).toBe(201);
+    const path = `/api/v1/library/versions/${item.versionId}`;
+    await agents.student.get(path).expect(200);
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [item.id]);
+    for (const endpoint of [path, `${path}/pdf`, `${path}/download`])
+      await agents.admin.get(endpoint).expect(404);
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [item.id]);
+    await db.query(
+      "UPDATE hucescholar.files SET scan_status='FAILED' WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)",
+      [item.versionId],
+    );
+    await agents.student.get(`${path}/pdf`).expect(404);
+    const expired = await safeDraft();
+    await db.query(
+      "UPDATE hucescholar.document_versions SET rights_valid_until=now()-interval '1 day' WHERE id=$1",
+      [expired.versionId],
+    );
+    // Test-only fixture transitions directly to APPROVED: no immutable payload is edited.
+    await db.query(
+      "UPDATE hucescholar.document_versions SET review_status='APPROVED' WHERE id=$1",
+      [expired.versionId],
+    );
+    await db.query('UPDATE hucescholar.documents SET current_version_id=$1 WHERE id=$2', [
+      expired.versionId,
+      expired.id,
+    ]);
+    await agents.admin.get(`/api/v1/library/versions/${expired.versionId}/pdf`).expect(404);
+  });
+  it('library pins approved old versions while listing only the current version and reports unavailable storage', async () => {
+    const item = await submitted();
+    expect((await review(item.requestId, decision())).status).toBe(201);
+    const newer = (
+      await db.query(
+        "INSERT INTO hucescholar.document_versions(document_id,version_no,file_id,created_by,title,authors,material_type,source_reference,rights_basis,review_status) SELECT document_id,2,file_id,created_by,title,authors,material_type,source_reference,rights_basis,'APPROVED' FROM hucescholar.document_versions WHERE id=$1 RETURNING id",
+        [item.versionId],
+      )
+    ).rows[0].id;
+    await db.query('UPDATE hucescholar.documents SET current_version_id=$1 WHERE id=$2', [
+      newer,
+      item.id,
+    ]);
+    const list = await agents.student.get('/api/v1/library?limit=100').expect(200);
+    expect(list.body.items.some((v: { versionId: string }) => v.versionId === newer)).toBe(true);
+    expect(list.body.items.some((v: { versionId: string }) => v.versionId === item.versionId)).toBe(
+      false,
+    );
+    const old = await agents.student.get(`/api/v1/library/versions/${item.versionId}`).expect(200);
+    expect(old.body.item.current).toBe(false);
+    await db.query('UPDATE hucescholar.courses SET is_active=false WHERE id=$1', [courses[0]]);
+    await agents.student.get(`/api/v1/library/versions/${item.versionId}/pdf`).expect(200);
+    await db.query('UPDATE hucescholar.courses SET is_active=true WHERE id=$1', [courses[0]]);
+    const file = await uploadedFile(item);
+    await app.get(PrivateStore).remove(file.object_key);
+    await agents.student.get(`/api/v1/library/versions/${item.versionId}/pdf`).expect(503);
+  });
+  it('closes the private source stream when the reader cancels its HTTP response', async () => {
+    const item = await create('student');
+    await upload(
+      'student',
+      item.id,
+      1,
+      Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(8 * 1024 * 1024, 32)]),
+    );
+    await db.query(
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=1,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)",
+      [item.versionId],
+    );
+    await publication('student', item.id, 'submit', { revision: 2 });
+    const pending = (
+      await db.query(
+        "SELECT id FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+        [item.versionId],
+      )
+    ).rows[0];
+    expect((await review(pending.id, decision())).status).toBe(201);
+    const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+    const login = await agents.student
+      .post('/api/v1/auth/login')
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send({ email: `${prefix}-student@example.test`, password })
+      .expect(200);
+    const cookie = (login.headers['set-cookie'] as unknown as string[])
+      .map((s) => s.split(';')[0])
+      .join(';');
+    const store = app.get(PrivateStore),
+      original = store.read.bind(store);
+    let source: Readable | undefined;
+    const observed = jest.spyOn(store, 'read').mockImplementation(async (...args) => {
+      source = await original(...args);
+      return source;
+    });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const address = app.getHttpServer().address();
+      await new Promise<void>((resolve, reject) => {
+        const req = httpGet(
+          `http://127.0.0.1:${address.port}/api/v1/library/versions/${item.versionId}/pdf`,
+          { headers: { Cookie: cookie } },
+          (res) => {
+            res.once('data', () => {
+              res.destroy();
+              resolve();
+            });
+            res.on('error', () => {});
+          },
+        );
+        req.on('error', reject);
+      });
+      expect(source).toBeDefined();
+      const closed = await new Promise<boolean>((resolve) => {
+        if (source!.destroyed) return resolve(true);
+        source!.once('close', () => resolve(true));
+        timer = setTimeout(() => resolve(false), 1000);
+      });
+      expect(closed).toBe(true);
+    } finally {
+      clearTimeout(timer);
+      source?.destroy();
+      observed.mockRestore();
+    }
   });
   it('admin reviews a submitted snapshot and publishes atomically without opening HIDDEN', async () => {
     const item = await submitted('lecturer');
