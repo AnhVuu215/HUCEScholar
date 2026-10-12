@@ -2,7 +2,7 @@
 
 Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hướng web responsive + PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên. Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường.
 
-Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF private, gửi/rút và xem lịch sử. Admin xem PDF SAFE, yêu cầu sửa, từ chối hoặc duyệt bản hiện hành; chủ mở lại bản được yêu cầu sửa. Đã có kho học liệu, reader PDF.js và tải bản gốc theo quyền. Giao diện responsive cho desktop, điện thoại và tablet. **Chưa có học liệu trường được cấp quyền thật, ghi chú, lưu tiến độ hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
+Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF private, gửi/rút và xem lịch sử. Admin xem PDF SAFE, yêu cầu sửa, từ chối hoặc duyệt bản hiện hành; chủ mở lại bản được yêu cầu sửa. Đã có kho học liệu, reader PDF.js, tải bản gốc theo quyền, ghi chú riêng theo trang và lưu tiến độ đọc. Giao diện responsive cho desktop, điện thoại và tablet. **Chưa có học liệu trường được cấp quyền thật, highlight, đọc offline hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
 
 Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng dẫn theo vai trò. Trang tiến độ cùng kiểm tra kết nối API nằm ở `/project`. Bìa minh họa không phải học liệu đã được công bố. Chi tiết: [landing page](docs/implementation/2026-10-12-landing-page.md).
 
@@ -74,7 +74,7 @@ Khi PDF SAFE, chọn **Gửi duyệt** rồi xác nhận phiên bản/lần lưu
 
 Admin mở **Kiểm duyệt học liệu** ở `/workspace/admin/moderation`, lọc yêu cầu và mở chi tiết. Chỉ PDF SAFE với snapshot còn khớp được mở ở tab mới. Chọn quyết định, nhập lý do, duyệt cần xác nhận đã kiểm tra nội dung/quyền; xác nhận inline để lưu. Duyệt đặt bản hiện hành, không tự mở tài liệu HIDDEN. Khi mất kết nối, **Tải trạng thái yêu cầu** trước retry.
 
-Ba vai trò mở **Kho học liệu** ở `/workspace/library`, tìm tiêu đề/tác giả, lọc môn/loại/nguồn và chọn **Đọc tài liệu**. Reader chuyển trang, zoom, xoay và chọn chữ nếu PDF có text layer. Nguồn/quyền nằm trong phần mở rộng inline; **Tải PDF gốc** chỉ xuất hiện khi được phép. Mỗi lượt metadata/file kiểm tra APPROVED + VISIBLE + SAFE + hạn quyền; admin không vượt điều kiện này. Không lưu tiến độ hoặc PDF offline. `dev`/`build` chuẩn bị worker, CMaps, font và wasm PDF.js cùng version vào public; không dùng CDN.
+Ba vai trò mở **Kho học liệu** ở `/workspace/library`, tìm tiêu đề/tác giả, lọc môn/loại/nguồn và chọn **Đọc tài liệu**. Reader chuyển trang, zoom, xoay và chọn chữ nếu PDF có text layer. Nguồn/quyền nằm trong phần mở rộng inline; **Tải PDF gốc** chỉ xuất hiện khi được phép. Mỗi lượt metadata/file kiểm tra APPROVED + VISIBLE + SAFE + hạn quyền; admin không vượt điều kiện này. Ghi chú riêng gắn phiên bản/trang, có tạo/sửa/xóa; lỗi lưu giữ bản soạn, retry tạo giữ request ID để tránh nhân đôi. Lưu trước khi dùng Back/Forward của trình duyệt: cảnh báo rời trang hiện chỉ bao phủ link trong app, đăng xuất và đóng/tải lại trang. Tiến độ chỉ lưu trang render thành công, mở lại sau khi máy chủ xác nhận; xung đột tab yêu cầu tải lại. Khi lỗi tải tiến độ có thể đọc từ trang 1 mà không ghi. Chưa có highlight hoặc PDF offline. Chi tiết: [ghi chú và tiến độ](docs/implementation/2026-10-12-reader-notes-progress.md). `dev`/`build` chuẩn bị worker, CMaps, font và wasm PDF.js cùng version vào public; không dùng CDN.
 
 Để chạy kiểm tra file local, bật profile Docker riêng: `docker compose --env-file infra/.env -f infra/compose.yaml --profile files up -d --build clamav file-worker`. API và worker dùng chung `.local/files` ngoài webroot. Production yêu cầu S3 private; chưa tạo dịch vụ cloud. Hướng dẫn, giới hạn và bằng chứng quét thật ở tài liệu upload phía trên.
 
@@ -118,8 +118,8 @@ CI dùng PostgreSQL/Redis ephemeral trên runner và chạy format, lint, typech
 
 ## Lộ trình còn lại
 
-1. Ghi chú riêng theo phiên bản/trang và tiến độ đọc, tiếp nối kho/reader đã có.
-2. Tạo phiên bản kế tiếp, bàn giao và quản lý ẩn/khôi phục.
+1. Tạo phiên bản kế tiếp, bàn giao và quản lý ẩn/khôi phục.
+2. Thư viện cá nhân và nguồn sách được cấp quyền.
 3. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
 
 Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
