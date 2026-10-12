@@ -92,7 +92,7 @@ async function markSyntheticSafe(id: string, pageCount = 1) {
   try {
     // Explicit synthetic scan fixture; does not claim real scanner evidence.
     const result = await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test'))",
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test'))",
       [id, pageCount],
     );
     expect(result.rowCount).toBe(1);
@@ -122,8 +122,12 @@ async function adminReviewLogin(page: Page, code: string, accountPrefix = 'e2e-d
     .getByRole('button', { name: `Xem yêu cầu Học liệu minh họa ${code}`, exact: true })
     .click();
 }
-async function submittedForReview(page: Page, role: 'student' | 'lecturer', readable = false) {
-  const accountPrefix = readable ? 'e2e-reader' : 'e2e-drafts';
+async function submittedForReview(
+  page: Page,
+  role: 'student' | 'lecturer',
+  readable = false,
+  accountPrefix = readable ? 'e2e-reader' : 'e2e-drafts',
+) {
   const code = await seed(page, role, accountPrefix);
   await login(page, role, accountPrefix);
   const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
@@ -294,6 +298,135 @@ test('student searches the library and reads, selects text, changes pages, zooms
   await page.unroute('**/api/v1/library/versions/*/pdf');
   await page.getByRole('button', { name: 'Thử mở lại PDF', exact: true }).click();
   await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+});
+async function openPersonalReader(page: Page, prefix: string) {
+  const { code } = await submittedForReview(page, 'student', true, prefix);
+  await adminReviewLogin(page, code, prefix);
+  const item = (
+    await (await page.request.get('/api/v1/admin/publication-requests?search=' + code)).json()
+  ).items[0];
+  const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+  expect(
+    (
+      await page.request.post(`/api/v1/admin/publication-requests/${item.id}/decision`, {
+        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+        data: {
+          revision: item.revision,
+          submittedRevision: item.submittedRevision,
+          outcome: 'APPROVED',
+          reason: 'Original test PDF permitted',
+          rightsConfirmed: true,
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  await logoutForTest(page);
+  await login(page, 'student', prefix);
+  await page.goto(`/workspace/library/versions/${item.versionId}`);
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' }),
+  ).toBeVisible();
+  return `/api/v1/library/versions/${item.versionId}`;
+}
+test('private page notes preserve drafts, recover lost responses and reject stale edits', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const path = await openPersonalReader(page, 'e2e-notes');
+  const editor = page.getByLabel('Nội dung ghi chú', { exact: true });
+  await expect(editor).toBeVisible();
+  await editor.fill('Ghi chú riêng <b>không phải HTML</b>');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
+  await expect(editor).toHaveValue('Ghi chú riêng <b>không phải HTML</b>');
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Ghi chú đang soạn · Trang 1', exact: true }),
+  ).toBeVisible();
+  await page.route('**/api/v1/library/versions/*/notes', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    await route.fetch();
+    await route.abort();
+  });
+  await page.getByRole('button', { name: 'Lưu ghi chú', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Chưa xác nhận được lần lưu' }),
+  ).toBeVisible();
+  await expect(editor).toHaveValue('Ghi chú riêng <b>không phải HTML</b>');
+  await page.unroute('**/api/v1/library/versions/*/notes');
+  await page.getByRole('button', { name: 'Lưu ghi chú', exact: true }).click();
+  await expect(editor).toHaveValue('');
+  let notes = (await (await page.request.get(`${path}/notes?pageNumber=1`)).json()).items;
+  expect(notes).toHaveLength(1);
+  await page.getByRole('button', { name: 'Trang trước', exact: true }).click();
+  const row = page.getByRole('article', { name: `Ghi chú ${notes[0].id}` });
+  await expect(
+    row.getByText('Ghi chú riêng <b>không phải HTML</b>', { exact: true }),
+  ).toBeVisible();
+  expect(await row.locator('b').count()).toBe(0);
+  await row.getByRole('button', { name: 'Sửa', exact: true }).click();
+  await editor.fill('Bản soạn ở tab hiện tại');
+  const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+  expect(
+    (
+      await page.request.patch(`${path}/notes/${notes[0].id}`, {
+        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+        data: { revision: 1, content: 'Đã sửa ở tab khác' },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole('button', { name: 'Lưu ghi chú', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Ghi chú đã thay đổi' })).toBeVisible();
+  await expect(editor).toHaveValue('Bản soạn ở tab hiện tại');
+  await page.getByRole('button', { name: 'Tải lại ghi chú', exact: true }).click();
+  await expect(row.getByText('Đã sửa ở tab khác', { exact: true })).toBeVisible();
+  await expect(editor).toHaveValue('Bản soạn ở tab hiện tại');
+  await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
+  await row.getByRole('button', { name: 'Sửa', exact: true }).click();
+  await editor.fill('Ghi chú đã chỉnh sửa');
+  await page.getByRole('button', { name: 'Lưu ghi chú', exact: true }).click();
+  await expect(editor).toHaveValue('');
+  await page.reload();
+  await expect(page.getByLabel('Số trang', { exact: true })).toBeEnabled();
+  await page.getByLabel('Số trang', { exact: true }).fill('1');
+  await expect(row.getByText('Ghi chú đã chỉnh sửa', { exact: true })).toBeVisible();
+  if (process.env.CAPTURE_READING_UI === '1') {
+    mkdirSync('.impeccable/review/reading', { recursive: true });
+    for (const [name, width, height] of [
+      ['desktop', 1440, 1100],
+      ['tablet', 768, 1100],
+      ['mobile', 360, 1000],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' }),
+      ).toBeVisible();
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+        .toBe(true);
+      await page.screenshot({
+        path: `.impeccable/review/reading/${name}-notes.png`,
+        fullPage: true,
+      });
+    }
+  }
+  await row.getByRole('button', { name: 'Sửa', exact: true }).click();
+  await editor.fill('Giữ bản soạn khi reader lỗi');
+  await page.route('**/api/v1/library/versions/*', (route) => route.abort());
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Thử mở lại PDF', exact: true })).toBeVisible();
+  await expect(editor).toHaveValue('Giữ bản soạn khi reader lỗi');
+  await page.unroute('**/api/v1/library/versions/*');
+  await page.getByRole('button', { name: 'Thử mở lại PDF', exact: true }).click();
+  await expect(editor).toHaveValue('Giữ bản soạn khi reader lỗi');
+  await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
+  await expect(page.getByLabel('Số trang', { exact: true })).toBeEnabled();
+  await page.getByLabel('Số trang', { exact: true }).fill('1');
+  await row.getByRole('button', { name: 'Xóa', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận xóa', exact: true }).click();
+  await expect(row).toHaveCount(0);
+  notes = (await (await page.request.get(`${path}/notes?pageNumber=1`)).json()).items;
+  expect(notes).toEqual([]);
 });
 test('admin approves with rights confirmation and recovers a committed decision after response loss', async ({
   page,

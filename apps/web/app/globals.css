@@ -1090,3 +1090,67 @@ h2 {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.reader-notes {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.notes-heading,
+.note-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.notes-heading {
+  justify-content: space-between;
+}
+.notes-heading h3 {
+  margin: 0;
+  font-size: 20px;
+}
+.note-editor {
+  max-width: 72ch;
+  margin: 24px 0;
+}
+.note-editor h4 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.note-editor label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.note-editor textarea {
+  display: block;
+  width: 100%;
+  min-height: 112px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+  caret-color: var(--accent);
+}
+.note-list article {
+  padding: 24px 0;
+  border-top: 1px solid var(--line);
+}
+.note-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 72ch;
+}
+.note-delete {
+  margin-top: 16px;
+}
+.reader-progress {
+  margin: 16px 0;
+}
+.reader-progress p {
+  margin: 8px 0;
+}
