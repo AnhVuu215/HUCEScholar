@@ -2,7 +2,7 @@
 
 Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hướng web responsive + PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên. Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường.
 
-Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF vào kho riêng tư và xem kết quả kiểm tra nền. Giao diện dùng trên desktop, điện thoại và tablet. **Chưa có học liệu được cấp quyền thật, gửi duyệt, công bố, reader hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
+Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF vào kho riêng tư, xem kết quả kiểm tra nền, gửi/rút yêu cầu duyệt và xem lịch sử. Giao diện dùng trên desktop, điện thoại và tablet. **Chưa có học liệu được cấp quyền thật, admin duyệt/công bố, reader hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
 
 Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng dẫn theo vai trò. Trang tiến độ cùng kiểm tra kết nối API nằm ở `/project`. Bìa minh họa không phải học liệu đã được công bố. Chi tiết: [landing page](docs/implementation/2026-10-12-landing-page.md).
 
@@ -15,6 +15,7 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [Danh mục đào tạo và phân công](docs/implementation/2026-10-11-academic-catalog.md)
 - [Bản nháp học liệu](docs/implementation/2026-10-11-material-drafts.md)
 - [Upload PDF riêng tư, worker và cách chạy](docs/implementation/2026-10-11-private-pdf-upload.md)
+- [Gửi/rút yêu cầu duyệt và lịch sử](docs/implementation/2026-10-12-publication-requests.md)
 - [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)
 - [Prototype thiết kế](design/wireframe/README.md)
 - [Proposal, use case và tài liệu bàn giao](docs/deliverables/)
@@ -32,7 +33,7 @@ pnpm --filter @hucescholar/api db:migrate
 pnpm dev
 ```
 
-Mở [http://127.0.0.1:3000/login](http://127.0.0.1:3000/login). API health ở `http://127.0.0.1:3001/api/v1/health`. Dừng web/API bằng `Ctrl+C`. Root `/` giữ trang tiến độ dự án và kiểm tra API.
+Mở [http://127.0.0.1:3000/](http://127.0.0.1:3000/) rồi đăng nhập. API health ở `http://127.0.0.1:3001/api/v1/health`. Dừng web/API bằng `Ctrl+C`. Trang tiến độ dự án và kiểm tra API nằm ở `/project`.
 
 `setup:local` tạo `infra/.env` và `apps/api/.env` với password/CSRF secret ngẫu nhiên, giữ nguyên file đã có và không in secret. PostgreSQL mặc định **55432**, Redis **56379**, chỉ bind `127.0.0.1`; không đụng PostgreSQL khác trên 5432. `pnpm infra:down` giữ named volumes; không thêm `-v` khi cần giữ dữ liệu.
 
@@ -65,7 +66,9 @@ Tại `/workspace/admin/assignments`, chọn giảng viên hoạt động/đã x
 
 Giảng viên mở `/workspace/lecturer/materials`, sinh viên mở `/workspace/student/materials` hoặc chọn **Học liệu của tôi**. Tạo bản nháp, nhập tiêu đề/loại/nguồn/căn cứ quyền, thêm 1–20 môn rồi lưu. Tác giả/mô tả có thể để trống. Bản sinh viên mang loại riêng, không sửa giáo trình giảng viên; Admin không biên soạn ở luồng này.
 
-Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. Bản đã lưu có thể gắn/thay PDF tối đa 25 MiB, xem CHECKING/SAFE/FAILED bằng **Cập nhật trạng thái**. SAFE chỉ là kết quả kỹ thuật. **Chưa có gửi duyệt hoặc đọc/tải**; lựa chọn cho phép tải chỉ là đề nghị cho bước công bố sau này.
+Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. Bản đã lưu có thể gắn/thay PDF tối đa 25 MiB, xem CHECKING/SAFE/FAILED bằng **Cập nhật trạng thái**. SAFE chỉ là kết quả kỹ thuật. **Chưa có đọc/tải**; lựa chọn cho phép tải chỉ là đề nghị cho bước công bố sau này.
+
+Khi PDF SAFE, chọn **Gửi duyệt** rồi xác nhận phiên bản/lần lưu. Bản SUBMITTED khóa metadata/PDF, vẫn xuất hiện trong danh sách với bộ lọc **Trạng thái duyệt**. Nhập lý do rồi **Rút về nháp** để sửa; lịch sử các lần gửi/rút được giữ. Giảng viên mất phân công vẫn rút được nhưng không sửa/gửi lại. Nếu lỗi hoặc chưa rõ kết quả, bấm **Tải trạng thái duyệt** trước khi thử lại; lý do rút được giữ. Đây là yêu cầu chờ, chưa được công bố vì chức năng admin xét duyệt chưa mở.
 
 Để chạy kiểm tra file local, bật profile Docker riêng: `docker compose --env-file infra/.env -f infra/compose.yaml --profile files up -d --build clamav file-worker`. API và worker dùng chung `.local/files` ngoài webroot. Production yêu cầu S3 private; chưa tạo dịch vụ cloud. Hướng dẫn, giới hạn và bằng chứng quét thật ở tài liệu upload phía trên.
 
@@ -109,7 +112,7 @@ CI dùng PostgreSQL/Redis ephemeral trên runner và chạy format, lint, typech
 
 ## Lộ trình còn lại
 
-1. Gửi/rút, kiểm duyệt và công bố học liệu; nối với bản nháp/PDF đã kiểm tra.
+1. Admin kiểm duyệt/công bố, yêu cầu sửa và tạo phiên bản kế tiếp; nối với yêu cầu gửi/rút đã có.
 2. PDF reader, ghi chú riêng theo phiên bản, tiến độ đọc.
 3. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
 
