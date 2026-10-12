@@ -226,7 +226,7 @@ export function ModerationDetail({
               Bản hiện hành.{' '}
               {row.visibility === 'HIDDEN'
                 ? 'Tài liệu vẫn đang ẩn.'
-                : 'Kho học liệu và trình đọc sẽ được mở ở bước tiếp theo.'}
+                : 'Người học có thể tìm và đọc khi bản đã duyệt, SAFE, đang hiển thị và quyền còn hợp lệ.'}
             </p>
           )}
           {!row.snapshotMatches && (

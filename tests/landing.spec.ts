@@ -30,7 +30,7 @@ test('guide switches role by keyboard and explains unfinished reader honestly', 
   );
   await page.getByText('Đã đọc và ghi chú trên PDF được chưa?', { exact: true }).click();
   await expect(
-    page.getByText('Trình đọc PDF và ghi chú riêng đang được phát triển.'),
+    page.getByText('Đã có kho học liệu và trình đọc PDF cho tài khoản được cấp.', { exact: false }),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Tiến độ dự án', exact: true }).click();
   await expect(page).toHaveURL('/project');

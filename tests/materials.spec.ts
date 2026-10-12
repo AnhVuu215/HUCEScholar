@@ -4,17 +4,18 @@ import { mkdirSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
+import { readerPdf } from './helpers/reader-pdf';
 
-async function login(page: Page, role: 'lecturer' | 'student') {
+async function login(page: Page, role: 'lecturer' | 'student', accountPrefix = 'e2e-drafts') {
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(`e2e-drafts-${role}@example.test`);
+  await page.getByLabel('Email', { exact: true }).fill(`${accountPrefix}-${role}@example.test`);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await expect(page).toHaveURL(`/workspace/${role}`);
   await page.getByRole('link', { name: 'Học liệu của tôi', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Học liệu của tôi', exact: true })).toBeVisible();
 }
-async function seed(page: Page, role: 'lecturer' | 'student') {
+async function seed(page: Page, role: 'lecturer' | 'student', accountPrefix = 'e2e-drafts') {
   const code = `MAT-${randomBytes(5).toString('hex').toUpperCase()}`;
   const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
   const headers = { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf };
@@ -22,7 +23,7 @@ async function seed(page: Page, role: 'lecturer' | 'student') {
     (
       await page.request.post('/api/v1/auth/login', {
         headers,
-        data: { email: 'e2e-drafts-admin@example.test', password: process.env.E2E_PASSWORD! },
+        data: { email: `${accountPrefix}-admin@example.test`, password: process.env.E2E_PASSWORD! },
       })
     ).status(),
   ).toBe(200);
@@ -80,7 +81,7 @@ async function fill(page: Page, code: string) {
     .selectOption({ label: `${code} · Môn minh họa kiểm thử học liệu` });
   await page.getByRole('button', { name: 'Thêm môn', exact: true }).click();
 }
-async function markSyntheticSafe(id: string) {
+async function markSyntheticSafe(id: string, pageCount = 1) {
   const environment = parseEnv(readFileSync('.local/test.env', 'utf8'));
   const url = new URL(environment.TEST_DATABASE_URL ?? '');
   if (!url.pathname.endsWith('_test')) throw new Error('Test database required.');
@@ -91,8 +92,8 @@ async function markSyntheticSafe(id: string) {
   try {
     // Explicit synthetic scan fixture; does not claim real scanner evidence.
     const result = await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=1,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND u.email LIKE 'e2e-drafts-%@example.test')",
-      [id],
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test'))",
+      [id, pageCount],
     );
     expect(result.rowCount).toBe(1);
   } finally {
@@ -109,9 +110,9 @@ async function logoutForTest(page: Page) {
     ).status(),
   ).toBe(204);
 }
-async function adminReviewLogin(page: Page, code: string) {
+async function adminReviewLogin(page: Page, code: string, accountPrefix = 'e2e-drafts') {
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('e2e-drafts-admin@example.test');
+  await page.getByLabel('Email', { exact: true }).fill(`${accountPrefix}-admin@example.test`);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await page.getByRole('link', { name: 'Kiểm duyệt học liệu', exact: true }).click();
@@ -121,9 +122,10 @@ async function adminReviewLogin(page: Page, code: string) {
     .getByRole('button', { name: `Xem yêu cầu Học liệu minh họa ${code}`, exact: true })
     .click();
 }
-async function submittedForReview(page: Page, role: 'student' | 'lecturer') {
-  const code = await seed(page, role);
-  await login(page, role);
+async function submittedForReview(page: Page, role: 'student' | 'lecturer', readable = false) {
+  const accountPrefix = readable ? 'e2e-reader' : 'e2e-drafts';
+  const code = await seed(page, role, accountPrefix);
+  await login(page, role, accountPrefix);
   const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
   const headers = { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf };
   const created = await page.request.post('/api/v1/material-drafts', {
@@ -135,7 +137,7 @@ async function submittedForReview(page: Page, role: 'student' | 'lecturer') {
       materialType: 'EXERCISE',
       sourceReference: 'Tự biên soạn — nguồn minh họa',
       rightsBasis: 'Tác giả cho phép — căn cứ minh họa',
-      downloadAllowed: false,
+      downloadAllowed: readable,
       courseIds: [
         (await (await page.request.get('/api/v1/material-drafts/courses?search=' + code)).json())
           .items[0].id,
@@ -153,11 +155,11 @@ async function submittedForReview(page: Page, role: 'student' | 'lecturer') {
           'X-File-Name': 'synthetic-review.pdf',
           'If-Match': '"1"',
         },
-        data: Buffer.from('%PDF-1.7\nSynthetic review fixture'),
+        data: readable ? readerPdf() : Buffer.from('%PDF-1.7\nSynthetic review fixture'),
       })
     ).status(),
   ).toBe(201);
-  await markSyntheticSafe(item.id);
+  await markSyntheticSafe(item.id, readable ? 2 : 1);
   expect(
     (
       await page.request.post(`/api/v1/material-drafts/${item.id}/submit`, {
@@ -169,6 +171,130 @@ async function submittedForReview(page: Page, role: 'student' | 'lecturer') {
   await logoutForTest(page);
   return { code, id: item.id };
 }
+
+test('student searches the library and reads, selects text, changes pages, zooms and downloads a permitted PDF', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const { code } = await submittedForReview(page, 'student', true);
+  await adminReviewLogin(page, code, 'e2e-reader');
+  const request = (
+    await (await page.request.get('/api/v1/admin/publication-requests?search=' + code)).json()
+  ).items[0];
+  const token = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+  expect(
+    (
+      await page.request.post(`/api/v1/admin/publication-requests/${request.id}/decision`, {
+        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': token },
+        data: {
+          revision: request.revision,
+          submittedRevision: request.submittedRevision,
+          outcome: 'APPROVED',
+          reason: 'Fixture created by this test; permitted for reading',
+          rightsConfirmed: true,
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  await logoutForTest(page);
+  await login(page, 'student', 'e2e-reader');
+  await page.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
+  await page.getByLabel('Tìm học liệu', { exact: true }).fill(code);
+  await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
+  await expect(
+    page.getByRole('link', { name: `Đọc Học liệu minh họa ${code}`, exact: true }),
+  ).toBeVisible();
+  if (process.env.CAPTURE_LIBRARY_UI === '1') {
+    mkdirSync('.impeccable/review/library', { recursive: true });
+    for (const [name, width, height] of [
+      ['desktop', 1440, 1000],
+      ['tablet', 768, 1024],
+      ['mobile', 360, 800],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({
+        path: `.impeccable/review/library/${name}-catalog.png`,
+        fullPage: true,
+      });
+    }
+  }
+  await page.getByRole('link', { name: `Đọc Học liệu minh họa ${code}`, exact: true }).click();
+  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+  await expect(page.locator('.textLayer')).toContainText('HUCEScholar reader fixture');
+  expect(
+    await page.locator('.reader-page canvas').evaluate((node: HTMLCanvasElement) => {
+      const pixels = node.getContext('2d')!.getImageData(0, 0, node.width, node.height).data;
+      return pixels.some((value, index) => index % 4 !== 3 && value < 100);
+    }),
+  ).toBe(true);
+  const selectedText = await page.locator('.textLayer').evaluate((node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return selection.toString();
+  });
+  expect(selectedText).toContain('HUCEScholar reader fixture');
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(page.getByText('Đã hiển thị trang 2 / 2', { exact: true })).toBeVisible();
+  await expect(page.locator('.textLayer')).toContainText('Second page');
+  await page.getByLabel('Mức phóng', { exact: true }).selectOption('1.25');
+  await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
+  await expect(page.getByText('Đã hiển thị trang 2 / 2', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
+  await page.getByLabel('Mức phóng', { exact: true }).selectOption('fit');
+  await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
+  await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
+  if (process.env.CAPTURE_LIBRARY_UI === '1')
+    for (const [name, width, height] of [
+      ['desktop', 1440, 1000],
+      ['tablet', 768, 1024],
+      ['mobile', 360, 800],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect
+        .poll(async () =>
+          page.locator('.reader-stage').evaluate((node) => {
+            const canvas = node.querySelector('canvas');
+            return canvas
+              ? Math.abs(node.clientWidth - 64 - canvas.getBoundingClientRect().width)
+              : 999;
+          }),
+        )
+        .toBeLessThan(2);
+      await expect(page.getByText('Đã hiển thị trang 2 / 2', { exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({
+        path: `.impeccable/review/library/${name}-reader.png`,
+        fullPage: true,
+      });
+    }
+  const downloadPath = (await page
+    .getByRole('link', { name: 'Tải PDF gốc', exact: true })
+    .getAttribute('href'))!;
+  const downloaded = await page.request.get(downloadPath);
+  expect(downloaded.status()).toBe(200);
+  expect(downloaded.headers()['content-disposition']).toContain('attachment');
+  expect((await downloaded.body()).equals(readerPdf())).toBe(true);
+  const pdfPath = downloadPath.replace('/download', '/pdf');
+  const range = await page.request.get(pdfPath, { headers: { Range: 'bytes=0-4' } });
+  expect(range.status()).toBe(206);
+  expect((await range.body()).toString()).toBe('%PDF-');
+  await page.route('**/api/v1/library/versions/*/pdf', (route) => route.abort());
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Thử mở lại PDF', exact: true })).toBeVisible();
+  await page.unroute('**/api/v1/library/versions/*/pdf');
+  await page.getByRole('button', { name: 'Thử mở lại PDF', exact: true }).click();
+  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+});
 test('admin approves with rights confirmation and recovers a committed decision after response loss', async ({
   page,
 }) => {

@@ -22,9 +22,9 @@ const upcoming: Record<Role, string> = {
   ADMIN:
     'Bạn có thể quản lý tài khoản, danh mục, phân công và kiểm duyệt học liệu. Mở Kiểm duyệt học liệu để xem yêu cầu, yêu cầu sửa, từ chối hoặc duyệt bản hiện hành.',
   LECTURER:
-    'Bạn có thể xem phân công, chuẩn bị bản nháp, tải PDF, gửi/rút yêu cầu và xem quyết định. Bản được yêu cầu sửa có thể mở lại. Phiên bản kế tiếp, kho học liệu và reader sẽ được bổ sung sau.',
+    'Bạn có thể xem phân công, chuẩn bị bản nháp, tải PDF, gửi/rút yêu cầu và xem quyết định. Mở Kho học liệu để tìm và đọc bản đã công bố. Phiên bản kế tiếp và ghi chú riêng sẽ được bổ sung sau.',
   STUDENT:
-    'Bạn có thể chuẩn bị tài liệu bổ sung, tải PDF, gửi/rút yêu cầu và xem quyết định. Bản được yêu cầu sửa có thể mở lại. Kho tài liệu theo môn, trình đọc và ghi chú riêng sẽ được bổ sung sau.',
+    'Bạn có thể tìm và đọc trong Kho học liệu, tải khi được phép, chuẩn bị tài liệu bổ sung và theo dõi kết quả duyệt. Ghi chú riêng và lưu tiến độ sẽ được bổ sung sau.',
 };
 
 export function RoleWorkspace({
@@ -38,7 +38,7 @@ export function RoleWorkspace({
   children?: ReactNode;
   title?: string;
   description?: string;
-  activeSection?: 'users' | 'catalog' | 'assignments' | 'materials' | 'moderation';
+  activeSection?: 'users' | 'catalog' | 'assignments' | 'materials' | 'moderation' | 'library';
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -174,6 +174,14 @@ export function RoleWorkspace({
             </Link>
           )}
           <Link href="/project">Tiến độ dự án</Link>
+          {state.kind === 'ready' && (
+            <Link
+              href="/workspace/library"
+              aria-current={activeSection === 'library' ? 'page' : undefined}
+            >
+              Kho học liệu
+            </Link>
+          )}
         </nav>
         <p className="sidebar-note">
           Dự án độc lập đang phát triển. Chưa phải hệ thống chính thức của trường.
@@ -258,7 +266,7 @@ export function RoleWorkspace({
                   <p>
                     {state.user.role === 'ADMIN'
                       ? 'Bạn có thể cấp và quản lý tài khoản giảng viên, sinh viên. Chưa có học liệu thật trong hệ thống.'
-                      : 'Mở Học liệu của tôi để chuẩn bị bản nháp, đính kèm PDF và theo dõi kết quả duyệt. Kho học liệu và reader chưa được mở.'}
+                      : 'Mở Kho học liệu để tìm và đọc; mở Học liệu của tôi để chuẩn bị bản nháp và theo dõi kết quả duyệt.'}
                   </p>
                 </section>
               </>

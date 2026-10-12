@@ -15,6 +15,7 @@ coverage/
 *.tsbuildinfo
 next-env.d.ts
 apps/api/src/generated/
+apps/web/public/pdfjs/
 
 # Local verification and tools
 .tools/

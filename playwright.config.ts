@@ -29,7 +29,7 @@ export default defineConfig({
       timeout: 60_000,
     },
     {
-      command: 'pnpm exec next dev --hostname 127.0.0.1 --port 3100',
+      command: 'node ../../scripts/pdfjs-assets.mjs && pnpm exec next dev --hostname 127.0.0.1 --port 3100',
       cwd: './apps/web',
       url: 'http://127.0.0.1:3100',
       env: { API_PROXY_TARGET: 'http://127.0.0.1:3101', NODE_ENV: 'development' },

@@ -333,9 +333,10 @@ export default function HomePage() {
             <details>
               <summary>Đã đọc và ghi chú trên PDF được chưa?</summary>
               <p>
-                Trình đọc PDF và ghi chú riêng đang được phát triển. Hiện bạn có thể lưu bản nháp,
-                đính kèm PDF, gửi duyệt và theo dõi quyết định của admin. Kho học liệu, trình đọc và
-                tải file gốc chưa được mở.
+                Đã có kho học liệu và trình đọc PDF cho tài khoản được cấp. Tài liệu phải đã duyệt,
+                an toàn, đang hiển thị và còn quyền sử dụng; tải bản gốc cần được cho phép riêng.
+                Ghi chú riêng và lưu tiến độ đang được phát triển. Chưa có học liệu trường được cấp
+                quyền thật.
               </p>
             </details>
             <details>

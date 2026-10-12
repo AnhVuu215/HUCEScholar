@@ -125,8 +125,8 @@ export function PublicationActions({
       </p>
       <p className="field-hint">
         Gửi duyệt khóa thông tin và PDF của phiên bản này. Rút về nháp trước khi sửa. Chức năng kiểm
-        duyệt do admin quyết định; duyệt không tự mở tài liệu đang ẩn. Kho học liệu và reader sẽ
-        được bổ sung sau.
+        duyệt do admin quyết định; duyệt không tự mở tài liệu đang ẩn. Bản đủ quyền đọc xuất hiện
+        trong Kho học liệu; tải bản gốc cần quyền riêng.
       </p>
       {(error || uncertain) && (
         <p role="alert" className="form-error" ref={feedback} tabIndex={-1}>

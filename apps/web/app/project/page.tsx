@@ -46,8 +46,8 @@ export default function HomePage() {
           <h2 id="scope-heading">Phạm vi hiện tại</h2>
           <p>Web responsive và API đã được khởi tạo theo kiến trúc đã chốt.</p>
           <p className="scope-disclosure">
-            Đã có tài khoản, danh mục, phân công, PDF riêng tư và kiểm duyệt. Kho học liệu và reader
-            chưa được mở.
+            Đã có tài khoản, danh mục, phân công, PDF riêng tư, kiểm duyệt, kho học liệu và trình
+            đọc theo quyền. Ghi chú riêng chưa được mở.
           </p>
           <dl className="scope-list">
             <div>
@@ -76,10 +76,11 @@ export default function HomePage() {
           className="content-section next-section"
           aria-labelledby="next-heading"
         >
-          <h2 id="next-heading">Mốc tiếp theo: tìm và đọc học liệu</h2>
+          <h2 id="next-heading">Mốc tiếp theo: ghi chú riêng theo phiên bản</h2>
           <p>
-            Đã có gửi/rút, yêu cầu sửa, từ chối và duyệt bản hiện hành. Tiếp theo là kho học liệu,
-            kiểm tra quyền đọc, trình đọc PDF và ghi chú riêng theo phiên bản.
+            Đã có tìm học liệu, đọc PDF, chọn chữ, chuyển trang, zoom và tải khi được phép. Tiếp
+            theo là ghi chú riêng gắn phiên bản/trang và lưu tiến độ đọc; không tự chuyển ghi chú
+            sang bản mới.
           </p>
           <ul className="role-list">
             <li>
