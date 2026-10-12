@@ -12,6 +12,7 @@ import {
 import { CatalogPicker, type CatalogChoice } from '../academic/catalog-picker';
 import { DraftPdf } from './draft-pdf';
 import { PublicationActions } from './publication-actions';
+import { VersionHistory } from './version-history';
 
 export function MaterialEditor({
   id,
@@ -490,6 +491,7 @@ function DraftForm({
           recoveryRequired={setPublicationUncertain}
         />
       )}
+      {current && <VersionHistory current={current} />}
     </section>
   );
 }
