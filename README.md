@@ -70,7 +70,7 @@ Giảng viên mở `/workspace/lecturer/materials`, sinh viên mở `/workspace/
 
 Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. Bản đã lưu có thể gắn/thay PDF tối đa 25 MiB, xem CHECKING/SAFE/FAILED bằng **Cập nhật trạng thái**. SAFE chỉ là kết quả kỹ thuật. Quyền tải bản gốc chỉ có hiệu lực khi phiên bản đủ điều kiện đọc sau khi duyệt.
 
-Khi PDF SAFE, chọn **Gửi duyệt** rồi xác nhận phiên bản/lần lưu. Bản SUBMITTED khóa metadata/PDF; nhập lý do rồi **Rút về nháp** để sửa. Giảng viên mất phân công vẫn rút được nhưng không sửa/gửi lại. Nếu lỗi hoặc chưa rõ kết quả, bấm **Tải trạng thái duyệt** trước retry. Chủ thấy quyết định/lý do trong lịch sử và lọc cả năm trạng thái; CHANGES_REQUIRED có **Mở lại để chỉnh sửa**. APPROVED/REJECTED giữ nguyên; tạo phiên bản kế tiếp chưa mở.
+Khi PDF SAFE, chọn **Gửi duyệt** rồi xác nhận phiên bản/lần lưu. Bản SUBMITTED khóa metadata/PDF; nhập lý do rồi **Rút về nháp** để sửa. Giảng viên mất phân công vẫn rút được nhưng không sửa/gửi lại. Nếu lỗi hoặc chưa rõ kết quả, bấm **Tải trạng thái duyệt** trước retry. Chủ thấy quyết định/lý do trong lịch sử và lọc cả năm trạng thái; CHANGES_REQUIRED có **Mở lại để chỉnh sửa**. APPROVED/REJECTED giữ nguyên; chọn **Tạo phiên bản kế tiếp** và xác nhận để copy metadata/môn sang nháp mới. PDF, nguồn/quyền và quyền tải được xác nhận lại. Bản công bố và ghi chú cũ giữ nguyên; **Lịch sử phiên bản** cho xem các lần duyệt trước.
 
 Admin mở **Kiểm duyệt học liệu** ở `/workspace/admin/moderation`, lọc yêu cầu và mở chi tiết. Chỉ PDF SAFE với snapshot còn khớp được mở ở tab mới. Chọn quyết định, nhập lý do, duyệt cần xác nhận đã kiểm tra nội dung/quyền; xác nhận inline để lưu. Duyệt đặt bản hiện hành, không tự mở tài liệu HIDDEN. Khi mất kết nối, **Tải trạng thái yêu cầu** trước retry.
 
@@ -116,11 +116,12 @@ Bản build local dùng env phát triển hiện có. Production yêu cầu HTTP
 
 CI dùng PostgreSQL/Redis ephemeral trên runner và chạy format, lint, typecheck, unit, build, integration và E2E. Không dùng trust auth của CI cho local/production.
 
+Admin mở **Quản lý học liệu** tại `/workspace/admin/materials` để tìm/lọc, bàn giao giáo trình giảng viên hoặc ẩn/khôi phục toàn tài liệu. Người nhận phải hoạt động, đã xác minh và có phân công ở mọi môn trong lịch sử. Bàn giao rút yêu cầu đang chờ về nháp nguyên tử; giữ bản công bố, tác giả và ghi chú. Ẩn chặn lượt đọc/tải mới ở mọi version; khôi phục cần bản hiện hành đã duyệt, PDF SAFE, quyền còn hiệu lực và xác nhận lý do ẩn đã giải quyết. Lỗi/xung đột giữ lý do, bắt tải trạng thái trước thử lại. Xem [vòng đời học liệu](docs/implementation/2026-10-12-material-lifecycle.md).
+
 ## Lộ trình còn lại
 
-1. Tạo phiên bản kế tiếp, bàn giao và quản lý ẩn/khôi phục.
-2. Thư viện cá nhân và nguồn sách được cấp quyền.
-3. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
+1. Thư viện cá nhân và nguồn sách được cấp quyền.
+2. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
 
 Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
 

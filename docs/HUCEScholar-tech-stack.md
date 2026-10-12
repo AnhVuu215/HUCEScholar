@@ -106,7 +106,7 @@ design/         prototype và nguồn thiết kế đã có
 3. Làm một luồng xuyên suốt: tài khoản được cấp → upload → kiểm tra file → gửi/duyệt → tìm → đọc → ghi chú → mở lại trên thiết bị khác. Sau đó mới mở rộng CRUD và nghiệp vụ phụ.
 4. Kiểm thử người dùng không đọc được ghi chú của người khác, không duyệt file CHECKING/FAILED, không thay phiên bản đã khóa và không đọc tài liệu bị ẩn. Kiểm tra phục hồi job, lưu ghi chú lỗi, xung đột revision, Range/zoom trên mobile và cài PWA qua HTTPS.
 
-Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; Đã có gửi/rút và admin kiểm duyệt/bản hiện hành; Đã có kho học liệu, reader PDF.js và tải theo quyền; Đã có ghi chú riêng theo trang và lưu tiến độ với kiểm soát revision; highlight chưa mở. S3 thật và deploy còn ở các mốc tiếp theo. Xem [ghi chú và tiến độ](implementation/2026-10-12-reader-notes-progress.md).
+Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; Đã có gửi/rút và admin kiểm duyệt/bản hiện hành; Đã có kho học liệu, reader PDF.js và tải theo quyền; Đã có ghi chú riêng theo trang và lưu tiến độ với kiểm soát revision; Đã có phiên bản kế tiếp, bàn giao và ẩn/khôi phục; revision tăng xuyên phiên bản, giữ ghi chú gắn PDF cũ. highlight chưa mở. S3 thật và deploy còn ở các mốc tiếp theo. Xem [ghi chú và tiến độ](implementation/2026-10-12-reader-notes-progress.md).
 
 ## 9. Nguồn kỹ thuật chính thức đã đối chiếu
 
