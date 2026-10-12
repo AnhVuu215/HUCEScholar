@@ -5,6 +5,7 @@ import {
   DraftFieldsDto,
   DraftListDto,
   MaterialListDto,
+  MaterialHistoryDto,
   SubmitMaterialDto,
   WithdrawMaterialDto,
   UpdateDraftDto,
@@ -19,6 +20,20 @@ export class MaterialsController {
     private readonly materials: MaterialsService,
     private readonly pdf: DraftPdfService,
   ) {}
+  @Post(':id/versions') nextVersion(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SubmitMaterialDto,
+  ) {
+    return this.materials.nextVersion(req.user, id, body);
+  }
+  @Get(':id/versions') versions(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query() query: DraftListDto,
+  ) {
+    return this.materials.versions(req.user, id, query);
+  }
   @Post(':id/reopen') reopen(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -43,7 +58,7 @@ export class MaterialsController {
   @Get(':id/requests') history(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
-    @Query() query: DraftListDto,
+    @Query() query: MaterialHistoryDto,
   ) {
     return this.materials.history(req.user, id, query);
   }
