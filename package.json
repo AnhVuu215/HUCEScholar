@@ -1,0 +1,37 @@
+{
+  "name": "hucescholar",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24.19.0 <25",
+    "pnpm": "11.25.0"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others --names api,web \"pnpm --filter @hucescholar/api dev\" \"pnpm --filter @hucescholar/web dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck && tsc -p tsconfig.tools.json",
+    "lint": "pnpm -r lint && eslint tests playwright.config.ts",
+    "test": "pnpm --filter @hucescholar/api test",
+    "test:e2e": "playwright test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check apps tests scripts infra .github *.json *.yaml *.mjs",
+    "infra:up": "docker compose --env-file infra/.env -f infra/compose.yaml up -d",
+    "infra:down": "docker compose --env-file infra/.env -f infra/compose.yaml down",
+    "setup:local": "node scripts/setup-local.mjs",
+    "test:setup": "node scripts/test-environment.mjs",
+    "test:integration": "pnpm --filter @hucescholar/api test:integration"
+  },
+  "devDependencies": {
+    "@next/eslint-plugin-next": "16.4.0",
+    "@playwright/test": "1.64.0",
+    "@types/node": "24.19.2",
+    "concurrently": "9.2.5",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.1"
+  }
+}

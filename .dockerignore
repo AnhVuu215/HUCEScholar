@@ -1,0 +1,17 @@
+.git
+.local
+.tools
+.superpowers
+.impeccable
+**/node_modules
+**/dist
+**/.next
+**/.env
+**/.env.*
+!**/.env.example
+**/generated
+docs
+design
+test-results
+playwright-report
+*.log

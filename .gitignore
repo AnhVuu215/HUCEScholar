@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !**/.env.example
+!**/.env.bootstrap.example
 *.pem
 *.key
 
@@ -13,6 +14,8 @@ dist/
 coverage/
 *.tsbuildinfo
 next-env.d.ts
+apps/api/src/generated/
+apps/web/public/pdfjs/
 
 # Local verification and tools
 .tools/
@@ -20,6 +23,7 @@ next-env.d.ts
 .local/
 test-results/
 playwright-report/
+.impeccable/review/
 **/_qa/
 **/__pycache__/
 *.log

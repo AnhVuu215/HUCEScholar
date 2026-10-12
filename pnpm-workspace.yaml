@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+saveExact: true
+engineStrict: true
+allowBuilds:
+  esbuild: true
+  sharp: true
+  '@nestjs/core': false
+  unrs-resolver: true
+  '@parcel/watcher': true
+  '@prisma/engines': true
+  prisma: true
+  argon2: true
+  msgpackr-extract: false

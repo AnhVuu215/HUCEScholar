@@ -1,0 +1,480 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+  moduleFormat    = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["hucescholar"]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model annotations {
+  id                BigInt            @id @default(autoincrement())
+  user_id           BigInt
+  version_id        BigInt
+  page_number       Int
+  kind              String            @db.VarChar(16)
+  content           String            @default("")
+  anchor            Json?
+  color             String            @default("#FFF59D") @db.VarChar(7)
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime          @default(now()) @db.Timestamptz(6)
+  revision          Int               @default(1)
+  users             users             @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+  document_versions document_versions @relation(fields: [version_id], references: [id], onUpdate: NoAction)
+
+  @@index([user_id, version_id, page_number], map: "ix_annotation_owner_page")
+  @@index([version_id], map: "ix_annotation_version")
+  @@schema("hucescholar")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model audit_events {
+  id          BigInt   @id @default(autoincrement())
+  actor_id    BigInt?
+  event_type  String   @db.VarChar(80)
+  entity_type String   @db.VarChar(80)
+  entity_id   BigInt
+  reason_code String?  @db.VarChar(80)
+  request_id  String?  @db.VarChar(100)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  users       users?   @relation(fields: [actor_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([entity_type, entity_id, created_at(sort: Desc)], map: "ix_audit_entity")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model auth_sessions {
+  id         BigInt    @id @default(autoincrement())
+  user_id    BigInt
+  token_hash String    @unique @db.VarChar(128)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at DateTime  @db.Timestamptz(6)
+  revoked_at DateTime? @db.Timestamptz(6)
+  users      users     @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([user_id], map: "ix_session_user", where: raw("(revoked_at IS NULL)"))
+  @@schema("hucescholar")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model book_courses {
+  book_id   BigInt
+  course_id BigInt
+  books     books   @relation(fields: [book_id], references: [id], onUpdate: NoAction)
+  courses   courses @relation(fields: [course_id], references: [id], onUpdate: NoAction)
+
+  @@id([book_id, course_id])
+  @@index([course_id, book_id], map: "ix_book_course_reverse")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model books {
+  id                    BigInt         @id @default(autoincrement())
+  title                 String         @db.VarChar(300)
+  authors               String         @default("")
+  publisher             String?        @db.VarChar(200)
+  publication_year      Int?           @db.SmallInt
+  edition               String?        @db.VarChar(80)
+  isbn                  String?        @db.VarChar(20)
+  source_provider       String         @db.VarChar(100)
+  external_id           String?        @db.VarChar(150)
+  source_url            String
+  metadata_rights_basis String
+  native_document_id    BigInt?
+  checked_at            DateTime?      @db.Timestamptz(6)
+  is_active             Boolean        @default(true)
+  managed_by            BigInt
+  created_at            DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime       @default(now()) @db.Timestamptz(6)
+  revision              Int            @default(1)
+  book_courses          book_courses[]
+  users                 users          @relation(fields: [managed_by], references: [id], onUpdate: NoAction)
+  documents             documents?     @relation(fields: [native_document_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  reports               reports[]
+
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model courses {
+  id                   BigInt                 @id @default(autoincrement())
+  faculty_id           BigInt
+  code                 String                 @unique @db.VarChar(30)
+  name                 String                 @db.VarChar(200)
+  is_active            Boolean                @default(true)
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  revision             Int                    @default(1)
+  book_courses         book_courses[]
+  faculties            faculties              @relation(fields: [faculty_id], references: [id], onUpdate: NoAction)
+  lecturer_assignments lecturer_assignments[]
+  program_courses      program_courses[]
+  version_courses      version_courses[]
+
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model document_versions {
+  id                                                           BigInt                @id @default(autoincrement())
+  document_id                                                  BigInt                @unique(map: "ux_one_working_version", where: raw("((review_status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'CHANGES_REQUIRED'::character varying])::text[]))"))
+  version_no                                                   Int
+  file_id                                                      BigInt?
+  created_by                                                   BigInt
+  title                                                        String                @db.VarChar(300)
+  authors                                                      String                @default("")
+  description                                                  String                @default("")
+  material_type                                                String                @db.VarChar(20)
+  publication_year                                             Int?                  @db.SmallInt
+  source_reference                                             String
+  rights_basis                                                 String
+  rights_valid_until                                           DateTime?             @db.Timestamptz(6)
+  download_allowed                                             Boolean               @default(false)
+  review_status                                                String                @default("DRAFT") @db.VarChar(20)
+  change_summary                                               String                @default("")
+  search_text                                                  String                @default("")
+  created_at                                                   DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                                                   DateTime              @default(now()) @db.Timestamptz(6)
+  revision                                                     Int                   @default(1)
+  annotations                                                  annotations[]
+  users                                                        users                 @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  documents_document_versions_document_idTodocuments           documents             @relation("document_versions_document_idTodocuments", fields: [document_id], references: [id], onUpdate: NoAction)
+  files                                                        files?                @relation(fields: [file_id], references: [id], onUpdate: NoAction)
+  /// Prisma cannot infer the composite FK uniqueness from documents.id; SQL remains authoritative.
+  documents_documents_id_current_version_idTodocument_versions documents[]           @relation("documents_id_current_version_idTodocument_versions")
+  publication_requests                                         publication_requests?
+  reading_progress                                             reading_progress[]
+  reports                                                      reports[]
+  version_courses                                              version_courses[]
+
+  @@unique([document_id, id])
+  @@unique([document_id, version_no])
+  @@index([file_id], map: "ix_version_file")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model documents {
+  id                                                                   BigInt                @id @default(autoincrement())
+  kind                                                                 String                @db.VarChar(20)
+  created_by                                                           BigInt
+  manager_id                                                           BigInt
+  visibility                                                           String                @default("VISIBLE") @db.VarChar(8)
+  current_version_id                                                   BigInt?               @unique
+  created_at                                                           DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                                                           DateTime              @default(now()) @db.Timestamptz(6)
+  revision                                                             Int                   @default(1)
+  books                                                                books[]
+  document_versions_document_versions_document_idTodocuments           document_versions?    @relation("document_versions_document_idTodocuments")
+  users_documents_created_byTousers                                    users                 @relation("documents_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  users_documents_manager_idTousers                                    users                 @relation("documents_manager_idTousers", fields: [manager_id], references: [id], onUpdate: NoAction)
+  document_versions_documents_id_current_version_idTodocument_versions document_versions?    @relation("documents_id_current_version_idTodocument_versions", fields: [id, current_version_id], references: [document_id, id], onUpdate: NoAction, map: "fk_current_version_same_document")
+  ownership_transfers                                                  ownership_transfers[]
+  reports                                                              reports[]
+  saved_documents                                                      saved_documents[]
+  visibility_events                                                    visibility_events[]
+
+  @@index([manager_id, kind], map: "ix_document_manager")
+  @@schema("hucescholar")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model faculties {
+  revision   Int        @default(1)
+  id         BigInt     @id @default(autoincrement())
+  code       String     @unique @db.VarChar(30)
+  name       String     @db.VarChar(200)
+  is_active  Boolean    @default(true)
+  created_at DateTime   @default(now()) @db.Timestamptz(6)
+  courses    courses[]
+  programs   programs[]
+
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model files {
+  id                BigInt              @id @default(autoincrement())
+  uploaded_by       BigInt
+  object_key        String              @unique @db.VarChar(500)
+  original_name     String              @db.VarChar(255)
+  mime_type         String              @default("application/pdf") @db.VarChar(80)
+  byte_size         BigInt
+  sha256            String              @db.Char(64)
+  scan_status       String              @default("CHECKING") @db.VarChar(8)
+  page_count        Int?
+  has_text_layer    Boolean?
+  checked_at        DateTime?           @db.Timestamptz(6)
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  document_versions document_versions[]
+  users             users               @relation(fields: [uploaded_by], references: [id], onUpdate: NoAction)
+
+  @@index([sha256], map: "ix_file_hash")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model lecturer_assignments {
+  id                                            BigInt    @id @default(autoincrement())
+  lecturer_id                                   BigInt
+  course_id                                     BigInt
+  assigned_by                                   BigInt
+  assigned_at                                   DateTime  @default(now()) @db.Timestamptz(6)
+  revoked_at                                    DateTime? @db.Timestamptz(6)
+  revoked_by                                    BigInt?
+  reason                                        String?
+  users_lecturer_assignments_assigned_byTousers users     @relation("lecturer_assignments_assigned_byTousers", fields: [assigned_by], references: [id], onUpdate: NoAction)
+  courses                                       courses   @relation(fields: [course_id], references: [id], onUpdate: NoAction)
+  users_lecturer_assignments_lecturer_idTousers users     @relation("lecturer_assignments_lecturer_idTousers", fields: [lecturer_id], references: [id], onUpdate: NoAction)
+  users_lecturer_assignments_revoked_byTousers  users?    @relation("lecturer_assignments_revoked_byTousers", fields: [revoked_by], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([lecturer_id, course_id], map: "ux_active_assignment", where: raw("(revoked_at IS NULL)"))
+  @@index([course_id], map: "ix_assignment_course", where: raw("(revoked_at IS NULL)"))
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ownership_transfers {
+  id                                            BigInt    @id @default(autoincrement())
+  document_id                                   BigInt
+  from_user_id                                  BigInt
+  to_user_id                                    BigInt
+  performed_by                                  BigInt
+  reason                                        String
+  created_at                                    DateTime  @default(now()) @db.Timestamptz(6)
+  documents                                     documents @relation(fields: [document_id], references: [id], onUpdate: NoAction)
+  users_ownership_transfers_from_user_idTousers users     @relation("ownership_transfers_from_user_idTousers", fields: [from_user_id], references: [id], onUpdate: NoAction)
+  users_ownership_transfers_performed_byTousers users     @relation("ownership_transfers_performed_byTousers", fields: [performed_by], references: [id], onUpdate: NoAction)
+  users_ownership_transfers_to_user_idTousers   users     @relation("ownership_transfers_to_user_idTousers", fields: [to_user_id], references: [id], onUpdate: NoAction)
+
+  @@index([document_id, created_at(sort: Desc)], map: "ix_transfer_document")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model password_reset_tokens {
+  id         BigInt    @id @default(autoincrement())
+  user_id    BigInt
+  token_hash String    @unique @db.VarChar(128)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at DateTime  @db.Timestamptz(6)
+  used_at    DateTime? @db.Timestamptz(6)
+  users      users     @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([user_id], map: "ix_reset_user", where: raw("(used_at IS NULL)"))
+  @@schema("hucescholar")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model program_courses {
+  program_id BigInt
+  course_id  BigInt
+  courses    courses  @relation(fields: [course_id], references: [id], onUpdate: NoAction)
+  programs   programs @relation(fields: [program_id], references: [id], onUpdate: NoAction)
+
+  @@id([program_id, course_id])
+  @@index([course_id, program_id], map: "ix_program_course_reverse")
+  @@schema("hucescholar")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model programs {
+  revision        Int               @default(1)
+  id              BigInt            @id @default(autoincrement())
+  faculty_id      BigInt
+  code            String            @unique @db.VarChar(30)
+  name            String            @db.VarChar(200)
+  is_active       Boolean           @default(true)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  program_courses program_courses[]
+  faculties       faculties         @relation(fields: [faculty_id], references: [id], onUpdate: NoAction)
+
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model publication_requests {
+  id                                             BigInt            @id @default(autoincrement())
+  version_id                                     BigInt            @unique(map: "ux_one_pending_request", where: raw("((status)::text = 'PENDING'::text)"))
+  submitted_by                                   BigInt
+  submitted_revision                             Int
+  submitted_at                                   DateTime          @default(now()) @db.Timestamptz(6)
+  status                                         String            @default("PENDING") @db.VarChar(20)
+  resolved_by                                    BigInt?
+  resolved_at                                    DateTime?         @db.Timestamptz(6)
+  reason                                         String?
+  revision                                       Int               @default(1)
+  users_publication_requests_resolved_byTousers  users?            @relation("publication_requests_resolved_byTousers", fields: [resolved_by], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  users_publication_requests_submitted_byTousers users             @relation("publication_requests_submitted_byTousers", fields: [submitted_by], references: [id], onUpdate: NoAction)
+  document_versions                              document_versions @relation(fields: [version_id], references: [id], onUpdate: NoAction)
+
+  @@index([status, submitted_at], map: "ix_request_queue")
+  @@index([submitted_by, submitted_at(sort: Desc)], map: "ix_request_submitter")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model reading_progress {
+  user_id           BigInt
+  version_id        BigInt
+  page_number       Int
+  page_offset       Decimal           @default(0) @db.Decimal(6, 5)
+  updated_at        DateTime          @default(now()) @db.Timestamptz(6)
+  revision          Int               @default(1)
+  users             users             @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+  document_versions document_versions @relation(fields: [version_id], references: [id], onUpdate: NoAction)
+
+  @@id([user_id, version_id])
+  @@index([version_id], map: "ix_progress_version")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model report_actions {
+  id                  BigInt             @id @default(autoincrement())
+  report_id           BigInt
+  performed_by        BigInt
+  action              String             @db.VarChar(20)
+  result              String
+  visibility_event_id BigInt?
+  created_at          DateTime           @default(now()) @db.Timestamptz(6)
+  users               users              @relation(fields: [performed_by], references: [id], onUpdate: NoAction)
+  reports             reports            @relation(fields: [report_id], references: [id], onUpdate: NoAction)
+  visibility_events   visibility_events? @relation(fields: [visibility_event_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([report_id, created_at], map: "ix_report_action")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model reports {
+  id                BigInt             @id @default(autoincrement())
+  reported_by       BigInt
+  document_id       BigInt?
+  version_id        BigInt?
+  book_id           BigInt?
+  category          String             @db.VarChar(20)
+  description       String
+  status            String             @default("OPEN") @db.VarChar(12)
+  created_at        DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime           @default(now()) @db.Timestamptz(6)
+  revision          Int                @default(1)
+  report_actions    report_actions[]
+  books             books?             @relation(fields: [book_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  documents         documents?         @relation(fields: [document_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  document_versions document_versions? @relation(fields: [document_id, version_id], references: [document_id, id], onDelete: Restrict, onUpdate: NoAction)
+  users             users              @relation(fields: [reported_by], references: [id], onUpdate: NoAction)
+
+  @@index([book_id], map: "ix_report_book")
+  @@index([document_id, version_id], map: "ix_report_document")
+  @@index([reported_by, created_at(sort: Desc)], map: "ix_report_owner")
+  @@index([status, created_at], map: "ix_report_queue")
+  @@schema("hucescholar")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model saved_documents {
+  user_id     BigInt
+  document_id BigInt
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  documents   documents @relation(fields: [document_id], references: [id], onUpdate: NoAction)
+  users       users     @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@id([user_id, document_id])
+  @@index([document_id], map: "ix_saved_document")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model users {
+  id                                                            BigInt                  @id @default(autoincrement())
+  email                                                         String                  @unique @db.VarChar(254)
+  display_name                                                  String                  @db.VarChar(150)
+  password_hash                                                 String
+  role                                                          String                  @db.VarChar(12)
+  status                                                        String                  @default("PENDING") @db.VarChar(12)
+  verified_at                                                   DateTime?               @db.Timestamptz(6)
+  verified_by                                                   BigInt?
+  created_at                                                    DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at                                                    DateTime                @default(now()) @db.Timestamptz(6)
+  revision                                                      Int                     @default(1)
+  annotations                                                   annotations[]
+  audit_events                                                  audit_events[]
+  auth_sessions                                                 auth_sessions[]
+  books                                                         books[]
+  document_versions                                             document_versions[]
+  documents_documents_created_byTousers                         documents[]             @relation("documents_created_byTousers")
+  documents_documents_manager_idTousers                         documents[]             @relation("documents_manager_idTousers")
+  files                                                         files[]
+  lecturer_assignments_lecturer_assignments_assigned_byTousers  lecturer_assignments[]  @relation("lecturer_assignments_assigned_byTousers")
+  lecturer_assignments_lecturer_assignments_lecturer_idTousers  lecturer_assignments[]  @relation("lecturer_assignments_lecturer_idTousers")
+  lecturer_assignments_lecturer_assignments_revoked_byTousers   lecturer_assignments[]  @relation("lecturer_assignments_revoked_byTousers")
+  ownership_transfers_ownership_transfers_from_user_idTousers   ownership_transfers[]   @relation("ownership_transfers_from_user_idTousers")
+  ownership_transfers_ownership_transfers_performed_byTousers   ownership_transfers[]   @relation("ownership_transfers_performed_byTousers")
+  ownership_transfers_ownership_transfers_to_user_idTousers     ownership_transfers[]   @relation("ownership_transfers_to_user_idTousers")
+  password_reset_tokens                                         password_reset_tokens[]
+  publication_requests_publication_requests_resolved_byTousers  publication_requests[]  @relation("publication_requests_resolved_byTousers")
+  publication_requests_publication_requests_submitted_byTousers publication_requests[]  @relation("publication_requests_submitted_byTousers")
+  reading_progress                                              reading_progress[]
+  report_actions                                                report_actions[]
+  reports                                                       reports[]
+  saved_documents                                               saved_documents[]
+  users                                                         users?                  @relation("usersTousers", fields: [verified_by], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  other_users                                                   users[]                 @relation("usersTousers")
+  visibility_events                                             visibility_events[]
+
+  @@schema("hucescholar")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model version_courses {
+  version_id        BigInt
+  course_id         BigInt
+  courses           courses           @relation(fields: [course_id], references: [id], onUpdate: NoAction)
+  document_versions document_versions @relation(fields: [version_id], references: [id], onUpdate: NoAction)
+
+  @@id([version_id, course_id])
+  @@index([course_id, version_id], map: "ix_version_course_reverse")
+  @@schema("hucescholar")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model visibility_events {
+  id              BigInt           @id @default(autoincrement())
+  document_id     BigInt
+  performed_by    BigInt
+  from_visibility String           @db.VarChar(8)
+  to_visibility   String           @db.VarChar(8)
+  reason          String
+  created_at      DateTime         @default(now()) @db.Timestamptz(6)
+  report_actions  report_actions[]
+  documents       documents        @relation(fields: [document_id], references: [id], onUpdate: NoAction)
+  users           users            @relation(fields: [performed_by], references: [id], onUpdate: NoAction)
+
+  @@index([document_id, created_at(sort: Desc)], map: "ix_visibility_document")
+  @@schema("hucescholar")
+}
