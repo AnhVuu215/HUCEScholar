@@ -208,6 +208,32 @@ button:disabled {
 .account-details dd {
   overflow-wrap: anywhere;
 }
+.moderation-metadata {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-block: 28px;
+}
+.moderation-metadata dt {
+  font-weight: 600;
+  margin-top: 12px;
+}
+.moderation-metadata dd {
+  margin: 0;
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.moderation-detail h3 {
+  overflow-wrap: anywhere;
+}
+.moderation-confirm-rights {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-block: 16px;
+}
 .account-heading .intro {
   overflow-wrap: anywhere;
 }

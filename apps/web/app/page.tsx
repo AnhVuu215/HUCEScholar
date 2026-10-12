@@ -334,8 +334,8 @@ export default function HomePage() {
               <summary>Đã đọc và ghi chú trên PDF được chưa?</summary>
               <p>
                 Trình đọc PDF và ghi chú riêng đang được phát triển. Hiện bạn có thể lưu bản nháp,
-                đính kèm PDF và theo dõi kết quả kiểm tra. Tài liệu chưa được công bố hoặc mở tải
-                xuống.
+                đính kèm PDF, gửi duyệt và theo dõi quyết định của admin. Kho học liệu, trình đọc và
+                tải file gốc chưa được mở.
               </p>
             </details>
             <details>

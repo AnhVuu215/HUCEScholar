@@ -36,7 +36,7 @@ const guides = {
     ],
     [
       'Phân công giảng viên',
-      'Gắn giảng viên với môn học phụ trách. Chức năng kiểm duyệt và công bố sẽ được bổ sung sau.',
+      'Gắn giảng viên với môn học phụ trách. Mở Kiểm duyệt học liệu để xem nội dung, nguồn/quyền và ghi quyết định.',
     ],
   ],
 } as const;

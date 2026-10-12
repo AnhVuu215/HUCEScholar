@@ -11,7 +11,7 @@ test('web reaches the real API through its own origin', async ({ page, request }
   await expect(page.getByRole('status')).toContainText('API đang hoạt động');
   await expect(
     page.getByText(
-      'Đã có tài khoản, danh mục, phân công và bản nháp học liệu. Chưa có PDF được công bố.',
+      'Đã có tài khoản, danh mục, phân công, PDF riêng tư và kiểm duyệt. Kho học liệu và reader chưa được mở.',
     ),
   ).toBeVisible();
 });

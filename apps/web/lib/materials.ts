@@ -187,7 +187,7 @@ export async function publicationHistory(
 }
 export async function changePublication(
   current: MaterialDraft,
-  action: 'submit' | 'withdraw',
+  action: 'submit' | 'withdraw' | 'reopen',
   reason?: string,
 ) {
   return readItem(

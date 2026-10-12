@@ -99,7 +99,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
         />
       )}
       <section className="users-directory" aria-labelledby="draft-list-title">
-        <h2 id="draft-list-title">Bản nháp và yêu cầu duyệt</h2>
+        <h2 id="draft-list-title">Học liệu và yêu cầu duyệt</h2>
         <form className="users-filters draft-filters" onSubmit={filter}>
           <div className="form-field">
             <label htmlFor="draft-search">Tìm bản nháp</label>
@@ -119,9 +119,12 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
               value={status}
               onChange={(event) => setStatus(event.target.value)}
             >
-              <option value="">Nháp và chờ duyệt</option>
+              <option value="">Tất cả trạng thái</option>
               <option value="DRAFT">Bản nháp</option>
               <option value="SUBMITTED">Chờ duyệt</option>
+              <option value="CHANGES_REQUIRED">Yêu cầu sửa</option>
+              <option value="APPROVED">Đã duyệt</option>
+              <option value="REJECTED">Từ chối</option>
             </select>
           </div>
           <button className="secondary-button">Tìm kiếm</button>

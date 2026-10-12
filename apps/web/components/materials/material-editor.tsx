@@ -231,9 +231,11 @@ function DraftForm({
         >
           {current?.editBlock === 'ASSIGNMENT_REQUIRED'
             ? 'Bạn không còn phân công hợp lệ ở tất cả môn liên quan. Metadata được giữ lại; cần quản trị viên kiểm tra phân công trước khi sửa.'
-            : current?.reviewStatus === 'SUBMITTED'
-              ? 'Phiên bản đang chờ duyệt. Rút yêu cầu về nháp trước khi sửa thông tin hoặc thay PDF.'
-              : 'Phiên bản không còn ở trạng thái nháp, không thể sửa tại đây.'}
+            : current?.reviewStatus === 'CHANGES_REQUIRED'
+              ? 'Admin đã yêu cầu sửa. Xem lý do ở lịch sử và chọn Mở lại để chỉnh sửa.'
+              : current?.reviewStatus === 'SUBMITTED'
+                ? 'Phiên bản đang chờ duyệt. Rút yêu cầu về nháp trước khi sửa thông tin hoặc thay PDF.'
+                : 'Phiên bản không còn ở trạng thái nháp, không thể sửa tại đây.'}
         </p>
       )}
       {error && (

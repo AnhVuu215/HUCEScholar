@@ -55,7 +55,7 @@ export function PublicationActions({
     current.editable &&
     current.fileState === 'SAFE' &&
     current.courses.every((c) => c.active);
-  async function run(action: 'submit' | 'withdraw' | 'refresh') {
+  async function run(action: 'submit' | 'withdraw' | 'reopen' | 'refresh') {
     if (locked || (action !== 'refresh' && uncertain)) return;
     setPending(true);
     busy(true);
@@ -84,7 +84,9 @@ export function PublicationActions({
           ? 'Đã gửi yêu cầu duyệt. Học liệu chưa được công bố.'
           : action === 'withdraw'
             ? 'Đã rút về bản nháp. Bạn có thể chỉnh sửa khi còn quyền biên soạn.'
-            : 'Đã tải trạng thái hiện hành. Kiểm tra trước khi tiếp tục.',
+            : action === 'reopen'
+              ? 'Đã mở lại bản nháp để chỉnh sửa.'
+              : 'Đã tải trạng thái hiện hành. Kiểm tra trước khi tiếp tục.',
       );
       requestAnimationFrame(() => feedback.current?.focus());
     } catch (failure) {
@@ -122,8 +124,9 @@ export function PublicationActions({
         </strong>
       </p>
       <p className="field-hint">
-        Gửi duyệt khóa thông tin và PDF của phiên bản này. Rút về nháp trước khi sửa. Chức năng
-        admin duyệt và công bố sẽ được mở ở bước tiếp theo.
+        Gửi duyệt khóa thông tin và PDF của phiên bản này. Rút về nháp trước khi sửa. Chức năng kiểm
+        duyệt do admin quyết định; duyệt không tự mở tài liệu đang ẩn. Kho học liệu và reader sẽ
+        được bổ sung sau.
       </p>
       {(error || uncertain) && (
         <p role="alert" className="form-error" ref={feedback} tabIndex={-1}>
@@ -140,6 +143,26 @@ export function PublicationActions({
       {blocked && (
         <p className="field-hint">
           Lưu thay đổi thông tin và tải hoặc bỏ PDF đã chọn trước khi thao tác duyệt.
+        </p>
+      )}
+      {current.reviewStatus === 'CHANGES_REQUIRED' && (
+        <>
+          <p className="field-hint">
+            Xem lý do trong lịch sử. Mở lại bản nháp trước khi sửa rồi gửi duyệt lại.
+          </p>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={locked || uncertain}
+            onClick={() => void run('reopen')}
+          >
+            Mở lại để chỉnh sửa
+          </button>
+        </>
+      )}
+      {['APPROVED', 'REJECTED'].includes(current.reviewStatus) && (
+        <p className="field-hint">
+          Phiên bản đã kết thúc và được giữ nguyên. Tạo phiên bản kế tiếp sẽ được bổ sung sau.
         </p>
       )}
       {current.reviewStatus === 'DRAFT' && (

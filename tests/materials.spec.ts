@@ -99,6 +99,206 @@ async function markSyntheticSafe(id: string) {
     await db.end();
   }
 }
+async function logoutForTest(page: Page) {
+  const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+  expect(
+    (
+      await page.request.post('/api/v1/auth/logout', {
+        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+      })
+    ).status(),
+  ).toBe(204);
+}
+async function adminReviewLogin(page: Page, code: string) {
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: true }).fill('e2e-drafts-admin@example.test');
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  await page.getByRole('link', { name: 'Kiểm duyệt học liệu', exact: true }).click();
+  await page.getByLabel('Tìm yêu cầu', { exact: true }).fill(code);
+  await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
+  await page
+    .getByRole('button', { name: `Xem yêu cầu Học liệu minh họa ${code}`, exact: true })
+    .click();
+}
+async function submittedForReview(page: Page, role: 'student' | 'lecturer') {
+  const code = await seed(page, role);
+  await login(page, role);
+  const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+  const headers = { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf };
+  const created = await page.request.post('/api/v1/material-drafts', {
+    headers,
+    data: {
+      title: `Học liệu minh họa ${code}`,
+      authors: 'Tác giả kiểm thử',
+      description: 'Nội dung synthetic cho kiểm thử kiểm duyệt.',
+      materialType: 'EXERCISE',
+      sourceReference: 'Tự biên soạn — nguồn minh họa',
+      rightsBasis: 'Tác giả cho phép — căn cứ minh họa',
+      downloadAllowed: false,
+      courseIds: [
+        (await (await page.request.get('/api/v1/material-drafts/courses?search=' + code)).json())
+          .items[0].id,
+      ],
+    },
+  });
+  expect(created.status()).toBe(201);
+  const item = (await created.json()).item;
+  expect(
+    (
+      await page.request.post(`/api/v1/material-drafts/${item.id}/pdf`, {
+        headers: {
+          ...headers,
+          'Content-Type': 'application/pdf',
+          'X-File-Name': 'synthetic-review.pdf',
+          'If-Match': '"1"',
+        },
+        data: Buffer.from('%PDF-1.7\nSynthetic review fixture'),
+      })
+    ).status(),
+  ).toBe(201);
+  await markSyntheticSafe(item.id);
+  expect(
+    (
+      await page.request.post(`/api/v1/material-drafts/${item.id}/submit`, {
+        headers,
+        data: { revision: 2 },
+      })
+    ).status(),
+  ).toBe(201);
+  await logoutForTest(page);
+  return { code, id: item.id };
+}
+test('admin approves with rights confirmation and recovers a committed decision after response loss', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const { code, id } = await submittedForReview(page, 'student');
+  await adminReviewLogin(page, code);
+  await expect(page.getByRole('heading', { name: 'Chi tiết yêu cầu', exact: true })).toBeVisible();
+  const preview = page.getByRole('link', { name: /Mở PDF để kiểm duyệt/ });
+  const previewPath = (await preview.getAttribute('href'))!;
+  const directPreview = await page.request.get('http://127.0.0.1:3101' + previewPath);
+  expect(directPreview.status()).toBe(200);
+  expect((await directPreview.body()).length).toBe(
+    Number(directPreview.headers()['content-length']),
+  );
+  expect((await page.request.get(previewPath)).status()).toBe(200);
+  await page.getByLabel('Quyết định', { exact: true }).selectOption('APPROVED');
+  await page
+    .getByLabel('Lý do quyết định', { exact: true })
+    .fill('Đã xem PDF, nguồn và căn cứ minh họa');
+  await expect(
+    page.getByRole('button', { name: 'Xác nhận quyết định', exact: true }),
+  ).toBeDisabled();
+  await page.getByLabel('Đã kiểm tra nội dung và căn cứ quyền sử dụng', { exact: true }).check();
+  if (process.env.CAPTURE_MODERATION_UI === '1') {
+    mkdirSync('.impeccable/review/moderation', { recursive: true });
+    for (const [device, width, height] of [
+      ['desktop', 1440, 1000],
+      ['tablet', 768, 1024],
+      ['mobile', 360, 800],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({
+        path: `.impeccable/review/moderation/${device}-pending.png`,
+        fullPage: true,
+      });
+    }
+  }
+  await page.route('**/api/v1/admin/publication-requests/*/decision', async (route) => {
+    await route.fetch();
+    await route.abort('failed');
+  });
+  await page.getByRole('button', { name: 'Xác nhận quyết định', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu quyết định', exact: true }).click();
+  await expect(page.locator('.moderation-detail [role="alert"]')).toContainText(
+    'Tải trạng thái yêu cầu',
+  );
+  await expect(page.getByLabel('Lý do quyết định', { exact: true })).toHaveValue(
+    'Đã xem PDF, nguồn và căn cứ minh họa',
+  );
+  await expect(page.getByRole('button', { name: 'Lưu quyết định', exact: true })).toBeDisabled();
+  if (process.env.CAPTURE_MODERATION_UI === '1')
+    for (const [device, width, height] of [
+      ['desktop', 1440, 1000],
+      ['tablet', 768, 1024],
+      ['mobile', 360, 800],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({
+        path: `.impeccable/review/moderation/${device}-retry.png`,
+        fullPage: true,
+      });
+    }
+  await page.unroute('**/api/v1/admin/publication-requests/*/decision');
+  await page.getByRole('button', { name: 'Tải trạng thái yêu cầu', exact: true }).click();
+  await expect(page.locator('.moderation-detail')).toContainText('Đã duyệt');
+  await expect(page.locator('.moderation-detail')).toContainText('Bản hiện hành');
+  await logoutForTest(page);
+  await login(page, 'student');
+  await page.getByLabel('Trạng thái duyệt', { exact: true }).selectOption('APPROVED');
+  await page.getByLabel('Tìm bản nháp', { exact: true }).fill(code);
+  await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
+  await page
+    .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
+    .click();
+  await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
+  await expect(page.locator('.publication-history')).toContainText('Đã duyệt');
+  expect(
+    (await (await page.request.get(`/api/v1/material-drafts/${id}`)).json()).item.reviewStatus,
+  ).toBe('APPROVED');
+});
+test('lecturer sees admin change request, reopens the draft and submits again', async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const { code } = await submittedForReview(page, 'lecturer');
+  await adminReviewLogin(page, code);
+  await page.getByLabel('Quyết định', { exact: true }).selectOption('CHANGES_REQUIRED');
+  await page
+    .getByLabel('Lý do quyết định', { exact: true })
+    .fill('Bổ sung dẫn chứng quyền sử dụng');
+  await page.goBack();
+  await expect(page).toHaveURL('/workspace/admin');
+  await page.goForward();
+  await page.getByLabel('Tìm yêu cầu', { exact: true }).fill(code);
+  await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
+  await page
+    .getByRole('button', { name: `Xem yêu cầu Học liệu minh họa ${code}`, exact: true })
+    .click();
+  await expect(page.getByLabel('Lý do quyết định', { exact: true })).toHaveValue(
+    'Bổ sung dẫn chứng quyền sử dụng',
+  );
+  await expect(page.getByLabel('Quyết định', { exact: true })).toHaveValue('CHANGES_REQUIRED');
+  await page.getByRole('button', { name: 'Xác nhận quyết định', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu quyết định', exact: true }).click();
+  await expect(page.locator('.moderation-detail')).toContainText('Đã lưu quyết định');
+  await logoutForTest(page);
+  await login(page, 'lecturer');
+  await page.getByLabel('Trạng thái duyệt', { exact: true }).selectOption('CHANGES_REQUIRED');
+  await page.getByLabel('Tìm bản nháp', { exact: true }).fill(code);
+  await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
+  await page
+    .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
+    .click();
+  await expect(page.locator('.publication-history')).toContainText(
+    'Bổ sung dẫn chứng quyền sử dụng',
+  );
+  await page.getByRole('button', { name: 'Mở lại để chỉnh sửa', exact: true }).click();
+  await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
+  await expect(page.locator('.publication-history')).toContainText('Chờ duyệt');
+});
 for (const role of ['student', 'lecturer'] as const)
   test(`${role} can submit and withdraw with a retained reason and history`, async ({ page }) => {
     const code = await seed(page, role);
