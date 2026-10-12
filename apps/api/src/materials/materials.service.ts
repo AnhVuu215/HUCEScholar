@@ -8,7 +8,14 @@ import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
 import { academicId } from '../academic/academic.service';
 import { Prisma } from '../generated/prisma/client';
-import { DraftFieldsDto, DraftListDto, UpdateDraftDto } from './materials.dto';
+import {
+  DraftFieldsDto,
+  DraftListDto,
+  MaterialListDto,
+  SubmitMaterialDto,
+  WithdrawMaterialDto,
+  UpdateDraftDto,
+} from './materials.dto';
 
 const selection = {
   id: true,
@@ -23,6 +30,8 @@ const selection = {
   download_allowed: true,
   review_status: true,
   revision: true,
+  file_id: true,
+  rights_valid_until: true,
   updated_at: true,
   files: {
     select: {
@@ -192,9 +201,9 @@ export class MaterialsService {
       { isolationLevel: 'RepeatableRead' },
     );
   }
-  async list(actor: Profile, query: DraftListDto) {
+  async list(actor: Profile, query: MaterialListDto) {
     const where: Prisma.document_versionsWhereInput = {
-      review_status: 'DRAFT',
+      review_status: query.reviewStatus ?? { in: ['DRAFT', 'SUBMITTED'] },
       documents_document_versions_document_idTodocuments: this.owner(actor),
       ...(query.search ? { title: { contains: query.search, mode: 'insensitive' } } : {}),
     };
@@ -313,19 +322,136 @@ export class MaterialsService {
     });
   }
   async lockDraft(tx: Prisma.TransactionClient, actor: Profile, rawId: string, revision: number) {
-    const id = academicId(rawId);
-    const actorId = await this.begin(tx, actor);
-    await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${id} AND manager_id=${actorId} FOR UPDATE`;
-    const row = await this.read(tx, actor, id);
-    await tx.$queryRaw`SELECT id FROM hucescholar.document_versions WHERE id=${row.id} FOR UPDATE`;
-    if (row.revision !== revision)
-      throw conflict('STALE_REVISION', 'Bản nháp đã thay đổi. Mở lại trước khi tải PDF lên.');
+    const result = await this.lockOwned(tx, actor, rawId, revision);
+    const { row } = result;
     if (row.review_status !== 'DRAFT') throw conflict('NOT_DRAFT', 'Chỉ thay PDF của bản nháp.');
     await this.checkCourses(
       tx,
       actor,
       row.version_courses.map((c) => c.courses.id),
     );
+    return result;
+  }
+  private async lockOwned(
+    tx: Prisma.TransactionClient,
+    actor: Profile,
+    rawId: string,
+    revision: number,
+  ) {
+    const id = academicId(rawId);
+    const actorId = await this.begin(tx, actor);
+    await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${id} AND manager_id=${actorId} FOR UPDATE`;
+    const row = await this.read(tx, actor, id);
+    await tx.$queryRaw`SELECT id FROM hucescholar.document_versions WHERE id=${row.id} FOR UPDATE`;
+    if (row.revision !== revision)
+      throw conflict(
+        'STALE_REVISION',
+        'Học liệu đã thay đổi. Tải trạng thái mới trước khi tiếp tục.',
+      );
     return { actorId, row, id };
+  }
+  async submit(actor: Profile, rawId: string, body: SubmitMaterialDto) {
+    return this.db.$transaction(async (tx) => {
+      const { actorId, row, id } = await this.lockOwned(tx, actor, rawId, body.revision);
+      if (row.review_status !== 'DRAFT') throw conflict('NOT_DRAFT', 'Chỉ gửi bản nháp.');
+      if (
+        !row.title.trim() ||
+        !row.source_reference.trim() ||
+        !row.rights_basis.trim() ||
+        !row.version_courses.length
+      )
+        throw conflict(
+          'METADATA_REQUIRED',
+          'Bổ sung thông tin, nguồn, quyền và môn trước khi gửi.',
+        );
+      if (row.rights_valid_until && row.rights_valid_until <= new Date())
+        throw conflict('RIGHTS_EXPIRED', 'Căn cứ quyền sử dụng đã hết hạn.');
+      await this.checkCourses(
+        tx,
+        actor,
+        row.version_courses.map((c) => c.courses.id),
+      );
+      if (row.file_id)
+        await tx.$queryRaw`SELECT id FROM hucescholar.files WHERE id=${row.file_id} FOR SHARE`;
+      const file = row.file_id ? await tx.files.findUnique({ where: { id: row.file_id } }) : null;
+      if (!file || file.scan_status !== 'SAFE')
+        throw conflict('FILE_NOT_SAFE', 'PDF phải qua kiểm tra kỹ thuật trước khi gửi.');
+      const revision = row.revision + 1;
+      await tx.document_versions.update({
+        where: { id: row.id },
+        data: { review_status: 'SUBMITTED', revision, updated_at: new Date() },
+      });
+      await tx.publication_requests.create({
+        data: { version_id: row.id, submitted_by: actorId, submitted_revision: revision },
+      });
+      await tx.documents.update({
+        where: { id },
+        data: { revision: { increment: 1 }, updated_at: new Date() },
+      });
+      await this.audit(tx, actorId, id, 'MATERIAL_SUBMITTED');
+      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+    });
+  }
+  async withdraw(actor: Profile, rawId: string, body: WithdrawMaterialDto) {
+    return this.db.$transaction(async (tx) => {
+      const { actorId, row, id } = await this.lockOwned(tx, actor, rawId, body.revision);
+      if (row.review_status !== 'SUBMITTED')
+        throw conflict('NOT_SUBMITTED', 'Học liệu không còn chờ duyệt.');
+      await tx.$queryRaw`SELECT id FROM hucescholar.publication_requests WHERE version_id=${row.id} AND status='PENDING' FOR UPDATE`;
+      const pending = await tx.publication_requests.findFirst({
+        where: { version_id: row.id, status: 'PENDING' },
+      });
+      if (!pending || pending.submitted_revision !== row.revision)
+        throw conflict('REQUEST_CHANGED', 'Yêu cầu duyệt đã thay đổi. Tải trạng thái mới.');
+      await tx.publication_requests.update({
+        where: { id: pending.id },
+        data: {
+          status: 'WITHDRAWN',
+          resolved_by: actorId,
+          resolved_at: new Date(),
+          reason: body.reason,
+          revision: { increment: 1 },
+        },
+      });
+      await tx.document_versions.update({
+        where: { id: row.id },
+        data: { review_status: 'DRAFT', revision: { increment: 1 }, updated_at: new Date() },
+      });
+      await tx.documents.update({
+        where: { id },
+        data: { revision: { increment: 1 }, updated_at: new Date() },
+      });
+      await this.audit(tx, actorId, id, 'MATERIAL_WITHDRAWN');
+      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+    });
+  }
+  async history(actor: Profile, rawId: string, query: DraftListDto) {
+    const id = academicId(rawId);
+    return this.db.$transaction(
+      async (tx) => {
+        const row = await this.read(tx, actor, id);
+        const where = { version_id: row.id };
+        const items = await tx.publication_requests.findMany({
+          where,
+          orderBy: [{ submitted_at: 'desc' }, { id: 'desc' }],
+          skip: (query.page - 1) * query.limit,
+          take: query.limit,
+        });
+        return {
+          items: items.map((r) => ({
+            id: String(r.id),
+            submittedRevision: r.submitted_revision,
+            submittedAt: r.submitted_at.toISOString(),
+            status: r.status,
+            resolvedAt: r.resolved_at?.toISOString() ?? null,
+            reason: r.reason,
+          })),
+          total: await tx.publication_requests.count({ where }),
+          page: query.page,
+          limit: query.limit,
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
 }

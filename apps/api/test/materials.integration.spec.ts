@@ -109,6 +109,14 @@ describe('private material drafts', () => {
     if (db) {
       const ids = Object.values(users);
       await db.query(
+        'DELETE FROM hucescholar.publication_requests WHERE submitted_by=ANY($1::bigint[])',
+        [ids],
+      );
+      await db.query(
+        "UPDATE hucescholar.document_versions SET review_status='DRAFT' WHERE created_by=ANY($1::bigint[]) AND review_status='SUBMITTED'",
+        [ids],
+      );
+      await db.query(
         'DELETE FROM hucescholar.version_courses WHERE version_id IN (SELECT id FROM hucescholar.document_versions WHERE created_by=ANY($1::bigint[]))',
         [ids],
       );
@@ -523,8 +531,237 @@ describe('private material drafts', () => {
     expect(list.body).toMatchObject({ total: 1, page: 1, limit: 1 });
     expect(list.body.items[0].id).toBe(item.id);
   });
+  async function publication(name: string, id: string, action: string, data: object) {
+    const agent = agents[name];
+    const csrf = (await agent.get('/api/v1/auth/csrf')).body.csrfToken;
+    return agent
+      .post(`/api/v1/material-drafts/${id}/${action}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send(data);
+  }
+  async function safeDraft(name = 'student') {
+    const item = await create(name);
+    const result = await upload(name, item.id, item.revision);
+    expect(result.status).toBe(201);
+    // Synthetic scanner fixture only; real ClamAV is covered by its opt-in suite.
+    await db.query(
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=1,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE document_id=$1)",
+      [item.id],
+    );
+    return result.body.item;
+  }
+  it.each(['student', 'lecturer'])(
+    '%s submits a frozen snapshot, withdraws with history and submits again',
+    async (name) => {
+      const item = await safeDraft(name);
+      const result = await publication(name, item.id, 'submit', { revision: 2 });
+      expect(result.status).toBe(201);
+      expect(result.body.item).toMatchObject({
+        reviewStatus: 'SUBMITTED',
+        revision: 3,
+        editable: false,
+      });
+      const pending = (
+        await db.query('SELECT * FROM hucescholar.publication_requests WHERE version_id=$1', [
+          item.versionId,
+        ])
+      ).rows[0];
+      expect(pending).toMatchObject({
+        status: 'PENDING',
+        submitted_by: users[name],
+        submitted_revision: 3,
+      });
+      expect(
+        (await agents[name].get('/api/v1/material-drafts?reviewStatus=SUBMITTED')).body.items.map(
+          (v: { id: string }) => v.id,
+        ),
+      ).toContain(item.id);
+      expect((await write(name, { ...body(), revision: 3 }, item.id)).status).toBe(409);
+      expect((await upload(name, item.id, 3)).status).toBe(409);
+      const withdrawn = await publication(name, item.id, 'withdraw', {
+        revision: 3,
+        reason: '  Cần bổ sung nguồn  ',
+      });
+      expect(withdrawn.status).toBe(201);
+      expect(withdrawn.body.item).toMatchObject({
+        reviewStatus: 'DRAFT',
+        revision: 4,
+        editable: true,
+      });
+      expect((await publication(name, item.id, 'submit', { revision: 4 })).status).toBe(201);
+      const history = await agents[name]
+        .get(`/api/v1/material-drafts/${item.id}/requests?limit=1&page=2`)
+        .expect(200);
+      expect(history.body).toMatchObject({ total: 2, page: 2, limit: 1 });
+      expect(history.body.items[0]).toMatchObject({
+        status: 'WITHDRAWN',
+        reason: 'Cần bổ sung nguồn',
+        submittedRevision: 3,
+      });
+      expect(JSON.stringify(history.body)).not.toMatch(/object_key|sha256|password/);
+      expect(
+        (
+          await db.query('SELECT current_version_id FROM hucescholar.documents WHERE id=$1', [
+            item.id,
+          ])
+        ).rows[0].current_version_id,
+      ).toBeNull();
+      expect(
+        (
+          await db.query(
+            "SELECT event_type FROM hucescholar.audit_events WHERE entity_id=$1 AND event_type IN ('MATERIAL_SUBMITTED','MATERIAL_WITHDRAWN')",
+            [item.id],
+          )
+        ).rows,
+      ).toHaveLength(3);
+    },
+  );
+  it('rejects missing, checking and failed PDFs without creating requests', async () => {
+    const item = await create('student');
+    expect((await publication('student', item.id, 'submit', { revision: 1 })).body.code).toBe(
+      'FILE_NOT_SAFE',
+    );
+    await upload('student', item.id, 1);
+    expect((await publication('student', item.id, 'submit', { revision: 2 })).body.code).toBe(
+      'FILE_NOT_SAFE',
+    );
+    await db.query(
+      "UPDATE hucescholar.files SET scan_status='FAILED',checked_at=now() WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE document_id=$1)",
+      [item.id],
+    );
+    expect((await publication('student', item.id, 'submit', { revision: 2 })).body.code).toBe(
+      'FILE_NOT_SAFE',
+    );
+    expect(
+      (
+        await db.query(
+          'SELECT count(*)::int n FROM hucescholar.publication_requests WHERE version_id=$1',
+          [item.versionId],
+        )
+      ).rows[0].n,
+    ).toBe(0);
+  });
+  it('enforces owner, role, CSRF and transition input validation', async () => {
+    const item = await safeDraft();
+    for (const action of ['submit', 'withdraw']) {
+      const data = { revision: 2, ...(action === 'withdraw' ? { reason: 'Kiểm thử' } : {}) };
+      expect((await publication('other', item.id, action, data)).status).toBe(404);
+      expect((await publication('admin', item.id, action, data)).status).toBe(403);
+      await agents.student
+        .post(`/api/v1/material-drafts/${item.id}/${action}`)
+        .set('Origin', origin)
+        .send(data)
+        .expect(403);
+    }
+    await agents.other.get(`/api/v1/material-drafts/${item.id}/requests`).expect(404);
+    for (const data of [
+      {},
+      { revision: 0 },
+      { revision: '2' },
+      { revision: 2, status: 'APPROVED' },
+    ])
+      expect((await publication('student', item.id, 'submit', data)).status).toBe(400);
+    expect(
+      (await publication('student', item.id, 'withdraw', { revision: 2, reason: ' ' })).status,
+    ).toBe(400);
+    await agents.student.get('/api/v1/material-drafts?reviewStatus=APPROVED').expect(400);
+  });
+  it('serializes competing requests and rejects stale withdrawals after resubmission', async () => {
+    const item = await safeDraft();
+    const sends = await Promise.all(
+      [1, 2].map(() => publication('student', item.id, 'submit', { revision: 2 })),
+    );
+    expect(sends.map((r) => r.status).sort()).toEqual([201, 409]);
+    const pulls = await Promise.all(
+      [1, 2].map(() =>
+        publication('student', item.id, 'withdraw', { revision: 3, reason: 'Sửa lại' }),
+      ),
+    );
+    expect(pulls.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect((await publication('student', item.id, 'submit', { revision: 4 })).status).toBe(201);
+    expect(
+      (await publication('student', item.id, 'withdraw', { revision: 3, reason: 'Yêu cầu cũ' }))
+        .body.code,
+    ).toBe('STALE_REVISION');
+    expect(
+      (
+        await db.query(
+          "SELECT count(*)::int n FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+          [item.versionId],
+        )
+      ).rows[0].n,
+    ).toBe(1);
+  });
+  it('rolls back status, request, revision and audit together on either transition failure', async () => {
+    const item = await safeDraft();
+    for (const [action, revision] of [
+      ['submit', 2],
+      ['withdraw', 3],
+    ] as const) {
+      const spy = jest
+        .spyOn(app.get(MaterialsService), 'audit')
+        .mockRejectedValueOnce(new Error('Synthetic audit failure'));
+      try {
+        expect(
+          (
+            await publication('student', item.id, action, {
+              revision,
+              ...(action === 'withdraw' ? { reason: 'Sửa lại' } : {}),
+            })
+          ).status,
+        ).toBe(500);
+      } finally {
+        spy.mockRestore();
+      }
+      const current = (await agents.student.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      expect(current.revision).toBe(revision);
+      expect(current.reviewStatus).toBe(action === 'submit' ? 'DRAFT' : 'SUBMITTED');
+      expect(
+        (
+          await db.query(
+            "SELECT count(*)::int n FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+            [item.versionId],
+          )
+        ).rows[0].n,
+      ).toBe(action === 'submit' ? 0 : 1);
+      if (action === 'submit')
+        expect((await publication('student', item.id, 'submit', { revision })).status).toBe(201);
+    }
+  });
+  it('rechecks metadata, rights expiry and active courses at submission', async () => {
+    const item = await safeDraft();
+    await db.query("UPDATE hucescholar.document_versions SET source_reference='' WHERE id=$1", [
+      item.versionId,
+    ]);
+    expect((await publication('student', item.id, 'submit', { revision: 2 })).body.code).toBe(
+      'METADATA_REQUIRED',
+    );
+    await db.query(
+      "UPDATE hucescholar.document_versions SET source_reference='Synthetic source',rights_valid_until=now()-interval '1 day' WHERE id=$1",
+      [item.versionId],
+    );
+    expect((await publication('student', item.id, 'submit', { revision: 2 })).body.code).toBe(
+      'RIGHTS_EXPIRED',
+    );
+    await db.query('UPDATE hucescholar.document_versions SET rights_valid_until=null WHERE id=$1', [
+      item.versionId,
+    ]);
+    await db.query('UPDATE hucescholar.courses SET is_active=false WHERE id=$1', [courses[0]]);
+    try {
+      expect((await publication('student', item.id, 'submit', { revision: 2 })).body.code).toBe(
+        'COURSE_UNAVAILABLE',
+      );
+    } finally {
+      await db.query('UPDATE hucescholar.courses SET is_active=true WHERE id=$1', [courses[0]]);
+    }
+  });
   it('retains metadata after revocation but blocks edits even by dropping old courses', async () => {
     const item = await create();
+    const submitted = await safeDraft('lecturer');
+    expect((await publication('lecturer', submitted.id, 'submit', { revision: 2 })).status).toBe(
+      201,
+    );
     const assignment = (
       await db.query(
         'SELECT id FROM hucescholar.lecturer_assignments WHERE lecturer_id=$1 AND revoked_at IS NULL',
@@ -554,5 +791,18 @@ describe('private material drafts', () => {
       ).status,
     ).toBe(409);
     expect((await agents.lecturer.get('/api/v1/material-drafts/courses')).body.total).toBe(0);
+    const withdrawn = await publication('lecturer', submitted.id, 'withdraw', {
+      revision: 3,
+      reason: 'Phân công đã thu hồi',
+    });
+    expect(withdrawn.status).toBe(201);
+    expect(withdrawn.body.item).toMatchObject({
+      reviewStatus: 'DRAFT',
+      editable: false,
+      editBlock: 'ASSIGNMENT_REQUIRED',
+    });
+    expect((await publication('lecturer', submitted.id, 'submit', { revision: 4 })).body.code).toBe(
+      'ASSIGNMENT_REQUIRED',
+    );
   });
 });

@@ -42,3 +42,12 @@ export class DraftListDto {
   @Transform(integer) @IsInt() @Min(1) @Max(100000) page = 1;
   @Transform(integer) @IsInt() @Min(1) @Max(100) limit = 20;
 }
+export class MaterialListDto extends DraftListDto {
+  @IsOptional() @IsIn(['DRAFT', 'SUBMITTED']) reviewStatus?: string;
+}
+export class SubmitMaterialDto {
+  @IsInt() @Min(1) @Max(2147483646) revision!: number;
+}
+export class WithdrawMaterialDto extends SubmitMaterialDto {
+  @Transform(trim) @IsString() @MinLength(1) @MaxLength(1000) reason!: string;
+}
