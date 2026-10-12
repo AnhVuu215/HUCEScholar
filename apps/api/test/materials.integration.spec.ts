@@ -1051,6 +1051,48 @@ describe('private material drafts', () => {
     const csrf = (await agent.get('/api/v1/auth/csrf')).body.csrfToken;
     return agent[method](path).set('Origin', origin).set('X-CSRF-Token', csrf).send(data);
   }
+  it('reading writes waiting for moderation do not exclusively lock the manager account', async () => {
+    const item = await submitted('student', 3);
+    const blocker = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+    await blocker.connect();
+    let pending: ReturnType<typeof readingWrite> | undefined;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT id FROM hucescholar.documents WHERE id=$1 FOR UPDATE', [item.id]);
+      pending = readingWrite(
+        'student',
+        `/api/v1/library/versions/${item.versionId}/progress`,
+        {
+          pageNumber: 1,
+          revision: 0,
+        },
+        'put',
+      );
+      let waiting = false;
+      for (let i = 0; i < 30; i++) {
+        waiting =
+          Number(
+            (
+              await db.query(
+                "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%hucescholar.documents%FOR SHARE%'",
+              )
+            ).rows[0].count,
+          ) > 0;
+        if (waiting) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      expect(waiting).toBe(true);
+      // Approval already holds the document and then shares the manager row.
+      // This must not wait on an exclusive actor lock held by the reader.
+      await blocker.query('SELECT id FROM hucescholar.users WHERE id=$1 FOR SHARE NOWAIT', [
+        users.student,
+      ]);
+    } finally {
+      await blocker.query('ROLLBACK');
+      await blocker.end();
+      if (pending) expect((await pending).status).toBe(404);
+    }
+  });
   it('reading notes are private to each role and cannot be accessed by another owner or admin', async () => {
     const { path } = await readingFixture();
     const note = await readingWrite('student', `${path}/notes`, {
