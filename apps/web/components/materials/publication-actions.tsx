@@ -4,6 +4,7 @@ import { ApiError } from '../../lib/auth';
 import {
   changePublication,
   currentDraft,
+  nextMaterialVersion,
   materialError,
   publicationHistory,
   reviewStatuses,
@@ -28,6 +29,7 @@ export function PublicationActions({
 }) {
   const [reason, setReason] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const [nextConfirm, setNextConfirm] = useState(false);
   const [pending, setPending] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState('');
@@ -55,7 +57,7 @@ export function PublicationActions({
     current.editable &&
     current.fileState === 'SAFE' &&
     current.courses.every((c) => c.active);
-  async function run(action: 'submit' | 'withdraw' | 'reopen' | 'refresh') {
+  async function run(action: 'submit' | 'withdraw' | 'reopen' | 'refresh' | 'next') {
     if (locked || (action !== 'refresh' && uncertain)) return;
     setPending(true);
     busy(true);
@@ -65,9 +67,12 @@ export function PublicationActions({
       const item =
         action === 'refresh'
           ? await currentDraft(current.id)
-          : await changePublication(current, action, reason.trim());
+          : action === 'next'
+            ? await nextMaterialVersion(current)
+            : await changePublication(current, action, reason.trim());
       changed(item);
       setConfirm(false);
+      setNextConfirm(false);
       setUncertain(false);
       recoveryRequired(false);
       // Keep the withdrawal explanation on refresh while the request is still pending.
@@ -84,9 +89,11 @@ export function PublicationActions({
           ? 'Đã gửi yêu cầu duyệt. Học liệu chưa được công bố.'
           : action === 'withdraw'
             ? 'Đã rút về bản nháp. Bạn có thể chỉnh sửa khi còn quyền biên soạn.'
-            : action === 'reopen'
-              ? 'Đã mở lại bản nháp để chỉnh sửa.'
-              : 'Đã tải trạng thái hiện hành. Kiểm tra trước khi tiếp tục.',
+            : action === 'next'
+              ? 'Đã tạo phiên bản kế tiếp. Nhập nguồn/quyền mới và đính kèm PDF trước khi gửi.'
+              : action === 'reopen'
+                ? 'Đã mở lại bản nháp để chỉnh sửa.'
+                : 'Đã tải trạng thái hiện hành. Kiểm tra trước khi tiếp tục.',
       );
       requestAnimationFrame(() => feedback.current?.focus());
     } catch (failure) {
@@ -161,9 +168,46 @@ export function PublicationActions({
         </>
       )}
       {['APPROVED', 'REJECTED'].includes(current.reviewStatus) && (
-        <p className="field-hint">
-          Phiên bản đã kết thúc và được giữ nguyên. Tạo phiên bản kế tiếp sẽ được bổ sung sau.
-        </p>
+        <>
+          <p className="field-hint">
+            Phiên bản đã kết thúc và được giữ nguyên. Bản kế tiếp có PDF, nguồn và căn cứ quyền mới;
+            ghi chú cũ không chuyển sang bản mới.
+          </p>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={locked || uncertain}
+            onClick={() => setNextConfirm(true)}
+          >
+            Tạo phiên bản kế tiếp
+          </button>
+          {nextConfirm && (
+            <div className="form-confirmation">
+              <p>
+                Tạo phiên bản {current.versionNo + 1} từ thông tin nhận diện và môn hiện tại? Bản
+                công bố tiếp tục phục vụ; cần nhập lại nguồn/quyền và upload PDF cho bản mới.
+              </p>
+              <div className="user-form-actions">
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={locked || uncertain}
+                  onClick={() => void run('next')}
+                >
+                  Xác nhận tạo phiên bản
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={pending}
+                  onClick={() => setNextConfirm(false)}
+                >
+                  Chưa tạo
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
       {current.reviewStatus === 'DRAFT' && (
         <>

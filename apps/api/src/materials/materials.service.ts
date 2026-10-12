@@ -12,6 +12,7 @@ import {
   DraftFieldsDto,
   DraftListDto,
   MaterialListDto,
+  MaterialHistoryDto,
   SubmitMaterialDto,
   WithdrawMaterialDto,
   UpdateDraftDto,
@@ -24,6 +25,7 @@ const selection = {
   title: true,
   authors: true,
   description: true,
+  publication_year: true,
   material_type: true,
   source_reference: true,
   rights_basis: true,
@@ -202,31 +204,98 @@ export class MaterialsService {
     );
   }
   async list(actor: Profile, query: MaterialListDto) {
-    const where: Prisma.document_versionsWhereInput = {
-      review_status: query.reviewStatus ?? {
-        in: ['DRAFT', 'SUBMITTED', 'CHANGES_REQUIRED', 'APPROVED', 'REJECTED'],
-      },
-      documents_document_versions_document_idTodocuments: this.owner(actor),
-      ...(query.search ? { title: { contains: query.search, mode: 'insensitive' } } : {}),
-    };
+    // Select the latest snapshot before filtering; a published older version must
+    // not appear as a second editable document while its successor is a draft.
+    const latest = Prisma.sql`FROM (
+      SELECT DISTINCT ON (v.document_id) v.id, v.title, v.review_status, v.updated_at
+      FROM hucescholar.document_versions v JOIN hucescholar.documents d ON d.id=v.document_id
+      WHERE d.manager_id=${academicId(actor.id)} AND d.kind=${kindFor(actor)}
+      ORDER BY v.document_id, v.version_no DESC
+    ) latest WHERE TRUE
+      ${query.search ? Prisma.sql`AND latest.title ILIKE ${`%${query.search}%`}` : Prisma.empty}
+      ${query.reviewStatus ? Prisma.sql`AND latest.review_status=${query.reviewStatus}` : Prisma.empty}`;
     return this.db.$transaction(
       async (tx) => {
+        const ids = await tx.$queryRaw<{ id: bigint }[]>(Prisma.sql`SELECT latest.id ${latest}
+          ORDER BY latest.updated_at DESC, latest.id DESC LIMIT ${query.limit} OFFSET ${(query.page - 1) * query.limit}`);
         const rows = await tx.document_versions.findMany({
-          where,
+          where: { id: { in: ids.map((r) => r.id) } },
           select: selection,
           orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
-          take: query.limit,
-          skip: (query.page - 1) * query.limit,
         });
+        const count = await tx.$queryRaw<{ total: bigint }[]>(
+          Prisma.sql`SELECT count(*) AS total ${latest}`,
+        );
         return {
           items: await this.serialize(tx, actor, rows),
-          total: await tx.document_versions.count({ where }),
+          total: Number(count[0].total),
           page: query.page,
           limit: query.limit,
         };
       },
       { isolationLevel: 'RepeatableRead' },
     );
+  }
+  async versions(actor: Profile, rawId: string, query: DraftListDto) {
+    const document_id = academicId(rawId);
+    return this.db.$transaction(
+      async (tx) => {
+        await this.read(tx, actor, document_id);
+        const rows = await tx.document_versions.findMany({
+          where: { document_id },
+          select: selection,
+          orderBy: { version_no: 'desc' },
+          take: query.limit,
+          skip: (query.page - 1) * query.limit,
+        });
+        return {
+          items: await this.serialize(tx, actor, rows),
+          total: await tx.document_versions.count({ where: { document_id } }),
+          page: query.page,
+          limit: query.limit,
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  async nextVersion(actor: Profile, rawId: string, body: SubmitMaterialDto) {
+    return this.db.$transaction(async (tx) => {
+      const { actorId, row, id } = await this.lockOwned(tx, actor, rawId, body.revision);
+      if (!['APPROVED', 'REJECTED'].includes(row.review_status))
+        throw conflict(
+          'WORKING_VERSION_EXISTS',
+          'Đã có phiên bản đang xử lý. Tải trạng thái để mở bản đó.',
+        );
+      if (row.version_no >= 2147483647 || row.revision >= 2147483646)
+        throw conflict('VERSION_LIMIT', 'Đã đạt giới hạn phiên bản.');
+      const ids = row.version_courses.map((c) => c.courses.id);
+      await this.checkCourses(tx, actor, ids);
+      await tx.document_versions.create({
+        data: {
+          document_id: id,
+          version_no: row.version_no + 1,
+          // Owner writes address the latest version by document ID. Never reuse
+          // a predecessor's revision, including for delayed uploads/retries.
+          revision: row.revision + 1,
+          created_by: actorId,
+          title: row.title,
+          authors: row.authors,
+          description: row.description,
+          material_type: row.material_type,
+          publication_year: row.publication_year,
+          source_reference: '',
+          rights_basis: '',
+          download_allowed: false,
+          version_courses: { create: ids.map((course_id) => ({ course_id })) },
+        },
+      });
+      await tx.documents.update({
+        where: { id },
+        data: { revision: { increment: 1 }, updated_at: new Date() },
+      });
+      await this.audit(tx, actorId, id, 'MATERIAL_VERSION_CREATED');
+      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+    });
   }
   async courses(actor: Profile, query: DraftListDto) {
     const where: Prisma.coursesWhereInput = {
@@ -449,12 +518,21 @@ export class MaterialsService {
       return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
     });
   }
-  async history(actor: Profile, rawId: string, query: DraftListDto) {
+  async history(actor: Profile, rawId: string, query: MaterialHistoryDto) {
     const id = academicId(rawId);
     return this.db.$transaction(
       async (tx) => {
         const row = await this.read(tx, actor, id);
-        const where = { version_id: row.id };
+        const versionId = query.versionId ? academicId(query.versionId) : row.id;
+        if (
+          query.versionId &&
+          !(await tx.document_versions.findFirst({
+            where: { id: versionId, document_id: id },
+            select: { id: true },
+          }))
+        )
+          throw new NotFoundException('Không tìm thấy phiên bản của tài liệu.');
+        const where = { version_id: versionId };
         const items = await tx.publication_requests.findMany({
           where,
           orderBy: [{ submitted_at: 'desc' }, { id: 'desc' }],

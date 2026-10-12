@@ -14,6 +14,7 @@ datasource db {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model annotations {
   id                BigInt            @id @default(autoincrement())
+  request_id        String            @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id           BigInt
   version_id        BigInt
   page_number       Int
@@ -29,6 +30,7 @@ model annotations {
 
   @@index([user_id, version_id, page_number], map: "ix_annotation_owner_page")
   @@index([version_id], map: "ix_annotation_version")
+  @@unique([user_id, request_id], map: "ux_annotation_owner_request")
   @@schema("hucescholar")
 }
 

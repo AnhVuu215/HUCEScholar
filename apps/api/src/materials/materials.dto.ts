@@ -47,6 +47,9 @@ export class MaterialListDto extends DraftListDto {
   @IsIn(['DRAFT', 'SUBMITTED', 'CHANGES_REQUIRED', 'APPROVED', 'REJECTED'])
   reviewStatus?: string;
 }
+export class MaterialHistoryDto extends DraftListDto {
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,18}$/) versionId?: string;
+}
 export class SubmitMaterialDto {
   @IsInt() @Min(1) @Max(2147483646) revision!: number;
 }
