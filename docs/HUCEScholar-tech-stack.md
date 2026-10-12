@@ -1,6 +1,6 @@
 # HUCEScholar — Tech stack và kiến trúc MVP
 
-Ngày quyết định: 11/10/2026. Trạng thái: chốt công nghệ MVP; đã có workspace Next.js/NestJS, migration PostgreSQL, đăng nhập/phân quyền, quản lý tài khoản, danh mục đào tạo, phân công, bản nháp học liệu và upload PDF riêng tư với worker kiểm tra local. Chưa triển khai vận hành. Bằng chứng: [mốc khởi tạo](implementation/2026-10-11-foundation.md), [database và auth](implementation/2026-10-11-database-auth.md), [quản lý tài khoản](implementation/2026-10-11-account-management.md), [danh mục và phân công](implementation/2026-10-11-academic-catalog.md), [upload PDF](implementation/2026-10-11-private-pdf-upload.md).
+Ngày quyết định: 11/10/2026. Trạng thái: chốt công nghệ MVP; đã có workspace Next.js/NestJS, migration PostgreSQL, đăng nhập/phân quyền, quản lý tài khoản, danh mục đào tạo, phân công, bản nháp, upload PDF riêng tư, gửi/rút và admin kiểm duyệt bản hiện hành. Chưa triển khai vận hành. Bằng chứng: [mốc khởi tạo](implementation/2026-10-11-foundation.md), [database và auth](implementation/2026-10-11-database-auth.md), [quản lý tài khoản](implementation/2026-10-11-account-management.md), [danh mục và phân công](implementation/2026-10-11-academic-catalog.md), [upload PDF](implementation/2026-10-11-private-pdf-upload.md).
 
 Người dùng đã chọn **web responsive + PWA cho MVP**. Một giao diện dùng trên máy tính, điện thoại và máy tính bảng; có thể thêm vào màn hình chính trên thiết bị/trình duyệt hỗ trợ. Chưa phát hành ứng dụng native trên App Store/Google Play. Việc cài PWA không đồng nghĩa đọc PDF offline.
 
@@ -106,7 +106,7 @@ design/         prototype và nguồn thiết kế đã có
 3. Làm một luồng xuyên suốt: tài khoản được cấp → upload → kiểm tra file → gửi/duyệt → tìm → đọc → ghi chú → mở lại trên thiết bị khác. Sau đó mới mở rộng CRUD và nghiệp vụ phụ.
 4. Kiểm thử người dùng không đọc được ghi chú của người khác, không duyệt file CHECKING/FAILED, không thay phiên bản đã khóa và không đọc tài liệu bị ẩn. Kiểm tra phục hồi job, lưu ghi chú lỗi, xung đột revision, Range/zoom trên mobile và cài PWA qua HTTPS.
 
-Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; S3 thật, gửi duyệt/công bố, reader và deploy còn ở các mốc tiếp theo.
+Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; Đã có gửi/rút và admin kiểm duyệt/bản hiện hành; S3 thật, kho học liệu, reader và deploy còn ở các mốc tiếp theo. Xem [kiểm duyệt](implementation/2026-10-12-admin-moderation.md).
 
 ## 9. Nguồn kỹ thuật chính thức đã đối chiếu
 

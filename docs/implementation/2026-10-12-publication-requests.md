@@ -2,6 +2,8 @@
 
 Lát cắt tiếp theo sau bản nháp/PDF: giảng viên và sinh viên gửi phiên bản để xét duyệt, rút với lý do và xem lịch sử. Chưa có quyết định của admin, công bố, reader, tạo phiên bản kế tiếp hoặc gửi lại từ CHANGES_REQUIRED.
 
+Đây là trạng thái của mốc gửi/rút ban đầu. Mốc kế tiếp đã bổ sung admin kiểm duyệt/bản hiện hành và mở lại CHANGES_REQUIRED; xem [kiểm duyệt](2026-10-12-admin-moderation.md).
+
 ## Hành vi và API
 
 - `POST /api/v1/material-drafts/:id/submit`, JSON `{ revision }`: actor hoạt động/đã xác minh, đúng chủ và loại tài liệu; phiên bản DRAFT; thông tin, nguồn, căn cứ quyền và môn đầy đủ; quyền chưa hết hạn, môn/khoa hoạt động và giảng viên có phân công tất cả môn; PDF SAFE. Tăng revision rồi chuyển SUBMITTED, tạo publication_requests PENDING với submitted_revision bằng revision sau chuyển. Không cập nhật current_version_id hoặc visibility.
