@@ -215,13 +215,10 @@ export class LibraryService {
     }
   }
 
-  // Personal-data writes serialize on the actor, including first progress/create retries.
-  // All paths use actor -> document -> version -> file to match new file grants.
-  async access(tx: Prisma.TransactionClient, actor: Profile, id: bigint, writing = false) {
+  // Keep actor locks shared: moderation also shares the manager after locking its document.
+  async access(tx: Prisma.TransactionClient, actor: Profile, id: bigint) {
     const actorId = academicId(actor.id);
-    if (writing)
-      await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR UPDATE`;
-    else await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
+    await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
     const user = await tx.users.findUnique({ where: { id: actorId } });
     if (!user || user.status !== 'ACTIVE' || !user.verified_at)
       throw new ForbiddenException('Tài khoản không còn quyền đọc.');

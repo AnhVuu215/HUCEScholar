@@ -62,7 +62,11 @@ export class ReadingService {
     const owner = academicId(actor.id),
       version = academicId(rawId);
     return this.db.$transaction(async (tx) => {
-      const row = await this.library.access(tx, actor, version, writing);
+      // Serialize personal mutations (including first inserts) without exclusively
+      // locking users, which would invert moderation's document -> manager lock order.
+      if (writing)
+        await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:reading:${owner}`}, 0))`;
+      const row = await this.library.access(tx, actor, version);
       return action(tx, owner, version, row.files!.page_count);
     });
   }
