@@ -10,17 +10,19 @@ import type {
 } from 'pdfjs-dist';
 import { libraryVersion, libraryError, type LibraryItem } from '../../lib/library';
 import { ReaderNotes } from './reader-notes';
+import { useReadingProgress } from './use-reading-progress';
 
 export function LibraryReader({ id }: { id: string }) {
   const [item, setItem] = useState<LibraryItem | null>(null),
     [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState(''),
     [attempt, setAttempt] = useState(0),
-    [page, setPage] = useState(1),
     [zoom, setZoom] = useState('fit'),
     [rotation, setRotation] = useState(0),
     [width, setWidth] = useState(0),
     [rendered, setRendered] = useState('');
+  const progress = useReadingProgress(id);
+  const { page, setPage, reportRendered } = progress;
   const renderKey = `${page}:${zoom}:${rotation}:${width}`;
   const stage = useRef<HTMLDivElement>(null),
     paper = useRef<HTMLDivElement>(null);
@@ -68,7 +70,7 @@ export function LibraryReader({ id }: { id: string }) {
     };
   }, [id, attempt]);
   useEffect(() => {
-    if (!pdf || !width || !paper.current) return;
+    if (!pdf || !width || !paper.current || !progress.ready) return;
     const controller = new AbortController(),
       host = paper.current;
     let render: RenderTask | undefined, text: TextLayer | undefined;
@@ -122,7 +124,10 @@ export function LibraryReader({ id }: { id: string }) {
           textContentSource: await pdfPage.getTextContent(),
         });
         await text.render();
-        if (!controller.signal.aborted) setRendered(`${page}:${zoom}:${rotation}:${width}`);
+        if (!controller.signal.aborted) {
+          setRendered(`${page}:${zoom}:${rotation}:${width}`);
+          reportRendered(page);
+        }
       } catch (e) {
         if (!controller.signal.aborted) {
           host.replaceChildren();
@@ -140,7 +145,7 @@ export function LibraryReader({ id }: { id: string }) {
       text?.cancel();
       pageNode.remove();
     };
-  }, [pdf, id, page, zoom, rotation, width]);
+  }, [pdf, id, page, zoom, rotation, width, progress.ready, reportRendered]);
   function changePage(value: number) {
     if (value === page) return;
     setRendered('');
@@ -150,12 +155,42 @@ export function LibraryReader({ id }: { id: string }) {
     setError('');
     setPdf(null);
     setRendered('');
-    setPage(1);
     setAttempt((n) => n + 1);
   }
   return (
     <section className="content-section library-reader">
       <Link href="/workspace/library">Về kho học liệu</Link>
+      <div className="reader-progress" aria-label="Tiến độ đọc riêng">
+        <p
+          role={
+            ['save-error', 'conflict', 'load-error'].includes(progress.status) ? 'alert' : 'status'
+          }
+        >
+          {progress.notice}
+        </p>
+        <div className="note-actions">
+          {progress.status === 'load-error' && (
+            <>
+              <button className="secondary-button" onClick={progress.reload}>
+                Thử tải tiến độ
+              </button>
+              <button className="secondary-button" onClick={progress.skip}>
+                Đọc từ trang 1, chưa lưu tiến độ
+              </button>
+            </>
+          )}
+          {progress.status === 'save-error' && (
+            <button className="secondary-button" onClick={progress.retrySave}>
+              Thử lưu tiến độ
+            </button>
+          )}
+          {['save-error', 'conflict', 'skipped'].includes(progress.status) && (
+            <button className="secondary-button" onClick={progress.reload}>
+              Tải lại tiến độ
+            </button>
+          )}
+        </div>
+      </div>
       {error ? (
         <div role="alert">
           <p>{error}</p>
@@ -291,8 +326,7 @@ export function LibraryReader({ id }: { id: string }) {
                 <p>{item.description}</p>
               </details>
               <p className="field-hint">
-                Chưa hỗ trợ highlight, lưu tiến độ hoặc đọc offline. Chỉ đọc không phải cơ chế chống
-                sao chép.
+                Chưa hỗ trợ highlight hoặc đọc offline. Chỉ đọc không phải cơ chế chống sao chép.
               </p>
             </>
           )}

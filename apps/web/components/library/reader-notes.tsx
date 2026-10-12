@@ -159,6 +159,7 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
           onClick={() => {
             setLoading(true);
             setListError('');
+            setDeleting(null);
             void load();
           }}
         >
@@ -167,6 +168,10 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
       </div>
       <p className="field-hint">
         Chỉ bạn xem được ghi chú. Gắn với phiên bản này; đổi bản PDF không tự chuyển ghi chú.
+      </p>
+      <p className="field-hint">
+        Bản soạn chỉ giữ khi trang đang mở. Hãy lưu trước khi dùng nút Quay lại/Tiến tới của trình
+        duyệt.
       </p>
       <form
         className="note-editor"

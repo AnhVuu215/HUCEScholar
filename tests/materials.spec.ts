@@ -216,6 +216,17 @@ test('student searches the library and reads, selects text, changes pages, zooms
       ['mobile', 360, 800],
     ] as const) {
       await page.setViewportSize({ width, height });
+      await expect
+        .poll(() =>
+          page.locator('.reader-stage').evaluate((stage) => {
+            const canvas = stage.querySelector('canvas');
+            return (
+              !!canvas &&
+              Math.abs(canvas.getBoundingClientRect().width - (stage.clientWidth - 32)) < 2
+            );
+          }),
+        )
+        .toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
@@ -423,10 +434,97 @@ test('private page notes preserve drafts, recover lost responses and reject stal
   await expect(page.getByLabel('Số trang', { exact: true })).toBeEnabled();
   await page.getByLabel('Số trang', { exact: true }).fill('1');
   await row.getByRole('button', { name: 'Xóa', exact: true }).click();
+  const beforeDelete = (await (await page.request.get(`${path}/notes?pageNumber=1`)).json())
+    .items[0];
+  expect(
+    (
+      await page.request.patch(`${path}/notes/${beforeDelete.id}`, {
+        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+        data: { revision: beforeDelete.revision, content: 'Đã đổi trước khi xóa' },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole('button', { name: 'Xác nhận xóa', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Tải lại danh sách trước khi xóa' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Tải lại ghi chú', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Xác nhận xóa', exact: true })).toHaveCount(0);
+  await expect(row.getByText('Đã đổi trước khi xóa', { exact: true })).toBeVisible();
+  await row.getByRole('button', { name: 'Xóa', exact: true }).click();
   await page.getByRole('button', { name: 'Xác nhận xóa', exact: true }).click();
   await expect(row).toHaveCount(0);
   notes = (await (await page.request.get(`${path}/notes?pageNumber=1`)).json()).items;
   expect(notes).toEqual([]);
+});
+test('reader resumes saved pages and never overwrites progress after network failure or conflict', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const path = await openPersonalReader(page, 'e2e-progress');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã lưu tiến độ · Trang 1' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã lưu tiến độ · Trang 2' }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel('Số trang', { exact: true })).toHaveValue('2');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 2 / 2' }),
+  ).toBeVisible();
+  await page.route('**/api/v1/library/versions/*/progress', (route) =>
+    route.request().method() === 'PUT' ? route.abort() : route.continue(),
+  );
+  await page.getByRole('button', { name: 'Trang trước', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Chưa xác nhận được tiến độ' }),
+  ).toBeVisible();
+  expect((await (await page.request.get(`${path}/progress`)).json()).item.pageNumber).toBe(2);
+  await page.unroute('**/api/v1/library/versions/*/progress');
+  await page.getByRole('button', { name: 'Thử lưu tiến độ', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã lưu tiến độ · Trang 1' }),
+  ).toBeVisible();
+  const current = (await (await page.request.get(`${path}/progress`)).json()).item;
+  const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+  expect(
+    (
+      await page.request.put(`${path}/progress`, {
+        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+        data: { revision: current.revision, pageNumber: 2 },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Tiến độ đã thay đổi ở tab khác' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Tải lại tiến độ', exact: true }).click();
+  await expect(page.getByLabel('Số trang', { exact: true })).toHaveValue('2');
+  expect((await (await page.request.get(`${path}/progress`)).json()).item.revision).toBe(
+    current.revision + 1,
+  );
+  await page.route('**/api/v1/library/versions/*/progress', (route) =>
+    route.request().method() === 'GET' ? route.abort() : route.continue(),
+  );
+  let writes = 0;
+  page.on('request', (req) => {
+    if (req.method() === 'PUT' && req.url().endsWith('/progress')) writes++;
+  });
+  await page.reload();
+  await expect(page.getByRole('alert').filter({ hasText: 'Chưa tải được tiến độ' })).toBeVisible();
+  await page.getByRole('button', { name: 'Đọc từ trang 1, chưa lưu tiến độ', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 2 / 2' }),
+  ).toBeVisible();
+  expect(writes).toBe(0);
+  await page.unroute('**/api/v1/library/versions/*/progress');
 });
 test('admin approves with rights confirmation and recovers a committed decision after response loss', async ({
   page,
