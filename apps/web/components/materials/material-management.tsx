@@ -1,10 +1,17 @@
 'use client';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { draftList, materialError, materialTypes, type DraftList } from '../../lib/materials';
+import {
+  draftList,
+  materialError,
+  materialTypes,
+  reviewStatuses,
+  type DraftList,
+} from '../../lib/materials';
 import { MaterialEditor } from './material-editor';
 export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
-  const [query, setQuery] = useState({ search: '', page: 1 });
+  const [query, setQuery] = useState({ search: '', page: 1, reviewStatus: '' });
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
   const [data, setData] = useState<DraftList | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -14,7 +21,12 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
   useEffect(() => {
     const controller = new AbortController();
     void draftList(
-      new URLSearchParams({ search: query.search, page: String(query.page), limit: '20' }),
+      new URLSearchParams({
+        search: query.search,
+        page: String(query.page),
+        limit: '20',
+        ...(query.reviewStatus ? { reviewStatus: query.reviewStatus } : {}),
+      }),
       controller.signal,
     )
       .then((result) => {
@@ -39,7 +51,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
     event.preventDefault();
     setError('');
     setData(null);
-    setQuery({ search: search.trim(), page: 1 });
+    setQuery({ search: search.trim(), page: 1, reviewStatus: status });
   }
   return (
     <div className="users-management materials-management">
@@ -48,7 +60,8 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
           {role === 'LECTURER'
             ? 'Bản nháp học liệu cho các môn bạn phụ trách.'
             : 'Tài liệu bổ sung của bạn, tách biệt với giáo trình giảng viên.'}{' '}
-          Lưu thông tin, mở lại bản nháp rồi đính kèm PDF để kiểm tra. Gửi duyệt chưa được mở.
+          Lưu thông tin, mở lại bản nháp rồi đính kèm PDF. Khi PDF đã qua kiểm tra, bạn có thể gửi
+          yêu cầu duyệt hoặc rút về nháp để sửa.
         </p>
         <button
           ref={create}
@@ -86,7 +99,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
         />
       )}
       <section className="users-directory" aria-labelledby="draft-list-title">
-        <h2 id="draft-list-title">Bản nháp của tôi</h2>
+        <h2 id="draft-list-title">Bản nháp và yêu cầu duyệt</h2>
         <form className="users-filters draft-filters" onSubmit={filter}>
           <div className="form-field">
             <label htmlFor="draft-search">Tìm bản nháp</label>
@@ -99,13 +112,26 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <div className="form-field">
+            <label htmlFor="material-status">Trạng thái duyệt</label>
+            <select
+              id="material-status"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="">Nháp và chờ duyệt</option>
+              <option value="DRAFT">Bản nháp</option>
+              <option value="SUBMITTED">Chờ duyệt</option>
+            </select>
+          </div>
           <button className="secondary-button">Tìm kiếm</button>
           <button
             type="button"
             className="text-button"
             onClick={() => {
               setSearch('');
-              setQuery({ search: '', page: 1 });
+              setStatus('');
+              setQuery({ search: '', page: 1, reviewStatus: '' });
               setError('');
               setData(null);
             }}
@@ -129,7 +155,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
         ) : (
           <>
             <p className="field-hint">
-              {data.total} bản nháp · Trang {data.page}/
+              {data.total} học liệu · Trang {data.page}/
               {Math.max(1, Math.ceil(data.total / data.limit))}
             </p>
             {data.items.length === 0 ? (
@@ -171,7 +197,10 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
                         </ul>
                       </td>
                       <td>
-                        <span className="user-status user-status-pending">Bản nháp</span>
+                        <span className="user-status user-status-pending">
+                          {reviewStatuses[item.reviewStatus as keyof typeof reviewStatuses] ??
+                            item.reviewStatus}
+                        </span>
                         <p className="field-hint">
                           {item.fileState === 'MISSING'
                             ? 'Chưa có PDF'
@@ -181,7 +210,9 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
                                 ? 'PDF không đạt kiểm tra'
                                 : 'PDF đã kiểm tra'}
                         </p>
-                        {!item.editable && <p className="field-hint">Cần kiểm tra phân công</p>}
+                        {item.editBlock === 'ASSIGNMENT_REQUIRED' && (
+                          <p className="field-hint">Cần kiểm tra phân công</p>
+                        )}
                       </td>
                       <td className="user-row-actions">
                         <button

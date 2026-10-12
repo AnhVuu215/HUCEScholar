@@ -292,8 +292,8 @@ export default function HomePage() {
                 </li>
               </ul>
               <p className="current-next">
-                Tiếp theo: gửi duyệt, công bố, trình đọc PDF và ghi chú riêng. Cài đặt PWA sẽ được
-                bổ sung sau.
+                Đã có gửi và rút yêu cầu duyệt. Tiếp theo: admin duyệt, công bố, trình đọc PDF và
+                ghi chú riêng. Cài đặt PWA sẽ được bổ sung sau.
               </p>
             </div>
           </div>

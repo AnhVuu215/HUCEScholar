@@ -11,12 +11,14 @@ import {
 export function DraftPdf({
   current,
   metadataDirty,
+  interactionBlocked = false,
   changed,
   busy,
   selectionChanged,
 }: {
   current: MaterialDraft;
   metadataDirty: boolean;
+  interactionBlocked?: boolean;
   changed: (item: MaterialDraft) => void;
   busy: (value: boolean) => void;
   selectionChanged: (value: boolean) => void;
@@ -34,7 +36,7 @@ export function DraftPdf({
     SAFE: 'PDF đã qua kiểm tra kỹ thuật',
     FAILED: 'PDF không đạt kiểm tra',
   };
-  const blocked = metadataDirty || !current.editable || pending;
+  const blocked = metadataDirty || interactionBlocked || !current.editable || pending;
   function fail(message: string) {
     setError(message);
     requestAnimationFrame(() => feedback.current?.focus());

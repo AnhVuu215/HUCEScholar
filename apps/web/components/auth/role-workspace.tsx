@@ -22,9 +22,9 @@ const upcoming: Record<Role, string> = {
   ADMIN:
     'Bạn có thể quản lý tài khoản, danh mục đào tạo và phân công giảng viên. Kiểm duyệt sẽ được bổ sung cùng luồng học liệu.',
   LECTURER:
-    'Bạn có thể xem phân công, chuẩn bị bản nháp và tải PDF lên để kiểm tra. Quản lý phiên bản và gửi công bố là các bước tiếp theo.',
+    'Bạn có thể xem phân công, chuẩn bị bản nháp, tải PDF lên để kiểm tra rồi gửi/rút yêu cầu duyệt. Quản lý phiên bản, admin duyệt và công bố là các bước tiếp theo.',
   STUDENT:
-    'Bạn có thể chuẩn bị bản nháp tài liệu bổ sung và tải PDF lên để kiểm tra. Gửi duyệt, kho tài liệu theo môn, trình đọc và ghi chú riêng sẽ được bổ sung sau.',
+    'Bạn có thể chuẩn bị bản nháp tài liệu bổ sung, tải PDF lên để kiểm tra rồi gửi yêu cầu duyệt. Có thể rút về nháp để sửa. Admin duyệt, kho tài liệu theo môn, trình đọc và ghi chú riêng sẽ được bổ sung sau.',
 };
 
 export function RoleWorkspace({

@@ -935,3 +935,14 @@ h2 {
 .draft-file-name {
   overflow-wrap: anywhere;
 }
+.publication-history {
+  padding-left: 24px;
+}
+.publication-history li {
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.publication-reason {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

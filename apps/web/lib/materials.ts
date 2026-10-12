@@ -9,6 +9,26 @@ export const materialTypes = {
   REFERENCE: 'Tham khảo',
   OTHER: 'Khác',
 } as const;
+export const reviewStatuses = {
+  DRAFT: 'Bản nháp',
+  SUBMITTED: 'Chờ duyệt',
+  CHANGES_REQUIRED: 'Yêu cầu sửa',
+  APPROVED: 'Đã duyệt',
+  REJECTED: 'Từ chối',
+} as const;
+export interface PublicationHistory {
+  items: {
+    id: string;
+    status: string;
+    submittedRevision: number;
+    submittedAt: string;
+    resolvedAt: string | null;
+    reason: string | null;
+  }[];
+  total: number;
+  page: number;
+  limit: number;
+}
 export type CourseChoice = { id: string; code: string; name: string };
 export interface MaterialDraft {
   id: string;
@@ -134,6 +154,47 @@ export async function saveDraft(body: DraftFields, current?: MaterialDraft) {
       `/material-drafts${current ? `/${current.id}` : ''}`,
       { ...body, ...(current ? { revision: current.revision } : {}) },
       current ? 'PATCH' : 'POST',
+    ),
+  );
+}
+export async function publicationHistory(
+  id: string,
+  page: number,
+  signal?: AbortSignal,
+): Promise<PublicationHistory> {
+  const data: unknown = await (
+    await apiRequest(`/material-drafts/${id}/requests?page=${page}&limit=10`, { signal })
+  ).json();
+  if (
+    isList(data) &&
+    data.items.every((item) => {
+      if (!item || typeof item !== 'object') return false;
+      const r = item as Record<string, unknown>;
+      return (
+        isId(r.id) &&
+        ['PENDING', 'WITHDRAWN', 'APPROVED', 'CHANGES_REQUIRED', 'REJECTED'].includes(
+          String(r.status),
+        ) &&
+        Number.isInteger(r.submittedRevision) &&
+        typeof r.submittedAt === 'string' &&
+        (r.resolvedAt === null || typeof r.resolvedAt === 'string') &&
+        (r.reason === null || typeof r.reason === 'string')
+      );
+    })
+  )
+    return data as PublicationHistory;
+  throw new Error('Invalid publication history.');
+}
+export async function changePublication(
+  current: MaterialDraft,
+  action: 'submit' | 'withdraw',
+  reason?: string,
+) {
+  return readItem(
+    await academicWrite(
+      `/material-drafts/${current.id}/${action}`,
+      { revision: current.revision, ...(action === 'withdraw' ? { reason } : {}) },
+      'POST',
     ),
   );
 }
