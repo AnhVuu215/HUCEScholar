@@ -164,6 +164,13 @@ export class LibraryService {
       { isolationLevel: 'RepeatableRead' },
     );
   }
+  async readableItems(tx: Prisma.TransactionClient, ids: bigint[]) {
+    const rows = await tx.document_versions.findMany({
+      where: { AND: [{ id: { in: ids } }, available()] },
+      select: selection,
+    });
+    return new Map(rows.map((row) => [String(row.id), serialize(row)]));
+  }
   async file(
     actor: Profile,
     rawId: string,

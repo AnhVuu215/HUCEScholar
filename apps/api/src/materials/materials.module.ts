@@ -12,6 +12,8 @@ import { ReadingController } from './reading.controller';
 import { ReadingService } from './reading.service';
 import { LifecycleController } from './lifecycle.controller';
 import { LifecycleService } from './lifecycle.service';
+import { PersonalLibraryController } from './personal-library.controller';
+import { PersonalLibraryService } from './personal-library.service';
 @Module({
   imports: [AuthModule, FilesModule],
   controllers: [
@@ -20,6 +22,7 @@ import { LifecycleService } from './lifecycle.service';
     LibraryController,
     ReadingController,
     LifecycleController,
+    PersonalLibraryController,
   ],
   providers: [
     MaterialsService,
@@ -28,6 +31,7 @@ import { LifecycleService } from './lifecycle.service';
     LibraryService,
     ReadingService,
     LifecycleService,
+    PersonalLibraryService,
   ],
 })
 export class MaterialsModule {}
