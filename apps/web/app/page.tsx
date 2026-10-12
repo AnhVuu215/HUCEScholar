@@ -292,8 +292,8 @@ export default function HomePage() {
                 </li>
               </ul>
               <p className="current-next">
-                Đã có gửi và rút yêu cầu duyệt. Tiếp theo: admin duyệt, công bố, trình đọc PDF và
-                ghi chú riêng. Cài đặt PWA sẽ được bổ sung sau.
+                Đã có kiểm duyệt, kho học liệu, trình đọc PDF, ghi chú riêng theo trang và lưu tiến
+                độ đọc. Cài đặt PWA sẽ được bổ sung sau.
               </p>
             </div>
           </div>
@@ -334,9 +334,9 @@ export default function HomePage() {
               <summary>Đã đọc và ghi chú trên PDF được chưa?</summary>
               <p>
                 Đã có kho học liệu và trình đọc PDF cho tài khoản được cấp. Tài liệu phải đã duyệt,
-                an toàn, đang hiển thị và còn quyền sử dụng; tải bản gốc cần được cho phép riêng.
-                Ghi chú riêng và lưu tiến độ đang được phát triển. Chưa có học liệu trường được cấp
-                quyền thật.
+                an toàn, đang hiển thị và còn quyền sử dụng; tải bản gốc cần được cho phép riêng. Đã
+                có ghi chú riêng theo trang và mở lại trang đã đọc sau khi lưu thành công. Highlight
+                và đọc offline chưa được hỗ trợ. Chưa có học liệu trường được cấp quyền thật.
               </p>
             </details>
             <details>

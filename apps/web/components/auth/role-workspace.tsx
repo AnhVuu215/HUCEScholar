@@ -22,9 +22,9 @@ const upcoming: Record<Role, string> = {
   ADMIN:
     'Bạn có thể quản lý tài khoản, danh mục, phân công và kiểm duyệt học liệu. Mở Kiểm duyệt học liệu để xem yêu cầu, yêu cầu sửa, từ chối hoặc duyệt bản hiện hành.',
   LECTURER:
-    'Bạn có thể xem phân công, chuẩn bị bản nháp, tải PDF, gửi/rút yêu cầu và xem quyết định. Mở Kho học liệu để tìm và đọc bản đã công bố. Phiên bản kế tiếp và ghi chú riêng sẽ được bổ sung sau.',
+    'Bạn có thể xem phân công, chuẩn bị bản nháp, tải PDF, gửi/rút yêu cầu và xem quyết định. Mở Kho học liệu để đọc bản đã công bố, ghi chú riêng theo trang và mở lại trang đã đọc. Phiên bản kế tiếp sẽ được bổ sung sau.',
   STUDENT:
-    'Bạn có thể tìm và đọc trong Kho học liệu, tải khi được phép, chuẩn bị tài liệu bổ sung và theo dõi kết quả duyệt. Ghi chú riêng và lưu tiến độ sẽ được bổ sung sau.',
+    'Bạn có thể tìm và đọc trong Kho học liệu, ghi chú riêng theo trang, mở lại trang đã đọc, tải khi được phép, chuẩn bị tài liệu bổ sung và theo dõi kết quả duyệt.',
 };
 
 export function RoleWorkspace({

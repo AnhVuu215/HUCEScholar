@@ -10,7 +10,7 @@ Người dùng đã chọn **web responsive + PWA cho MVP**. Một giao diện d
 |---|---|---|
 | Ngôn ngữ ứng dụng | TypeScript | Dùng thống nhất ở frontend, API và worker |
 | Frontend | React + Next.js App Router | Giao diện responsive và PWA; giữ hướng thiết kế navy v2 |
-| CSS | Tailwind CSS + CSS variables | Ánh xạ token trong DESIGN.md; không đổi thiết kế theo theme mặc định |
+| CSS | Tailwind CSS + CSS variables | CSS sản phẩm và surface brief là nguồn hiện hành; DESIGN.md/sidecar giữ phạm vi wireframe lịch sử |
 | Backend | NestJS, REST API, OpenAPI | Auth, phân quyền, học liệu, phiên bản, kiểm duyệt, ghi chú và thư viện |
 | Database | PostgreSQL | Kế thừa mô hình 23 bảng và các ràng buộc đã thiết kế |
 | Truy cập dữ liệu/migration | Prisma ORM + migration SQL tùy chỉnh | Truy vấn có type; giữ nguyên CHECK, partial index, trigger và function PostgreSQL |
@@ -106,7 +106,7 @@ design/         prototype và nguồn thiết kế đã có
 3. Làm một luồng xuyên suốt: tài khoản được cấp → upload → kiểm tra file → gửi/duyệt → tìm → đọc → ghi chú → mở lại trên thiết bị khác. Sau đó mới mở rộng CRUD và nghiệp vụ phụ.
 4. Kiểm thử người dùng không đọc được ghi chú của người khác, không duyệt file CHECKING/FAILED, không thay phiên bản đã khóa và không đọc tài liệu bị ẩn. Kiểm tra phục hồi job, lưu ghi chú lỗi, xung đột revision, Range/zoom trên mobile và cài PWA qua HTTPS.
 
-Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; Đã có gửi/rút và admin kiểm duyệt/bản hiện hành; Đã có kho học liệu, reader PDF.js và tải theo quyền; S3 thật, ghi chú/lưu tiến độ và deploy còn ở các mốc tiếp theo. Xem [kiểm duyệt](implementation/2026-10-12-admin-moderation.md).
+Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; Đã có gửi/rút và admin kiểm duyệt/bản hiện hành; Đã có kho học liệu, reader PDF.js và tải theo quyền; Đã có ghi chú riêng theo trang và lưu tiến độ với kiểm soát revision; highlight chưa mở. S3 thật và deploy còn ở các mốc tiếp theo. Xem [ghi chú và tiến độ](implementation/2026-10-12-reader-notes-progress.md).
 
 ## 9. Nguồn kỹ thuật chính thức đã đối chiếu
 
