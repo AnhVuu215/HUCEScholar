@@ -171,24 +171,10 @@ export class LibraryService {
     range: string | undefined,
     response: Response,
   ) {
-    const id = academicId(rawId),
-      actorId = academicId(actor.id);
+    const id = academicId(rawId);
     // Document-first locks serialize new grants with hide/version decisions; checked bytes already granted cannot be recalled.
     const file = await this.db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
-      const user = await tx.users.findUnique({ where: { id: actorId } });
-      if (!user || user.status !== 'ACTIVE' || !user.verified_at)
-        throw new ForbiddenException('Tài khoản không còn quyền đọc.');
-      const target = await tx.document_versions.findUnique({
-        where: { id },
-        select: { document_id: true, file_id: true },
-      });
-      if (!target) throw new NotFoundException('Không tìm thấy học liệu.');
-      await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${target.document_id} FOR SHARE`;
-      await tx.$queryRaw`SELECT id FROM hucescholar.document_versions WHERE id=${id} FOR SHARE`;
-      if (target.file_id)
-        await tx.$queryRaw`SELECT id FROM hucescholar.files WHERE id=${target.file_id} FOR SHARE`;
-      const row = await this.readable(tx, id);
+      const row = await this.access(tx, actor, id);
       if (download && !row.download_allowed)
         throw new ForbiddenException({
           code: 'DOWNLOAD_NOT_ALLOWED',
@@ -227,5 +213,27 @@ export class LibraryService {
     } catch {
       throw new ServiceUnavailableException('Chưa mở được PDF. Kiểm tra kết nối rồi thử lại.');
     }
+  }
+
+  // Personal-data writes serialize on the actor, including first progress/create retries.
+  // All paths use actor -> document -> version -> file to match new file grants.
+  async access(tx: Prisma.TransactionClient, actor: Profile, id: bigint, writing = false) {
+    const actorId = academicId(actor.id);
+    if (writing)
+      await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR UPDATE`;
+    else await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
+    const user = await tx.users.findUnique({ where: { id: actorId } });
+    if (!user || user.status !== 'ACTIVE' || !user.verified_at)
+      throw new ForbiddenException('Tài khoản không còn quyền đọc.');
+    const target = await tx.document_versions.findUnique({
+      where: { id },
+      select: { document_id: true, file_id: true },
+    });
+    if (!target) throw new NotFoundException('Không tìm thấy học liệu.');
+    await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${target.document_id} FOR SHARE`;
+    await tx.$queryRaw`SELECT id FROM hucescholar.document_versions WHERE id=${id} FOR SHARE`;
+    if (target.file_id)
+      await tx.$queryRaw`SELECT id FROM hucescholar.files WHERE id=${target.file_id} FOR SHARE`;
+    return this.readable(tx, id);
   }
 }

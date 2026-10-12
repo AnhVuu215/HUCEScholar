@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
@@ -136,6 +136,12 @@ describe('private material drafts', () => {
           'DELETE FROM hucescholar.version_courses WHERE version_id IN (SELECT id FROM hucescholar.document_versions WHERE created_by=ANY($1::bigint[]))',
           [ids],
         );
+        await db.query('DELETE FROM hucescholar.annotations WHERE user_id=ANY($1::bigint[])', [
+          ids,
+        ]);
+        await db.query('DELETE FROM hucescholar.reading_progress WHERE user_id=ANY($1::bigint[])', [
+          ids,
+        ]);
         await db.query(
           'DELETE FROM hucescholar.document_versions WHERE created_by=ANY($1::bigint[])',
           [ids],
@@ -569,14 +575,14 @@ describe('private material drafts', () => {
       .set('X-CSRF-Token', csrf)
       .send(data);
   }
-  async function safeDraft(name = 'student') {
+  async function safeDraft(name = 'student', pageCount = 1) {
     const item = await create(name);
     const result = await upload(name, item.id, item.revision);
     expect(result.status).toBe(201);
     // Synthetic scanner fixture only; real ClamAV is covered by its opt-in suite.
     await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=1,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE document_id=$1)",
-      [item.id],
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE document_id=$1)",
+      [item.id, pageCount],
     );
     return result.body.item;
   }
@@ -793,8 +799,8 @@ describe('private material drafts', () => {
       .set('X-CSRF-Token', csrf)
       .send(data);
   }
-  async function submitted(name = 'student') {
-    const draft = await safeDraft(name);
+  async function submitted(name = 'student', pageCount = 1) {
+    const draft = await safeDraft(name, pageCount);
     expect((await publication(name, draft.id, 'submit', { revision: 2 })).status).toBe(201);
     const pending = (
       await db.query(
@@ -1029,6 +1035,331 @@ describe('private material drafts', () => {
       source?.destroy();
       observed.mockRestore();
     }
+  });
+  async function readingFixture() {
+    const item = await submitted('student', 3);
+    expect((await review(item.requestId, decision())).status).toBe(201);
+    return { ...item, path: `/api/v1/library/versions/${item.versionId}` };
+  }
+  async function readingWrite(
+    name: string,
+    path: string,
+    data: object,
+    method: 'post' | 'put' | 'patch' | 'delete' = 'post',
+  ) {
+    const agent = agents[name];
+    const csrf = (await agent.get('/api/v1/auth/csrf')).body.csrfToken;
+    return agent[method](path).set('Origin', origin).set('X-CSRF-Token', csrf).send(data);
+  }
+  it('reading notes are private to each role and cannot be accessed by another owner or admin', async () => {
+    const { path } = await readingFixture();
+    const note = await readingWrite('student', `${path}/notes`, {
+      pageNumber: 2,
+      content: '  Riêng tư <script>plain text</script>  ',
+      requestId: randomUUID(),
+    });
+    expect(note.status).toBe(201);
+    expect(note.body.item).toMatchObject({
+      pageNumber: 2,
+      content: 'Riêng tư <script>plain text</script>',
+      revision: 1,
+      kind: 'PAGE_NOTE',
+    });
+    for (const role of ['admin', 'lecturer', 'other']) {
+      const list = await agents[role].get(`${path}/notes?pageNumber=2`).expect(200);
+      expect(list.body.items).toEqual([]);
+      expect(
+        (
+          await readingWrite(
+            role,
+            `${path}/notes/${note.body.item.id}`,
+            { content: 'stolen', revision: 1 },
+            'patch',
+          )
+        ).status,
+      ).toBe(404);
+      expect(
+        (await readingWrite(role, `${path}/notes/${note.body.item.id}`, { revision: 1 }, 'delete'))
+          .status,
+      ).toBe(404);
+    }
+    for (const role of ['admin', 'lecturer']) {
+      const own = await readingWrite(role, `${path}/notes`, {
+        pageNumber: 1,
+        content: `${role} own note`,
+        requestId: randomUUID(),
+      });
+      expect(own.status).toBe(201);
+      expect(
+        (await agents[role].get(`${path}/notes?pageNumber=1`).expect(200)).body.items.map(
+          (n: { content: string }) => n.content,
+        ),
+      ).toEqual([`${role} own note`]);
+    }
+    expect(
+      (await agents.student.get(`${path}/notes?pageNumber=2`).expect(200)).body.items,
+    ).toHaveLength(1);
+    await request(app.getHttpServer()).get(`${path}/notes?pageNumber=1`).expect(401);
+    await agents.student.post(`${path}/notes`).send({}).expect(403);
+    expect(JSON.stringify(note.body)).not.toMatch(/user_id|request_id|object_key/);
+  });
+  it('reading note create is idempotent after response loss and validates content and page bounds', async () => {
+    const { path, versionId } = await readingFixture();
+    const data = { pageNumber: 1, content: 'Same committed note', requestId: randomUUID() };
+    const first = await readingWrite('student', `${path}/notes`, data);
+    expect(first.status).toBe(201);
+    const retry = await readingWrite('student', `${path}/notes`, data);
+    expect(retry.status).toBe(201);
+    expect(retry.body.item.id).toBe(first.body.item.id);
+    expect(
+      (
+        await db.query(
+          'SELECT count(*)::int AS n FROM hucescholar.annotations WHERE user_id=$1 AND version_id=$2',
+          [users.student, versionId],
+        )
+      ).rows[0].n,
+    ).toBe(1);
+    expect(
+      (await readingWrite('student', `${path}/notes`, { ...data, content: 'different' })).status,
+    ).toBe(409);
+    for (const invalid of [
+      { pageNumber: 0 },
+      { pageNumber: 4 },
+      { pageNumber: 1.5 },
+      { content: ' ' },
+      { content: 'x'.repeat(4001) },
+      { requestId: 'bad' },
+      { userId: users.other },
+      { kind: 'TEXT_HIGHLIGHT' },
+    ])
+      expect(
+        (
+          await readingWrite('student', `${path}/notes`, {
+            ...data,
+            requestId: randomUUID(),
+            ...invalid,
+          })
+        ).status,
+      ).toBe(400);
+    await agents.student.get(`${path}/notes?pageNumber=4`).expect(400);
+    await agents.student.get(`${path}/notes?pageNumber=1&userId=${users.other}`).expect(400);
+  });
+  it('reading note revisions prevent concurrent edits and stale deletes', async () => {
+    const { path } = await readingFixture();
+    const created = await readingWrite('student', `${path}/notes`, {
+      pageNumber: 1,
+      content: 'original',
+      requestId: randomUUID(),
+    });
+    expect(created.status).toBe(201);
+    const target = `${path}/notes/${created.body.item.id}`;
+    const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+    const updates = await Promise.all(
+      ['tab A', 'tab B'].map((content) =>
+        agents.student
+          .patch(target)
+          .set('Origin', origin)
+          .set('X-CSRF-Token', csrf)
+          .send({ revision: 1, content }),
+      ),
+    );
+    expect(updates.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect((await readingWrite('student', target, { revision: 1 }, 'delete')).status).toBe(409);
+    const persisted = (await agents.student.get(`${path}/notes?pageNumber=1`).expect(200)).body
+      .items[0];
+    expect(persisted.revision).toBe(2);
+    expect(['tab A', 'tab B']).toContain(persisted.content);
+    expect((await readingWrite('student', target, { revision: 2 }, 'delete')).status).toBe(204);
+    expect((await agents.student.get(`${path}/notes?pageNumber=1`).expect(200)).body.items).toEqual(
+      [],
+    );
+  });
+  it('reading notes paginate only the selected owner, version and page', async () => {
+    const { path, versionId } = await readingFixture();
+    await agents.student.get(`${path}/notes?pageNumber=1`).expect(200);
+    await db.query(
+      "INSERT INTO hucescholar.annotations(user_id,version_id,page_number,kind,content) SELECT $1,$2,1,'PAGE_NOTE','note '||n FROM generate_series(1,32) n",
+      [users.student, versionId],
+    );
+    const first = await agents.student.get(`${path}/notes?pageNumber=1`).expect(200);
+    expect(first.body.items).toHaveLength(30);
+    expect(first.body.nextCursor).toBe(first.body.items[29].id);
+    const second = await agents.student
+      .get(`${path}/notes?pageNumber=1&cursor=${first.body.nextCursor}`)
+      .expect(200);
+    expect(second.body.items).toHaveLength(2);
+    expect(second.body.nextCursor).toBeNull();
+    expect(
+      new Set([...first.body.items, ...second.body.items].map((n: { id: string }) => n.id)).size,
+    ).toBe(32);
+    expect(
+      (
+        await agents.other
+          .get(`${path}/notes?pageNumber=1&cursor=${first.body.nextCursor}`)
+          .expect(200)
+      ).body.items,
+    ).toEqual([]);
+    expect((await agents.student.get(`${path}/notes?pageNumber=2`).expect(200)).body.items).toEqual(
+      [],
+    );
+  });
+  it('reading progress restores the owner version and rejects stale concurrent writes', async () => {
+    const { path } = await readingFixture();
+    expect((await agents.student.get(`${path}/progress`).expect(200)).body.item).toBeNull();
+    const initial = await readingWrite(
+      'student',
+      `${path}/progress`,
+      { pageNumber: 2, revision: 0 },
+      'put',
+    );
+    expect(initial.status).toBe(200);
+    expect(initial.body.item).toMatchObject({ pageNumber: 2, revision: 1 });
+    expect((await agents.admin.get(`${path}/progress`).expect(200)).body.item).toBeNull();
+    expect((await agents.other.get(`${path}/progress`).expect(200)).body.item).toBeNull();
+    const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+    const updates = await Promise.all(
+      [1, 3].map((pageNumber) =>
+        agents.student
+          .put(`${path}/progress`)
+          .set('Origin', origin)
+          .set('X-CSRF-Token', csrf)
+          .send({ pageNumber, revision: 1 }),
+      ),
+    );
+    expect(updates.map((r) => r.status).sort()).toEqual([200, 409]);
+    const saved = (await agents.student.get(`${path}/progress`).expect(200)).body.item;
+    expect(saved.revision).toBe(2);
+    expect([1, 3]).toContain(saved.pageNumber);
+    expect(
+      (await readingWrite('student', `${path}/progress`, { pageNumber: 1, revision: 0 }, 'put'))
+        .status,
+    ).toBe(409);
+    for (const invalid of [
+      { pageNumber: 4, revision: 2 },
+      { pageNumber: 0, revision: 2 },
+      { pageNumber: 1, revision: -1 },
+      { pageNumber: 1, revision: 2, userId: users.other },
+    ])
+      expect((await readingWrite('student', `${path}/progress`, invalid, 'put')).status).toBe(400);
+    await agents.student.put(`${path}/progress`).send({ pageNumber: 1, revision: 2 }).expect(403);
+  });
+  it('reading data stays version-bound and is retained but unavailable after hide or unsafe scan', async () => {
+    const { path, id, versionId } = await readingFixture();
+    const note = await readingWrite('student', `${path}/notes`, {
+      pageNumber: 2,
+      content: 'retained',
+      requestId: randomUUID(),
+    });
+    expect(note.status).toBe(201);
+    expect(
+      (await readingWrite('student', `${path}/progress`, { pageNumber: 3, revision: 0 }, 'put'))
+        .status,
+    ).toBe(200);
+    await db.query('UPDATE hucescholar.documents SET current_version_id=null WHERE id=$1', [id]);
+    expect(
+      (await agents.student.get(`${path}/notes?pageNumber=2`).expect(200)).body.items[0].content,
+    ).toBe('retained');
+    const notePath = `${path}/notes/${note.body.item.id}`;
+    for (const state of ['hidden', 'unsafe']) {
+      if (state === 'hidden')
+        await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [id]);
+      if (state === 'unsafe')
+        await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [id]);
+      if (state === 'unsafe')
+        await db.query(
+          "UPDATE hucescholar.files SET scan_status='FAILED' WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)",
+          [versionId],
+        );
+      for (const role of ['student', 'admin']) {
+        await agents[role].get(`${path}/notes?pageNumber=2`).expect(404);
+        await agents[role].get(`${path}/progress`).expect(404);
+        expect(
+          (
+            await readingWrite(role, `${path}/notes`, {
+              pageNumber: 1,
+              content: 'blocked',
+              requestId: randomUUID(),
+            })
+          ).status,
+        ).toBe(404);
+        expect(
+          (await readingWrite(role, notePath, { content: 'blocked', revision: 1 }, 'patch')).status,
+        ).toBe(404);
+        expect((await readingWrite(role, notePath, { revision: 1 }, 'delete')).status).toBe(404);
+        expect(
+          (await readingWrite(role, `${path}/progress`, { pageNumber: 1, revision: 1 }, 'put'))
+            .status,
+        ).toBe(404);
+      }
+    }
+    expect(
+      (
+        await db.query('SELECT content FROM hucescholar.annotations WHERE id=$1', [
+          note.body.item.id,
+        ])
+      ).rows[0].content,
+    ).toBe('retained');
+    expect(
+      (
+        await db.query(
+          'SELECT page_number FROM hucescholar.reading_progress WHERE user_id=$1 AND version_id=$2',
+          [users.student, versionId],
+        )
+      ).rows[0].page_number,
+    ).toBe(3);
+  });
+  it('reading endpoints refuse expired rights without deleting personal data', async () => {
+    const item = await safeDraft();
+    await db.query(
+      "UPDATE hucescholar.document_versions SET rights_valid_until=now()-interval '1 day' WHERE id=$1",
+      [item.versionId],
+    );
+    // Synthetic terminal fixture created directly; never edit an approved payload.
+    await db.query(
+      "UPDATE hucescholar.document_versions SET review_status='APPROVED' WHERE id=$1",
+      [item.versionId],
+    );
+    const note = (
+      await db.query(
+        "INSERT INTO hucescholar.annotations(user_id,version_id,page_number,kind,content) VALUES($1,$2,1,'PAGE_NOTE','retained expired note') RETURNING id",
+        [users.student, item.versionId],
+      )
+    ).rows[0];
+    const path = `/api/v1/library/versions/${item.versionId}`;
+    for (const role of ['student', 'admin']) {
+      await agents[role].get(`${path}/notes?pageNumber=1`).expect(404);
+      await agents[role].get(`${path}/progress`).expect(404);
+      expect(
+        (
+          await readingWrite(role, `${path}/notes`, {
+            pageNumber: 1,
+            content: 'blocked',
+            requestId: randomUUID(),
+          })
+        ).status,
+      ).toBe(404);
+      expect(
+        (
+          await readingWrite(
+            role,
+            `${path}/notes/${note.id}`,
+            { revision: 1, content: 'blocked' },
+            'patch',
+          )
+        ).status,
+      ).toBe(404);
+      expect(
+        (await readingWrite(role, `${path}/notes/${note.id}`, { revision: 1 }, 'delete')).status,
+      ).toBe(404);
+      expect(
+        (await readingWrite(role, `${path}/progress`, { revision: 0, pageNumber: 1 }, 'put'))
+          .status,
+      ).toBe(404);
+    }
+    expect(
+      (await db.query('SELECT content FROM hucescholar.annotations WHERE id=$1', [note.id])).rows[0]
+        .content,
+    ).toBe('retained expired note');
   });
   it('admin reviews a submitted snapshot and publishes atomically without opening HIDDEN', async () => {
     const item = await submitted('lecturer');

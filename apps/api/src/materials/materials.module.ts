@@ -8,9 +8,11 @@ import { ModerationController } from './moderation.controller';
 import { ModerationService } from './moderation.service';
 import { LibraryController } from './library.controller';
 import { LibraryService } from './library.service';
+import { ReadingController } from './reading.controller';
+import { ReadingService } from './reading.service';
 @Module({
   imports: [AuthModule, FilesModule],
-  controllers: [MaterialsController, ModerationController, LibraryController],
-  providers: [MaterialsService, DraftPdfService, ModerationService, LibraryService],
+  controllers: [MaterialsController, ModerationController, LibraryController, ReadingController],
+  providers: [MaterialsService, DraftPdfService, ModerationService, LibraryService, ReadingService],
 })
 export class MaterialsModule {}
