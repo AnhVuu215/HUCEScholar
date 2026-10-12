@@ -92,7 +92,7 @@ export class MaterialsService {
     await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(68467, 1)`;
     return id;
   }
-  private async checkCourses(tx: Prisma.TransactionClient, actor: Profile, ids: bigint[]) {
+  async checkCourses(tx: Prisma.TransactionClient, actor: Profile, ids: bigint[]) {
     const active = await tx.courses.count({
       where: { id: { in: ids }, is_active: true, faculties: { is_active: true } },
     });
@@ -203,7 +203,9 @@ export class MaterialsService {
   }
   async list(actor: Profile, query: MaterialListDto) {
     const where: Prisma.document_versionsWhereInput = {
-      review_status: query.reviewStatus ?? { in: ['DRAFT', 'SUBMITTED'] },
+      review_status: query.reviewStatus ?? {
+        in: ['DRAFT', 'SUBMITTED', 'CHANGES_REQUIRED', 'APPROVED', 'REJECTED'],
+      },
       documents_document_versions_document_idTodocuments: this.owner(actor),
       ...(query.search ? { title: { contains: query.search, mode: 'insensitive' } } : {}),
     };
@@ -422,6 +424,28 @@ export class MaterialsService {
         data: { revision: { increment: 1 }, updated_at: new Date() },
       });
       await this.audit(tx, actorId, id, 'MATERIAL_WITHDRAWN');
+      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+    });
+  }
+  async reopen(actor: Profile, rawId: string, body: SubmitMaterialDto) {
+    return this.db.$transaction(async (tx) => {
+      const { actorId, row, id } = await this.lockOwned(tx, actor, rawId, body.revision);
+      if (row.review_status !== 'CHANGES_REQUIRED')
+        throw conflict('NOT_CHANGES_REQUIRED', 'Chỉ mở lại phiên bản được yêu cầu sửa.');
+      await this.checkCourses(
+        tx,
+        actor,
+        row.version_courses.map((c) => c.courses.id),
+      );
+      await tx.document_versions.update({
+        where: { id: row.id },
+        data: { review_status: 'DRAFT', revision: { increment: 1 }, updated_at: new Date() },
+      });
+      await tx.documents.update({
+        where: { id },
+        data: { revision: { increment: 1 }, updated_at: new Date() },
+      });
+      await this.audit(tx, actorId, id, 'MATERIAL_REOPENED');
       return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
     });
   }

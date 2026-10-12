@@ -19,6 +19,13 @@ export class MaterialsController {
     private readonly materials: MaterialsService,
     private readonly pdf: DraftPdfService,
   ) {}
+  @Post(':id/reopen') reopen(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SubmitMaterialDto,
+  ) {
+    return this.materials.reopen(req.user, id, body);
+  }
   @Post(':id/submit') submit(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,

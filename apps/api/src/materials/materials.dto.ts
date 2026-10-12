@@ -43,7 +43,9 @@ export class DraftListDto {
   @Transform(integer) @IsInt() @Min(1) @Max(100) limit = 20;
 }
 export class MaterialListDto extends DraftListDto {
-  @IsOptional() @IsIn(['DRAFT', 'SUBMITTED']) reviewStatus?: string;
+  @IsOptional()
+  @IsIn(['DRAFT', 'SUBMITTED', 'CHANGES_REQUIRED', 'APPROVED', 'REJECTED'])
+  reviewStatus?: string;
 }
 export class SubmitMaterialDto {
   @IsInt() @Min(1) @Max(2147483646) revision!: number;
