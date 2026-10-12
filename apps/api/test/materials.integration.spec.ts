@@ -50,6 +50,7 @@ describe('private material drafts', () => {
     for (const [name, role] of [
       ['admin', 'ADMIN'],
       ['lecturer', 'LECTURER'],
+      ['receiver', 'LECTURER'],
       ['student', 'STUDENT'],
       ['other', 'STUDENT'],
     ]) {
@@ -79,6 +80,11 @@ describe('private material drafts', () => {
       'INSERT INTO hucescholar.lecturer_assignments(lecturer_id,course_id,assigned_by) VALUES($1,$2,$3)',
       [users.lecturer, courses[0], users.admin],
     );
+    for (const course of courses)
+      await db.query(
+        'INSERT INTO hucescholar.lecturer_assignments(lecturer_id,course_id,assigned_by) VALUES($1,$2,$3)',
+        [users.receiver, course, users.admin],
+      );
     const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = module.createNestApplication();
     app.useLogger(false);
@@ -122,6 +128,14 @@ describe('private material drafts', () => {
         );
         await db.query(
           'UPDATE hucescholar.documents SET current_version_id=null WHERE created_by=ANY($1::bigint[])',
+          [ids],
+        );
+        await db.query(
+          'DELETE FROM hucescholar.ownership_transfers WHERE performed_by=ANY($1::bigint[])',
+          [ids],
+        );
+        await db.query(
+          'DELETE FROM hucescholar.visibility_events WHERE performed_by=ANY($1::bigint[])',
           [ids],
         );
         await db.query(
@@ -1041,6 +1055,318 @@ describe('private material drafts', () => {
     expect((await review(item.requestId, decision())).status).toBe(201);
     return { ...item, path: `/api/v1/library/versions/${item.versionId}` };
   }
+  async function lifecycleWrite(id: string, action: string, data: object, name = 'admin') {
+    const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+    return agents[name]
+      .post(`/api/v1/admin/materials/${id}/${action}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send(data);
+  }
+  const documentRevision = async (id: string) =>
+    (await db.query('SELECT revision FROM hucescholar.documents WHERE id=$1', [id])).rows[0]
+      .revision;
+  it('lifecycle admin lists all materials and transfers a pending lecturer document atomically', async () => {
+    const item = await submitted('lecturer');
+    const detail = await agents.admin.get(`/api/v1/admin/materials/${item.id}`).expect(200);
+    expect(detail.body.item).toMatchObject({
+      id: item.id,
+      manager: { id: users.lecturer },
+      latest: { reviewStatus: 'SUBMITTED' },
+    });
+    const options = await agents.admin
+      .get(`/api/v1/admin/materials/${item.id}/recipients`)
+      .expect(200);
+    expect(options.body.items.map((r: { id: string }) => r.id)).toContain(users.receiver);
+    expect(options.body.items.map((r: { id: string }) => r.id)).not.toContain(users.lecturer);
+    const result = await lifecycleWrite(item.id, 'transfer', {
+      revision: detail.body.item.revision,
+      recipientId: users.receiver,
+      reason: 'Bàn giao tổng hợp',
+    });
+    expect(result.status).toBe(201);
+    expect(result.body.item.manager.id).toBe(users.receiver);
+    expect(result.body.item.latest.reviewStatus).toBe('DRAFT');
+    const requestRow = (
+      await db.query('SELECT * FROM hucescholar.publication_requests WHERE id=$1', [item.requestId])
+    ).rows[0];
+    expect(requestRow).toMatchObject({
+      status: 'WITHDRAWN',
+      submitted_by: users.lecturer,
+      resolved_by: users.admin,
+      reason: 'Bàn giao tổng hợp',
+    });
+    await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`).expect(404);
+    expect(
+      (await agents.receiver.get(`/api/v1/material-drafts/${item.id}`).expect(200)).body.item
+        .editable,
+    ).toBe(true);
+    const history = await agents.admin.get(`/api/v1/admin/materials/${item.id}`).expect(200);
+    expect(history.body.item.history.transfers[0]).toMatchObject({
+      fromUserId: users.lecturer,
+      toUserId: users.receiver,
+      reason: 'Bàn giao tổng hợp',
+    });
+    const list = await agents.admin
+      .get(
+        `/api/v1/admin/materials?search=${encodeURIComponent(item.title)}&kind=LECTURER_MATERIAL`,
+      )
+      .expect(200);
+    expect(list.body.items.some((r: { id: string }) => r.id === item.id)).toBe(true);
+  });
+  it('lifecycle transfer validates role, all historic courses, revision and CSRF without changing a student document', async () => {
+    const student = await submitted();
+    expect(
+      (
+        await lifecycleWrite(student.id, 'transfer', {
+          revision: await documentRevision(student.id),
+          recipientId: users.receiver,
+          reason: 'Wrong kind',
+        })
+      ).status,
+    ).toBe(409);
+    const item = await submitted('lecturer');
+    const revision = await documentRevision(item.id);
+    const body = { revision, recipientId: users.receiver, reason: 'Transfer' };
+    await agents.student.get('/api/v1/admin/materials').expect(403);
+    await agents.lecturer.get(`/api/v1/admin/materials/${item.id}`).expect(403);
+    await agents.admin.post(`/api/v1/admin/materials/${item.id}/transfer`).send(body).expect(403);
+    expect((await lifecycleWrite(item.id, 'transfer', { ...body, reason: '  ' })).status).toBe(400);
+    expect(
+      (await lifecycleWrite(item.id, 'transfer', { ...body, managerId: users.student })).status,
+    ).toBe(400);
+    expect(
+      (await lifecycleWrite(item.id, 'transfer', { ...body, recipientId: users.student })).status,
+    ).toBe(409);
+    expect(
+      (await lifecycleWrite(item.id, 'transfer', { ...body, recipientId: users.lecturer })).status,
+    ).toBe(409);
+    // Receiver lacks historic course 0; the new draft only uses course 1.
+    const rejected = await submitted('lecturer');
+    expect((await review(rejected.requestId, decision('REJECTED'))).status).toBe(201);
+    await db.query(
+      "INSERT INTO hucescholar.document_versions(document_id,version_no,created_by,title,material_type,source_reference,rights_basis) VALUES($1,2,$2,'Historic course fixture','TEXTBOOK','Source','Rights')",
+      [rejected.id, users.lecturer],
+    );
+    // The terminal course links are immutable; add the extra course to the new draft.
+    const second = (
+      await db.query(
+        'SELECT id FROM hucescholar.document_versions WHERE document_id=$1 AND version_no=2',
+        [rejected.id],
+      )
+    ).rows[0].id;
+    await db.query('INSERT INTO hucescholar.version_courses(version_id,course_id) VALUES($1,$2)', [
+      second,
+      courses[1],
+    ]);
+    await db.query(
+      'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2 WHERE lecturer_id=$1 AND course_id=$3 AND revoked_at IS NULL',
+      [users.receiver, users.admin, courses[0]],
+    );
+    try {
+      expect(
+        (await agents.admin.get(`/api/v1/admin/materials/${rejected.id}/recipients`).expect(200))
+          .body.items,
+      ).toEqual([]);
+      expect(
+        (
+          await lifecycleWrite(rejected.id, 'transfer', {
+            ...body,
+            revision: await documentRevision(rejected.id),
+          })
+        ).body.code,
+      ).toBe('ASSIGNMENT_REQUIRED');
+    } finally {
+      await db.query(
+        'UPDATE hucescholar.lecturer_assignments SET revoked_at=null,revoked_by=null WHERE lecturer_id=$1 AND course_id=$2',
+        [users.receiver, courses[0]],
+      );
+    }
+    const outcomes = await Promise.all([
+      lifecycleWrite(item.id, 'transfer', body),
+      lifecycleWrite(item.id, 'transfer', body),
+    ]);
+    expect(outcomes.map((r) => r.status).sort()).toEqual([201, 409]);
+  });
+  it('lifecycle transfer and moderation resolve one pending request and audit failure rolls everything back', async () => {
+    const item = await submitted('lecturer');
+    const revision = await documentRevision(item.id);
+    const outcomes = await Promise.all([
+      lifecycleWrite(item.id, 'transfer', {
+        revision,
+        recipientId: users.receiver,
+        reason: 'Concurrent handover',
+      }),
+      review(item.requestId, decision()),
+    ]);
+    expect(outcomes.map((r) => r.status).sort()).toEqual([201, 409]);
+    const rollback = await submitted('lecturer');
+    const spy = jest
+      .spyOn(app.get(MaterialsService), 'audit')
+      .mockRejectedValueOnce(new Error('Synthetic transfer audit failure'));
+    try {
+      expect(
+        (
+          await lifecycleWrite(rollback.id, 'transfer', {
+            revision: await documentRevision(rollback.id),
+            recipientId: users.receiver,
+            reason: 'Rollback',
+          })
+        ).status,
+      ).toBe(500);
+      expect(
+        (await db.query('SELECT manager_id FROM hucescholar.documents WHERE id=$1', [rollback.id]))
+          .rows[0].manager_id,
+      ).toBe(users.lecturer);
+      expect(
+        (
+          await db.query('SELECT status FROM hucescholar.publication_requests WHERE id=$1', [
+            rollback.requestId,
+          ])
+        ).rows[0].status,
+      ).toBe('PENDING');
+      expect(
+        (
+          await db.query(
+            'SELECT count(*) FROM hucescholar.ownership_transfers WHERE document_id=$1',
+            [rollback.id],
+          )
+        ).rows[0].count,
+      ).toBe('0');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it('lifecycle hide blocks every read and restore retains notes and progress with event history', async () => {
+    const item = await readingFixture();
+    await readingWrite('student', `${item.path}/notes`, {
+      pageNumber: 1,
+      content: 'Retained',
+      requestId: randomUUID(),
+    });
+    await readingWrite('student', `${item.path}/progress`, { pageNumber: 2, revision: 0 }, 'put');
+    const hidden = await lifecycleWrite(item.id, 'visibility', {
+      revision: await documentRevision(item.id),
+      visibility: 'HIDDEN',
+      reason: 'Review source',
+    });
+    expect(hidden.status).toBe(201);
+    expect(hidden.body.item.visibility).toBe('HIDDEN');
+    for (const suffix of ['', '/pdf', '/download', '/notes?pageNumber=1', '/progress'])
+      await agents.student.get(`${item.path}${suffix}`).expect(404);
+    expect(
+      (
+        await db.query('SELECT count(*) FROM hucescholar.annotations WHERE version_id=$1', [
+          item.versionId,
+        ])
+      ).rows[0].count,
+    ).toBe('1');
+    expect(
+      (
+        await lifecycleWrite(item.id, 'visibility', {
+          revision: hidden.body.item.revision,
+          visibility: 'VISIBLE',
+          reason: 'Resolved',
+        })
+      ).status,
+    ).toBe(409);
+    const restored = await lifecycleWrite(item.id, 'visibility', {
+      revision: hidden.body.item.revision,
+      visibility: 'VISIBLE',
+      reason: 'Resolved',
+      resolved: true,
+    });
+    expect(restored.status).toBe(201);
+    expect(
+      restored.body.item.history.visibility.map((e: { toVisibility: string }) => e.toVisibility),
+    ).toEqual(['VISIBLE', 'HIDDEN']);
+    expect(
+      (await agents.student.get(`${item.path}/notes?pageNumber=1`)).body.items[0].content,
+    ).toBe('Retained');
+    expect((await agents.student.get(`${item.path}/progress`)).body.item.pageNumber).toBe(2);
+    expect(
+      (
+        await lifecycleWrite(item.id, 'visibility', {
+          revision: hidden.body.item.revision,
+          visibility: 'HIDDEN',
+          reason: 'Stale',
+        })
+      ).status,
+    ).toBe(409);
+  });
+  it('lifecycle restore refuses missing current, unsafe files and expired rights, while new approval keeps hidden', async () => {
+    const draft = await create('student');
+    expect(
+      (
+        await lifecycleWrite(draft.id, 'visibility', {
+          revision: await documentRevision(draft.id),
+          visibility: 'HIDDEN',
+          reason: 'Hide draft',
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await lifecycleWrite(draft.id, 'visibility', {
+          revision: await documentRevision(draft.id),
+          visibility: 'VISIBLE',
+          reason: 'No current',
+          resolved: true,
+        })
+      ).status,
+    ).toBe(409);
+    const pending = await submitted();
+    expect(
+      (
+        await lifecycleWrite(pending.id, 'visibility', {
+          revision: await documentRevision(pending.id),
+          visibility: 'HIDDEN',
+          reason: 'Hold',
+        })
+      ).status,
+    ).toBe(201);
+    expect((await review(pending.requestId, decision())).status).toBe(201);
+    expect(
+      (await db.query('SELECT visibility FROM hucescholar.documents WHERE id=$1', [pending.id]))
+        .rows[0].visibility,
+    ).toBe('HIDDEN');
+    const file = (
+      await db.query('SELECT file_id FROM hucescholar.document_versions WHERE id=$1', [
+        pending.versionId,
+      ])
+    ).rows[0].file_id;
+    await db.query("UPDATE hucescholar.files SET scan_status='FAILED' WHERE id=$1", [file]);
+    expect(
+      (
+        await lifecycleWrite(pending.id, 'visibility', {
+          revision: await documentRevision(pending.id),
+          visibility: 'VISIBLE',
+          reason: 'Unsafe',
+          resolved: true,
+        })
+      ).body.code,
+    ).toBe('MATERIAL_UNAVAILABLE');
+    await db.query("UPDATE hucescholar.files SET scan_status='SAFE' WHERE id=$1", [file]);
+    const expired = await safeDraft('student');
+    await db.query(
+      "UPDATE hucescholar.document_versions SET rights_valid_until=now()-interval '1 day',review_status='APPROVED' WHERE id=$1",
+      [expired.versionId],
+    );
+    await db.query(
+      "UPDATE hucescholar.documents SET visibility='HIDDEN',current_version_id=$2 WHERE id=$1",
+      [expired.id, expired.versionId],
+    );
+    expect(
+      (
+        await lifecycleWrite(expired.id, 'visibility', {
+          revision: await documentRevision(expired.id),
+          visibility: 'VISIBLE',
+          reason: 'Expired',
+          resolved: true,
+        })
+      ).body.code,
+    ).toBe('MATERIAL_UNAVAILABLE');
+  });
   it('lifecycle creates a fresh next version without changing the published snapshot or private data', async () => {
     const item = await readingFixture();
     const note = await readingWrite('student', `${item.path}/notes`, {
@@ -1058,7 +1384,7 @@ describe('private material drafts', () => {
       id: item.id,
       versionNo: 2,
       reviewStatus: 'DRAFT',
-      revision: 1,
+      revision: before.revision + 1,
       fileState: 'MISSING',
       sourceReference: '',
       rightsBasis: '',
@@ -1094,6 +1420,52 @@ describe('private material drafts', () => {
     expect(history.body.items[0].status).toBe('APPROVED');
     await agents.other.get(`/api/v1/material-drafts/${item.id}/versions`).expect(404);
     await agents.admin.get(`/api/v1/material-drafts/${item.id}/versions`).expect(403);
+  });
+  it('lifecycle rejects old-version metadata, PDF and delayed successor writes', async () => {
+    const draft = await create('student');
+    const saved = await write('student', { ...body(), revision: draft.revision }, draft.id);
+    expect(saved.status).toBe(200);
+    expect((await upload('student', draft.id, saved.body.item.revision)).status).toBe(201);
+    const scan = async (versionId: string) =>
+      db.query(
+        "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=1,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)",
+        [versionId],
+      );
+    await scan(draft.versionId);
+    expect((await publication('student', draft.id, 'submit', { revision: 3 })).status).toBe(201);
+    const request = (await agents.admin.get('/api/v1/admin/publication-requests')).body.items.find(
+      (r: { documentId: string }) => r.documentId === draft.id,
+    );
+    expect(
+      (await review(request.id, { ...decision('REJECTED'), submittedRevision: 4 })).status,
+    ).toBe(201);
+    const next = await publication('student', draft.id, 'versions', { revision: 5 });
+    expect(next.status).toBe(201);
+    const stale = await Promise.all([
+      write('student', { ...body(), title: 'Stale V1 metadata', revision: 1 }, draft.id),
+      upload('student', draft.id, 1),
+    ]);
+    expect(stale.map((r) => r.status)).toEqual([409, 409]);
+    const current = (await agents.student.get(`/api/v1/material-drafts/${draft.id}`)).body.item;
+    const edited = await write('student', { ...body(), revision: current.revision }, draft.id);
+    const attached = await upload('student', draft.id, edited.body.item.revision);
+    await scan(current.versionId);
+    expect(
+      (await publication('student', draft.id, 'submit', { revision: attached.body.item.revision }))
+        .status,
+    ).toBe(201);
+    const pending = (await agents.admin.get('/api/v1/admin/publication-requests')).body.items.find(
+      (r: { documentId: string }) => r.documentId === draft.id,
+    );
+    expect(
+      (
+        await review(pending.id, {
+          ...decision('REJECTED'),
+          submittedRevision: attached.body.item.revision + 1,
+        })
+      ).status,
+    ).toBe(201);
+    expect((await publication('student', draft.id, 'versions', { revision: 5 })).status).toBe(409);
   });
   it('lifecycle next version accepts terminal rejection but rejects working states, stale retries, invalid fields and CSRF', async () => {
     const pending = await submitted();

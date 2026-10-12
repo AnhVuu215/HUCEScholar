@@ -25,6 +25,7 @@ const selection = {
   title: true,
   authors: true,
   description: true,
+  publication_year: true,
   material_type: true,
   source_reference: true,
   rights_basis: true,
@@ -265,7 +266,7 @@ export class MaterialsService {
           'WORKING_VERSION_EXISTS',
           'Đã có phiên bản đang xử lý. Tải trạng thái để mở bản đó.',
         );
-      if (row.version_no >= 2147483647)
+      if (row.version_no >= 2147483647 || row.revision >= 2147483646)
         throw conflict('VERSION_LIMIT', 'Đã đạt giới hạn phiên bản.');
       const ids = row.version_courses.map((c) => c.courses.id);
       await this.checkCourses(tx, actor, ids);
@@ -273,11 +274,15 @@ export class MaterialsService {
         data: {
           document_id: id,
           version_no: row.version_no + 1,
+          // Owner writes address the latest version by document ID. Never reuse
+          // a predecessor's revision, including for delayed uploads/retries.
+          revision: row.revision + 1,
           created_by: actorId,
           title: row.title,
           authors: row.authors,
           description: row.description,
           material_type: row.material_type,
+          publication_year: row.publication_year,
           source_reference: '',
           rights_basis: '',
           download_allowed: false,
