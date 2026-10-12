@@ -326,6 +326,8 @@ Ràng buộc: `CHECK (from_visibility <> to_visibility)`
 
 ## annotations
 
+Triển khai 12/10/2026 bổ sung `request_id uuid NOT NULL DEFAULT gen_random_uuid()` và unique `(user_id, request_id)` bằng migration `202610120001_annotation_request_id`. UUID không phải token; cùng owner/request/body trả lại note đã tạo để retry sau mất response. Dữ liệu baseline bên dưới giữ nguyên; Prisma schema/migrations là nguồn triển khai. API hiện chỉ hỗ trợ PAGE_NOTE plain text 1–4000 ký tự, kiểm tra trang và revision. Không log/audit nội dung riêng.
+
 Ghi chú riêng gắn người, phiên bản và trang; không gắn sang current_version tự động.
 
 | Trường | Kiểu | Khóa | Null | Ý nghĩa |

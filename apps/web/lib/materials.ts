@@ -143,6 +143,26 @@ export async function draftCourses(params: URLSearchParams, signal: AbortSignal)
 export async function currentDraft(id: string, signal?: AbortSignal) {
   return readItem(await apiRequest(`/material-drafts/${id}`, { signal }));
 }
+export async function nextMaterialVersion(current: MaterialDraft) {
+  return readItem(
+    await academicWrite(
+      `/material-drafts/${current.id}/versions`,
+      { revision: current.revision },
+      'POST',
+    ),
+  );
+}
+export async function materialVersions(
+  id: string,
+  page: number,
+  signal?: AbortSignal,
+): Promise<DraftList> {
+  const data: unknown = await (
+    await apiRequest(`/material-drafts/${id}/versions?page=${page}&limit=10`, { signal })
+  ).json();
+  if (isList(data) && data.items.every(isDraft)) return data as DraftList;
+  throw new Error('Invalid version history.');
+}
 async function readItem(response: Response) {
   const data: unknown = await response.json();
   if (data && typeof data === 'object' && 'item' in data && isDraft(data.item)) return data.item;
@@ -161,9 +181,13 @@ export async function publicationHistory(
   id: string,
   page: number,
   signal?: AbortSignal,
+  versionId?: string,
 ): Promise<PublicationHistory> {
   const data: unknown = await (
-    await apiRequest(`/material-drafts/${id}/requests?page=${page}&limit=10`, { signal })
+    await apiRequest(
+      `/material-drafts/${id}/requests?page=${page}&limit=10${versionId ? `&versionId=${encodeURIComponent(versionId)}` : ''}`,
+      { signal },
+    )
   ).json();
   if (
     isList(data) &&
