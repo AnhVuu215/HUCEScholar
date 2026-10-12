@@ -77,6 +77,10 @@ try {
     ['drafts-student', 'STUDENT'],
     ['reader-admin', 'ADMIN'],
     ['reader-student', 'STUDENT'],
+    ['notes-admin', 'ADMIN'],
+    ['notes-student', 'STUDENT'],
+    ['progress-admin', 'ADMIN'],
+    ['progress-student', 'STUDENT'],
     ['lecturer', 'LECTURER'],
     ['student', 'STUDENT'],
   ];

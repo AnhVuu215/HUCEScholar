@@ -9,6 +9,7 @@ import type {
   TextLayer,
 } from 'pdfjs-dist';
 import { libraryVersion, libraryError, type LibraryItem } from '../../lib/library';
+import { ReaderNotes } from './reader-notes';
 
 export function LibraryReader({ id }: { id: string }) {
   const [item, setItem] = useState<LibraryItem | null>(null),
@@ -148,7 +149,6 @@ export function LibraryReader({ id }: { id: string }) {
   function retry() {
     setError('');
     setPdf(null);
-    setItem(null);
     setRendered('');
     setPage(1);
     setAttempt((n) => n + 1);
@@ -291,13 +291,14 @@ export function LibraryReader({ id }: { id: string }) {
                 <p>{item.description}</p>
               </details>
               <p className="field-hint">
-                Chưa hỗ trợ ghi chú, lưu tiến độ hoặc đọc offline. Chỉ đọc không phải cơ chế chống
+                Chưa hỗ trợ highlight, lưu tiến độ hoặc đọc offline. Chỉ đọc không phải cơ chế chống
                 sao chép.
               </p>
             </>
           )}
         </>
       )}
+      {item && <ReaderNotes versionId={id} page={page} />}
     </section>
   );
 }
