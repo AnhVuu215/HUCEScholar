@@ -156,6 +156,9 @@ describe('private material drafts', () => {
         await db.query('DELETE FROM hucescholar.reading_progress WHERE user_id=ANY($1::bigint[])', [
           ids,
         ]);
+        await db.query('DELETE FROM hucescholar.saved_documents WHERE user_id=ANY($1::bigint[])', [
+          ids,
+        ]);
         await db.query(
           'DELETE FROM hucescholar.document_versions WHERE created_by=ANY($1::bigint[])',
           [ids],
@@ -1055,6 +1058,166 @@ describe('private material drafts', () => {
     expect((await review(item.requestId, decision())).status).toBe(201);
     return { ...item, path: `/api/v1/library/versions/${item.versionId}` };
   }
+  async function savedWrite(
+    name: string,
+    id: string,
+    method: 'put' | 'delete' = 'put',
+    body: object = { saved: true },
+  ) {
+    const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+    return agents[name][method](`/api/v1/personal-library/saved/${id}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send(body);
+  }
+  it.each(['student', 'lecturer', 'admin'])(
+    'personal library is private and save/remove is idempotent for %s',
+    async (role) => {
+      const item = await readingFixture();
+      const path = `/api/v1/personal-library/saved/${item.id}`;
+      expect((await agents[role].get(path)).body.saved).toBe(false);
+      const saved = await Promise.all([savedWrite(role, item.id), savedWrite(role, item.id)]);
+      expect(saved.map((r) => r.status)).toEqual([200, 200]);
+      expect((await agents[role].get(path)).body.saved).toBe(true);
+      const mine = await agents[role].get('/api/v1/personal-library/saved').expect(200);
+      expect(mine.body.limit).toBe(12);
+      expect(
+        mine.body.items.find((r: { documentId: string }) => r.documentId === item.id).material
+          .versionId,
+      ).toBe(item.versionId);
+      expect(JSON.stringify(mine.body)).not.toMatch(/object_key|request_id|password|sha256/);
+      expect((await agents.other.get(path)).body.saved).toBe(false);
+      expect((await agents.other.get('/api/v1/personal-library/saved')).body.items).toEqual([]);
+      expect((await savedWrite('other', item.id, 'delete')).status).toBe(200);
+      expect((await agents[role].get(path)).body.saved).toBe(true);
+      expect((await savedWrite(role, item.id, 'delete')).body.saved).toBe(false);
+      expect((await savedWrite(role, item.id, 'delete')).status).toBe(200);
+    },
+  );
+  it('personal library retains unavailable entries without metadata and allows removing hidden saves', async () => {
+    const item = await readingFixture();
+    expect((await savedWrite('student', item.id)).status).toBe(200);
+    expect(
+      (
+        await readingWrite(
+          'student',
+          `${item.path}/progress`,
+          { pageNumber: 2, revision: 0 },
+          'put',
+        )
+      ).status,
+    ).toBe(200);
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [item.id]);
+    for (const list of ['saved', 'recent']) {
+      const result = await agents.student.get(`/api/v1/personal-library/${list}`).expect(200);
+      const entry = result.body.items.find((r: { documentId: string }) => r.documentId === item.id);
+      expect(entry.material).toBeNull();
+      expect(JSON.stringify(entry)).not.toContain(item.title);
+    }
+    expect((await savedWrite('student', item.id)).status).toBe(404);
+    expect((await savedWrite('student', item.id, 'delete')).status).toBe(200);
+    expect(
+      (
+        await db.query(
+          'SELECT count(*) FROM hucescholar.reading_progress WHERE user_id=$1 AND version_id=$2',
+          [users.student, item.versionId],
+        )
+      ).rows[0].count,
+    ).toBe('1');
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [item.id]);
+    await db.query(
+      "UPDATE hucescholar.files SET scan_status='FAILED' WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)",
+      [item.versionId],
+    );
+    expect((await savedWrite('student', item.id)).status).toBe(404);
+    expect(
+      (await agents.student.get('/api/v1/personal-library/recent')).body.items.find(
+        (r: { versionId: string }) => r.versionId === item.versionId,
+      ).material,
+    ).toBeNull();
+    await db.query(
+      "UPDATE hucescholar.files SET scan_status='SAFE' WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)",
+      [item.versionId],
+    );
+    const expired = await safeDraft('student');
+    await db.query(
+      "UPDATE hucescholar.document_versions SET rights_valid_until=now()-interval '1 day',review_status='APPROVED' WHERE id=$1",
+      [expired.versionId],
+    );
+    await db.query('UPDATE hucescholar.documents SET current_version_id=$2 WHERE id=$1', [
+      expired.id,
+      expired.versionId,
+    ]);
+    await db.query('INSERT INTO hucescholar.saved_documents(user_id,document_id) VALUES($1,$2)', [
+      users.student,
+      expired.id,
+    ]);
+    await db.query(
+      'INSERT INTO hucescholar.reading_progress(user_id,version_id,page_number) VALUES($1,$2,1)',
+      [users.student, expired.versionId],
+    );
+    expect((await savedWrite('student', expired.id)).status).toBe(404);
+    for (const list of ['saved', 'recent']) {
+      const result = await agents.student.get(`/api/v1/personal-library/${list}`).expect(200);
+      expect(
+        result.body.items.find((r: { documentId: string }) => r.documentId === expired.id).material,
+      ).toBeNull();
+    }
+    expect((await savedWrite('student', expired.id, 'delete')).status).toBe(200);
+  });
+  it('personal saved entries follow current while recent remains pinned to the old approved version', async () => {
+    const item = await readingFixture();
+    await savedWrite('student', item.id);
+    await readingWrite('student', `${item.path}/progress`, { pageNumber: 2, revision: 0 }, 'put');
+    const next = (
+      await db.query(
+        "INSERT INTO hucescholar.document_versions(document_id,version_no,file_id,created_by,title,authors,material_type,source_reference,rights_basis,review_status) SELECT document_id,2,file_id,created_by,'New published snapshot',authors,material_type,source_reference,rights_basis,'APPROVED' FROM hucescholar.document_versions WHERE id=$1 RETURNING id",
+        [item.versionId],
+      )
+    ).rows[0];
+    await db.query('UPDATE hucescholar.documents SET current_version_id=$2 WHERE id=$1', [
+      item.id,
+      next.id,
+    ]);
+    const saved = (await agents.student.get('/api/v1/personal-library/saved')).body.items.find(
+      (r: { documentId: string }) => r.documentId === item.id,
+    );
+    const recent = (await agents.student.get('/api/v1/personal-library/recent')).body.items.find(
+      (r: { versionId: string }) => r.versionId === item.versionId,
+    );
+    expect(saved.material.versionId).toBe(next.id);
+    expect(recent.material).toMatchObject({ versionId: item.versionId, current: false });
+    expect(recent.pageNumber).toBe(2);
+    expect((await agents.other.get('/api/v1/personal-library/recent')).body.items).toEqual([]);
+  });
+  it('personal library validates input, pagination and CSRF and refuses unpublished saves', async () => {
+    const unpublished = await create('student');
+    expect((await savedWrite('student', unpublished.id)).status).toBe(404);
+    expect((await savedWrite('student', '9223372036854775808')).status).toBe(400);
+    const item = await readingFixture();
+    await agents.student
+      .put(`/api/v1/personal-library/saved/${item.id}`)
+      .send({ saved: true })
+      .expect(403);
+    expect(
+      (await savedWrite('student', item.id, 'put', { saved: true, userId: users.other })).status,
+    ).toBe(400);
+    expect((await savedWrite('student', item.id, 'put', { saved: false })).status).toBe(400);
+    await agents.student.get('/api/v1/personal-library/saved?userId=1').expect(400);
+    await agents.student.get('/api/v1/personal-library/recent?limit=101').expect(400);
+    await savedWrite('student', item.id);
+    const second = await readingFixture();
+    await savedWrite('student', second.id);
+    const pages = await Promise.all(
+      [1, 2].map((page) =>
+        agents.student.get(`/api/v1/personal-library/saved?limit=1&page=${page}`),
+      ),
+    );
+    expect(pages.map((r) => r.status)).toEqual([200, 200]);
+    expect(pages[0].body.items).toHaveLength(1);
+    expect(pages[0].body.items[0].documentId).not.toBe(pages[1].body.items[0].documentId);
+    expect(pages[0].headers['cache-control']).toBe('no-store');
+  });
   async function lifecycleWrite(id: string, action: string, data: object, name = 'admin') {
     const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
     return agents[name]
