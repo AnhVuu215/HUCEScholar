@@ -801,6 +801,13 @@ h2 {
   gap: 12px;
   margin-top: 24px;
 }
+.lifecycle-history-pagination {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.lifecycle-history-pagination > * {
+  white-space: nowrap;
+}
 
 .catalog-tabs {
   display: flex;
@@ -839,6 +846,18 @@ h2 {
 }
 .draft-wide {
   grid-column: 1 / -1;
+}
+.lifecycle-detail > fieldset {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.lifecycle-detail > fieldset > legend {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.lifecycle-detail textarea {
+  min-height: 100px;
 }
 .draft-courses {
   margin-block: 28px;

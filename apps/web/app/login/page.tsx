@@ -28,8 +28,8 @@ export default function LoginPage() {
             bạn cần nhớ.
           </p>
           <p className="auth-progress">
-            Đang phát triển: đăng nhập đã sẵn sàng. Kho học liệu và trình đọc sẽ được bổ sung ở các
-            mốc tiếp theo.
+            Bản phát triển đã có kho học liệu, trình đọc, ghi chú riêng và lịch sử phiên bản. Nội
+            dung chỉ được đọc khi đủ điều kiện công bố và quyền sử dụng.
           </p>
         </div>
         <p className="auth-foot">
