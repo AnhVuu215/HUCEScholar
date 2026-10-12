@@ -81,6 +81,11 @@ try {
     ['notes-student', 'STUDENT'],
     ['progress-admin', 'ADMIN'],
     ['progress-student', 'STUDENT'],
+    ['versions-admin', 'ADMIN'],
+    ['versions-student', 'STUDENT'],
+    ['lifecycle-admin', 'ADMIN'],
+    ['lifecycle-lecturer', 'LECTURER'],
+    ['lifecycle-receiver', 'LECTURER'],
     ['lecturer', 'LECTURER'],
     ['student', 'STUDENT'],
   ];

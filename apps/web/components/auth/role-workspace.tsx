@@ -20,9 +20,9 @@ type State =
   | { kind: 'error' };
 const upcoming: Record<Role, string> = {
   ADMIN:
-    'Bạn có thể quản lý tài khoản, danh mục, phân công và kiểm duyệt học liệu. Mở Kiểm duyệt học liệu để xem yêu cầu, yêu cầu sửa, từ chối hoặc duyệt bản hiện hành.',
+    'Bạn có thể quản lý tài khoản, danh mục, phân công và kiểm duyệt. Mở Quản lý học liệu để bàn giao giảng viên hoặc ẩn/khôi phục toàn tài liệu.',
   LECTURER:
-    'Bạn có thể xem phân công, chuẩn bị bản nháp, tải PDF, gửi/rút yêu cầu và xem quyết định. Mở Kho học liệu để đọc bản đã công bố, ghi chú riêng theo trang và mở lại trang đã đọc. Phiên bản kế tiếp sẽ được bổ sung sau.',
+    'Bạn có thể xem phân công, chuẩn bị bản nháp, tải PDF, gửi/rút yêu cầu và xem quyết định. Sau duyệt hoặc từ chối, tạo phiên bản kế tiếp trong Học liệu của tôi. Mở Kho học liệu để đọc, ghi chú riêng và mở lại trang đã đọc.',
   STUDENT:
     'Bạn có thể tìm và đọc trong Kho học liệu, ghi chú riêng theo trang, mở lại trang đã đọc, tải khi được phép, chuẩn bị tài liệu bổ sung và theo dõi kết quả duyệt.',
 };
@@ -38,7 +38,8 @@ export function RoleWorkspace({
   children?: ReactNode;
   title?: string;
   description?: string;
-  activeSection?: 'users' | 'catalog' | 'assignments' | 'materials' | 'moderation' | 'library';
+  activeSection?:
+    'users' | 'catalog' | 'assignments' | 'materials' | 'moderation' | 'library' | 'lifecycle';
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -174,6 +175,14 @@ export function RoleWorkspace({
             </Link>
           )}
           <Link href="/project">Tiến độ dự án</Link>
+          {state.kind === 'ready' && state.user.role === 'ADMIN' && (
+            <Link
+              href="/workspace/admin/materials"
+              aria-current={activeSection === 'lifecycle' ? 'page' : undefined}
+            >
+              Quản lý học liệu
+            </Link>
+          )}
           {state.kind === 'ready' && (
             <Link
               href="/workspace/library"
