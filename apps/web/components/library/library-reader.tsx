@@ -208,7 +208,7 @@ export function LibraryReader({ id }: { id: string }) {
               <h2>{item.title}</h2>
               <p>
                 {item.authors || 'Chưa ghi tác giả'} · Phiên bản {item.versionNo}
-                {!item.current ? ' · Bản cũ đã duyệt' : ''}
+                {!item.current ? ' · Bản công bố trước' : ''}
               </p>
               <SaveMaterial key={item.documentId} documentId={item.documentId} />
               <div className="reader-toolbar" aria-label="Điều khiển đọc PDF">
@@ -302,24 +302,37 @@ export function LibraryReader({ id }: { id: string }) {
                 <div ref={paper} />
               </div>
               <details className="reader-source">
-                <summary>Nguồn và quyền sử dụng</summary>
+                <summary>
+                  {item.publicationMethod === 'LECTURER_SELF'
+                    ? 'Thông tin tài liệu'
+                    : 'Nguồn và quyền sử dụng'}
+                </summary>
                 <dl className="scope-list">
                   <div>
                     <dt>Nguồn</dt>
-                    <dd>{item.sourceReference}</dd>
+                    <dd>{item.sourceReference || 'Giảng viên chưa ghi nguồn tham khảo.'}</dd>
                   </div>
-                  <div>
-                    <dt>Căn cứ quyền</dt>
-                    <dd>{item.rightsBasis}</dd>
-                  </div>
-                  <div>
-                    <dt>Hạn quyền</dt>
-                    <dd>
-                      {item.rightsValidUntil
-                        ? new Date(item.rightsValidUntil).toLocaleDateString('vi-VN')
-                        : 'Chưa đặt thời hạn'}
-                    </dd>
-                  </div>
+                  {item.publicationMethod === 'LECTURER_SELF' ? (
+                    <div>
+                      <dt>Công bố</dt>
+                      <dd>Giảng viên tự công bố.</dd>
+                    </div>
+                  ) : (
+                    <div>
+                      <dt>Căn cứ quyền</dt>
+                      <dd>{item.rightsBasis || 'Không có thông tin khai báo.'}</dd>
+                    </div>
+                  )}
+                  {(item.publicationMethod !== 'LECTURER_SELF' || item.rightsValidUntil) && (
+                    <div>
+                      <dt>Hạn quyền</dt>
+                      <dd>
+                        {item.rightsValidUntil
+                          ? new Date(item.rightsValidUntil).toLocaleDateString('vi-VN')
+                          : 'Chưa đặt thời hạn'}
+                      </dd>
+                    </div>
+                  )}
                   <div>
                     <dt>Môn học</dt>
                     <dd>{item.courses.map((c) => `${c.code} · ${c.name}`).join('; ')}</dd>

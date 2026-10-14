@@ -21,11 +21,11 @@ const guides = {
     ],
     [
       'Chuẩn bị học liệu',
-      'Tạo bản nháp cho môn được phân công. Bổ sung thông tin tác giả, nguồn và căn cứ quyền sử dụng.',
+      'Tạo bản nháp cho môn được phân công. Không bắt buộc tài liệu HUCE; nguồn tham khảo là tùy chọn.',
     ],
     [
-      'Đính kèm và kiểm tra',
-      'Lưu bản nháp rồi tải PDF lên. Qua kiểm tra kỹ thuật chưa đồng nghĩa học liệu được duyệt hoặc công bố.',
+      'Upload và công bố',
+      'Lưu bản nháp rồi tải PDF lên. Khi file quét đạt, chọn Công bố; giảng viên không cần admin duyệt.',
     ],
   ],
   'Quản trị viên': [
@@ -36,7 +36,7 @@ const guides = {
     ],
     [
       'Phân công giảng viên',
-      'Gắn giảng viên với môn học phụ trách. Mở Kiểm duyệt học liệu để xem nội dung, nguồn/quyền và ghi quyết định.',
+      'Gắn giảng viên với môn học phụ trách. Giảng viên tự công bố; tài liệu sinh viên bổ sung vẫn qua Kiểm duyệt học liệu.',
     ],
   ],
 } as const;

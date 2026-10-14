@@ -16,6 +16,11 @@ export const reviewStatuses = {
   APPROVED: 'Đã duyệt',
   REJECTED: 'Từ chối',
 } as const;
+export function publicationLabel(item: { reviewStatus: string; publicationMethod: string }) {
+  return item.reviewStatus === 'APPROVED' && item.publicationMethod === 'LECTURER_SELF'
+    ? 'Đã công bố'
+    : (reviewStatuses[item.reviewStatus as keyof typeof reviewStatuses] ?? item.reviewStatus);
+}
 export interface PublicationHistory {
   items: {
     id: string;
@@ -49,6 +54,7 @@ export interface MaterialDraft {
   rightsBasis: string;
   downloadAllowed: boolean;
   reviewStatus: string;
+  publicationMethod: 'ADMIN_REVIEW' | 'LECTURER_SELF';
   fileState: 'MISSING' | 'CHECKING' | 'SAFE' | 'FAILED';
   revision: number;
   updatedAt: string;
@@ -88,6 +94,7 @@ function isDraft(value: unknown): value is MaterialDraft {
     Number.isInteger(d.versionNo) &&
     Number(d.versionNo) > 0 &&
     ['LECTURER_MATERIAL', 'STUDENT_SUPPLEMENT'].includes(String(d.kind)) &&
+    ['ADMIN_REVIEW', 'LECTURER_SELF'].includes(String(d.publicationMethod)) &&
     ['title', 'authors', 'description', 'sourceReference', 'rightsBasis', 'updatedAt'].every(
       (k) => typeof d[k] === 'string',
     ) &&
@@ -211,7 +218,7 @@ export async function publicationHistory(
 }
 export async function changePublication(
   current: MaterialDraft,
-  action: 'submit' | 'withdraw' | 'reopen',
+  action: 'submit' | 'withdraw' | 'reopen' | 'publish',
   reason?: string,
 ) {
   return readItem(

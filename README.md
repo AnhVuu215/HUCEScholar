@@ -1,5 +1,7 @@
 # HUCEScholar
 
+**Cập nhật14/10/2026:** giảng viên upload PDF từ nguồn tự chọn và tự công bố khi file quét đạt; nguồn tham khảo tùy chọn, không bắt buộc căn cứ quyền hoặc admin duyệt. Tài liệu sinh viên vẫn dùng quy trình kiểm duyệt.
+
 Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hướng web responsive + PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên. Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường.
 
 Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF private, gửi/rút và xem lịch sử. Admin xem PDF SAFE, yêu cầu sửa, từ chối hoặc duyệt bản hiện hành; chủ mở lại bản được yêu cầu sửa. Đã có kho học liệu, reader PDF.js, tải bản gốc theo quyền, ghi chú riêng theo trang và lưu tiến độ đọc. Giao diện responsive cho desktop, điện thoại và tablet. **Chưa có học liệu trường được cấp quyền thật, highlight, đọc offline hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
@@ -21,6 +23,7 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [Ghi chú riêng và tiến độ đọc](docs/implementation/2026-10-12-reader-notes-progress.md)
 - [Phiên bản, bàn giao và ẩn/khôi phục](docs/implementation/2026-10-12-material-lifecycle.md)
 - [Thư viện cá nhân](docs/implementation/2026-10-12-personal-library.md)
+- [Giảng viên upload và tự công bố](docs/implementation/2026-10-14-lecturer-self-publication.md)
 - [Tiến độ và phần còn lại ngày 14/10/2026](docs/implementation/2026-10-14-project-status.md)
 - [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)
 - [Prototype thiết kế](design/wireframe/README.md)
@@ -70,11 +73,11 @@ Tại `/workspace/admin/assignments`, chọn giảng viên hoạt động/đã x
 
 ## Bản nháp học liệu
 
-Giảng viên mở `/workspace/lecturer/materials`, sinh viên mở `/workspace/student/materials` hoặc chọn **Học liệu của tôi**. Tạo bản nháp, nhập tiêu đề/loại/nguồn/căn cứ quyền, thêm 1–20 môn rồi lưu. Tác giả/mô tả có thể để trống. Bản sinh viên mang loại riêng, không sửa giáo trình giảng viên; Admin không biên soạn ở luồng này.
+Giảng viên mở `/workspace/lecturer/materials`, sinh viên mở `/workspace/student/materials` hoặc chọn **Học liệu của tôi**. Tạo bản nháp, nhập tiêu đề/loại, thêm 1–20 môn rồi lưu. Tác giả/mô tả có thể để trống. **Giảng viên không cần tài liệu HUCE, nguồn tham khảo tùy chọn và không bắt buộc khai báo căn cứ quyền.** Sinh viên vẫn cần nguồn/căn cứ quyền cho tài liệu bổ sung và không sửa học liệu giảng viên; Admin không biên soạn ở luồng này.
 
-Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. Bản đã lưu có thể gắn/thay PDF tối đa 25 MiB, xem CHECKING/SAFE/FAILED bằng **Cập nhật trạng thái**. SAFE chỉ là kết quả kỹ thuật. Quyền tải bản gốc chỉ có hiệu lực khi phiên bản đủ điều kiện đọc sau khi duyệt.
+Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. Bản đã lưu có thể gắn/thay PDF tối đa25MiB, xem CHECKING/SAFE/FAILED bằng **Cập nhật trạng thái**. Khi SAFE, giảng viên chọn **Công bố** rồi xác nhận: tài liệu xuất hiện trong kho nếu đang hiển thị, không qua admin duyệt. Mất phản hồi dùng **Tải trạng thái công bố** trước retry. Lựa chọn tải PDF có hiệu lực sau công bố. Xem [giảng viên tự công bố](docs/implementation/2026-10-14-lecturer-self-publication.md).
 
-Khi PDF SAFE, chọn **Gửi duyệt** rồi xác nhận phiên bản/lần lưu. Bản SUBMITTED khóa metadata/PDF; nhập lý do rồi **Rút về nháp** để sửa. Giảng viên mất phân công vẫn rút được nhưng không sửa/gửi lại. Nếu lỗi hoặc chưa rõ kết quả, bấm **Tải trạng thái duyệt** trước retry. Chủ thấy quyết định/lý do trong lịch sử và lọc cả năm trạng thái; CHANGES_REQUIRED có **Mở lại để chỉnh sửa**. APPROVED/REJECTED giữ nguyên; chọn **Tạo phiên bản kế tiếp** và xác nhận để copy metadata/môn sang nháp mới. PDF, nguồn/quyền và quyền tải được xác nhận lại. Bản công bố và ghi chú cũ giữ nguyên; **Lịch sử phiên bản** cho xem các lần duyệt trước.
+Sinh viên chọn **Gửi duyệt** khi PDF SAFE rồi xác nhận phiên bản/lần lưu. Bản SUBMITTED khóa metadata/PDF; nhập lý do rồi **Rút về nháp** để sửa. Nếu lỗi hoặc chưa rõ kết quả, bấm **Tải trạng thái duyệt** trước retry. Yêu cầu giảng viên cũ vẫn được rút/mở lại; sau đó dùng Công bố. CHANGES_REQUIRED có **Mở lại để chỉnh sửa**. APPROVED/REJECTED giữ nguyên; **Tạo phiên bản kế tiếp** copy thông tin/môn sang nháp mới, cần PDF mới và chọn lại quyền tải. Giảng viên tự công bố lại, sinh viên gửi duyệt lại. Bản công bố và ghi chú cũ giữ nguyên; **Lịch sử phiên bản** giữ các yêu cầu/ quyết định trước đó.
 
 Admin mở **Kiểm duyệt học liệu** ở `/workspace/admin/moderation`, lọc yêu cầu và mở chi tiết. Chỉ PDF SAFE với snapshot còn khớp được mở ở tab mới. Chọn quyết định, nhập lý do, duyệt cần xác nhận đã kiểm tra nội dung/quyền; xác nhận inline để lưu. Duyệt đặt bản hiện hành, không tự mở tài liệu HIDDEN. Khi mất kết nối, **Tải trạng thái yêu cầu** trước retry.
 

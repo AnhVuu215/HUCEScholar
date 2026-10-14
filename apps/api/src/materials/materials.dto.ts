@@ -23,8 +23,8 @@ export class DraftFieldsDto {
   @Transform(trim) @IsString() @MaxLength(500) authors!: string;
   @Transform(trim) @IsString() @MaxLength(1500) description!: string;
   @IsIn(['TEXTBOOK', 'LECTURE', 'EXERCISE', 'EXAM', 'REFERENCE', 'OTHER']) materialType!: string;
-  @Transform(trim) @IsString() @MinLength(1) @MaxLength(1000) sourceReference!: string;
-  @Transform(trim) @IsString() @MinLength(1) @MaxLength(1000) rightsBasis!: string;
+  @Transform(trim) @IsString() @MaxLength(1000) sourceReference = '';
+  @Transform(trim) @IsString() @MaxLength(1000) rightsBasis = '';
   @IsBoolean() downloadAllowed!: boolean;
   @IsArray()
   @ArrayMinSize(1)

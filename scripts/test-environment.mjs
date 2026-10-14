@@ -85,6 +85,8 @@ try {
     ['versions-student', 'STUDENT'],
     ['personal-admin', 'ADMIN'],
     ['personal-student', 'STUDENT'],
+    ['selfpublish-admin', 'ADMIN'],
+    ['selfpublish-lecturer', 'LECTURER'],
     ['lifecycle-admin', 'ADMIN'],
     ['lifecycle-lecturer', 'LECTURER'],
     ['lifecycle-receiver', 'LECTURER'],

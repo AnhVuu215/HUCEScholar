@@ -5,6 +5,7 @@ type Version = {
   versionNo: number;
   title: string;
   reviewStatus: string;
+  publicationMethod: 'ADMIN_REVIEW' | 'LECTURER_SELF';
   fileState: string;
 };
 export type ManagedMaterial = {
@@ -54,6 +55,7 @@ const version = (v: unknown): v is Version =>
   integer(v.versionNo) &&
   Number(v.versionNo) > 0 &&
   typeof v.title === 'string' &&
+  ['ADMIN_REVIEW', 'LECTURER_SELF'].includes(String(v.publicationMethod)) &&
   ['DRAFT', 'SUBMITTED', 'CHANGES_REQUIRED', 'APPROVED', 'REJECTED'].includes(
     String(v.reviewStatus),
   ) &&

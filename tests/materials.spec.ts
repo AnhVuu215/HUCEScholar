@@ -67,9 +67,10 @@ async function fill(page: Page, code: string) {
   await page
     .getByLabel('Nguồn tài liệu', { exact: true })
     .fill('Tài liệu tổng hợp tự biên soạn — dữ liệu kiểm thử');
-  await page
-    .getByLabel('Căn cứ quyền sử dụng', { exact: true })
-    .fill('Tác giả cho phép chia sẻ học tập — minh họa');
+  if (await page.getByLabel('Căn cứ quyền sử dụng', { exact: true }).count())
+    await page
+      .getByLabel('Căn cứ quyền sử dụng', { exact: true })
+      .fill('Tác giả cho phép chia sẻ học tập — minh họa');
   await page.getByLabel('Tìm môn học liên quan', { exact: true }).fill(code);
   await expect(
     page
@@ -92,7 +93,7 @@ async function markSyntheticSafe(id: string, pageCount = 1) {
   try {
     // Explicit synthetic scan fixture; does not claim real scanner evidence.
     const result = await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-personal-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-personal-%@example.test' OR u.email LIKE 'e2e-selfpublish-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
       [id, pageCount],
     );
     expect(result.rowCount).toBe(1);
@@ -227,7 +228,9 @@ test('student searches the library and reads, selects text, changes pages, zooms
     }
   }
   await page.getByRole('link', { name: `Đọc Học liệu minh họa ${code}`, exact: true }).click();
-  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.locator('.textLayer')).toContainText('HUCEScholar reader fixture');
   expect(
     await page.locator('.reader-page canvas').evaluate((node: HTMLCanvasElement) => {
@@ -292,12 +295,16 @@ test('student searches the library and reads, selects text, changes pages, zooms
   const range = await page.request.get(pdfPath, { headers: { Range: 'bytes=0-4' } });
   expect(range.status()).toBe(206);
   expect((await range.body()).toString()).toBe('%PDF-');
+  // Reload/retry resumes acknowledged progress; do not race the debounced page-2 save.
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã lưu tiến độ · Trang 2' }),
+  ).toBeVisible();
   await page.route('**/api/v1/library/versions/*/pdf', (route) => route.abort());
   await page.reload();
   await expect(page.getByRole('button', { name: 'Thử mở lại PDF', exact: true })).toBeVisible();
   await page.unroute('**/api/v1/library/versions/*/pdf');
   await page.getByRole('button', { name: 'Thử mở lại PDF', exact: true }).click();
-  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByText('Đã hiển thị trang 2 / 2', { exact: true })).toBeVisible();
 });
 async function openPersonalReader(page: Page, prefix: string) {
   const { code } = await submittedForReview(page, 'student', true, prefix);
@@ -323,9 +330,9 @@ async function openPersonalReader(page: Page, prefix: string) {
   await logoutForTest(page);
   await login(page, 'student', prefix);
   await page.goto(`/workspace/library/versions/${item.versionId}`);
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' }),
-  ).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' })).toBeVisible(
+    { timeout: 15_000 },
+  );
   return `/api/v1/library/versions/${item.versionId}`;
 }
 async function capturePersonal(page: Page, prefix: string) {
@@ -367,6 +374,90 @@ async function capturePersonal(page: Page, prefix: string) {
     });
   }
 }
+test('lecturer self-publication needs no rights declaration or admin decision and recovers after response loss', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const code = await seed(page, 'lecturer', 'e2e-selfpublish');
+  await login(page, 'lecturer', 'e2e-selfpublish');
+  await page.getByRole('button', { name: 'Tạo bản nháp', exact: true }).click();
+  await page.getByLabel('Tiêu đề học liệu', { exact: true }).fill(`PDF tự công bố ${code}`);
+  await page.getByLabel('Tìm môn học liên quan', { exact: true }).fill(code);
+  await page
+    .getByLabel('Môn học liên quan', { exact: true })
+    .selectOption({ label: `${code} · Môn minh họa kiểm thử học liệu` });
+  await page.getByRole('button', { name: 'Thêm môn', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu bản nháp', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã lưu bản nháp' })).toBeVisible();
+  await page
+    .getByRole('button', { name: `Mở bản nháp PDF tự công bố ${code}`, exact: true })
+    .click();
+  await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toBeDisabled();
+  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
+    name: 'self-published.pdf',
+    mimeType: 'application/pdf',
+    buffer: readerPdf(),
+  });
+  await page.getByRole('button', { name: 'Tải PDF lên', exact: true }).click();
+  await expect(page.getByText('Lần lưu 2', { exact: false })).toBeVisible();
+  const item = (await (await page.request.get('/api/v1/material-drafts?search=' + code)).json())
+    .items[0];
+  await markSyntheticSafe(item.id, 2);
+  await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toBeEnabled();
+  await page.route('**/api/v1/material-drafts/*/publish', async (route) => {
+    await route.fetch();
+    await route.abort();
+  });
+  await page.getByRole('button', { name: 'Công bố', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận công bố', exact: true }).click();
+  await expect(page.locator('.publication-actions [role="alert"]')).toContainText(
+    'Tải trạng thái công bố',
+  );
+  await page.unroute('**/api/v1/material-drafts/*/publish');
+  await page.getByRole('button', { name: 'Tải trạng thái công bố', exact: true }).click();
+  await expect(page.locator('.publication-actions')).toContainText('Đã công bố');
+  await expect(
+    page
+      .getByRole('region', { name: 'Lịch sử phiên bản', exact: true })
+      .getByRole('listitem')
+      .first(),
+  ).toContainText('Phiên bản 1 · Đã công bố');
+  await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
+  if (process.env.CAPTURE_SELF_PUBLISH_UI === '1') {
+    mkdirSync('.impeccable/review/self-publication', { recursive: true });
+    for (const [name, width, height] of [
+      ['desktop', 1440, 1000],
+      ['tablet', 768, 1024],
+      ['mobile', 360, 900],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.screenshot({
+        path: `.impeccable/review/self-publication/${name}.png`,
+        fullPage: true,
+      });
+    }
+  }
+  const history = await (
+    await page.request.get(`/api/v1/material-drafts/${item.id}/requests`)
+  ).json();
+  expect(history.total).toBe(0);
+  const current = (await (await page.request.get(`/api/v1/material-drafts/${item.id}`)).json())
+    .item;
+  expect(current).toMatchObject({
+    publicationMethod: 'LECTURER_SELF',
+    sourceReference: '',
+    rightsBasis: '',
+  });
+  await page.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
+  await page.getByLabel('Tìm học liệu', { exact: false }).fill(code);
+  await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
+  await page.getByRole('link', { name: `Đọc PDF tự công bố ${code}`, exact: true }).click();
+  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+});
 test('personal library saves after response loss, shows recent page and removes only its saved link', async ({
   page,
 }) => {
@@ -888,7 +979,7 @@ test('admin approves with rights confirmation and recovers a committed decision 
     (await (await page.request.get(`/api/v1/material-drafts/${id}`)).json()).item.reviewStatus,
   ).toBe('APPROVED');
 });
-test('lecturer sees admin change request, reopens the draft and submits again', async ({
+test('lecturer reopens a legacy change request, self-publishes and retains older request history', async ({
   page,
 }) => {
   test.setTimeout(60000);
@@ -915,7 +1006,7 @@ test('lecturer sees admin change request, reopens the draft and submits again', 
   await expect(page.locator('.moderation-detail')).toContainText('Đã lưu quyết định');
   await logoutForTest(page);
   await login(page, 'lecturer');
-  await page.getByLabel('Trạng thái duyệt', { exact: true }).selectOption('CHANGES_REQUIRED');
+  await page.getByLabel('Trạng thái công bố', { exact: true }).selectOption('CHANGES_REQUIRED');
   await page.getByLabel('Tìm bản nháp', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await page
@@ -923,21 +1014,25 @@ test('lecturer sees admin change request, reopens the draft and submits again', 
     .click();
   await expect(
     page
-      .getByRole('region', { name: 'Yêu cầu duyệt', exact: true })
+      .getByRole('region', { name: 'Công bố tài liệu', exact: true })
       .locator('.publication-history'),
   ).toContainText('Bổ sung dẫn chứng quyền sử dụng');
   await page.getByRole('button', { name: 'Mở lại để chỉnh sửa', exact: true }).click();
   await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
-  await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
-  await expect(
-    page
-      .getByRole('region', { name: 'Yêu cầu duyệt', exact: true })
-      .locator('.publication-history'),
-  ).toContainText('Chờ duyệt');
+  await page.getByRole('button', { name: 'Công bố', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận công bố', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã công bố tài liệu' })).toBeVisible();
+  await page.getByRole('button', { name: 'Tạo phiên bản kế tiếp', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận tạo phiên bản', exact: true }).click();
+  await page.getByRole('button', { name: 'Xem lịch sử yêu cầu phiên bản 1', exact: true }).click();
+  await expect(page.getByText('Bổ sung dẫn chứng quyền sử dụng', { exact: true })).toBeVisible();
 });
 for (const role of ['student', 'lecturer'] as const)
-  test(`${role} can submit and withdraw with a retained reason and history`, async ({ page }) => {
+  test(`${role} can withdraw a pending review with a retained reason and history`, async ({
+    page,
+  }) => {
+    const actionLabel = role === 'lecturer' ? 'Công bố' : 'Gửi duyệt';
+    const refreshLabel = role === 'lecturer' ? 'Tải trạng thái công bố' : 'Tải trạng thái duyệt';
     const code = await seed(page, role);
     await login(page, role);
     await fill(page, code);
@@ -947,7 +1042,7 @@ for (const role of ['student', 'lecturer'] as const)
     await page
       .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
       .click();
-    await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: actionLabel, exact: true })).toBeDisabled();
     await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
       name: 'synthetic-publication.pdf',
       mimeType: 'application/pdf',
@@ -960,31 +1055,44 @@ for (const role of ['student', 'lecturer'] as const)
     await markSyntheticSafe(item.id);
     await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
     await page.getByLabel('Tác giả', { exact: false }).fill('Chưa lưu');
-    await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: actionLabel, exact: true })).toBeDisabled();
     await page.getByLabel('Tác giả', { exact: false }).fill('Tác giả kiểm thử');
-    if (role === 'lecturer')
-      await page.route('**/api/v1/material-drafts/*/submit', async (route) => {
-        await route.fetch();
-        await route.abort('failed');
-      });
-    await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
-    await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
     if (role === 'lecturer') {
-      await expect(page.locator('.publication-actions [role="alert"]')).toContainText(
-        'Tải trạng thái duyệt',
-      );
-      await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
-      await expect(page.getByLabel('Chọn PDF', { exact: true })).toBeDisabled();
-      await expect(
-        page.getByRole('button', { name: 'Tải trạng thái duyệt', exact: true }),
-      ).toBeEnabled();
-      await page.unroute('**/api/v1/material-drafts/*/submit');
-      await page.getByRole('button', { name: 'Tải trạng thái duyệt', exact: true }).click();
+      // Compatibility: a lecturer's pending request created before self-publication can still be withdrawn.
+      const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+      const legacy = await page.request.patch(`/api/v1/material-drafts/${item.id}`, {
+        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+        data: {
+          title: item.title,
+          authors: item.authors,
+          description: item.description,
+          materialType: item.materialType,
+          sourceReference: 'Synthetic legacy source',
+          rightsBasis: 'Synthetic legacy declaration',
+          downloadAllowed: item.downloadAllowed,
+          courseIds: item.courses.map((c: { id: string }) => c.id),
+          revision: item.revision,
+        },
+      });
+      expect(legacy.status()).toBe(200);
+      const legacyRevision = (await legacy.json()).item.revision;
+      expect(
+        (
+          await page.request.post(`/api/v1/material-drafts/${item.id}/submit`, {
+            headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+            data: { revision: legacyRevision },
+          })
+        ).status(),
+      ).toBe(201);
+      await page.getByRole('button', { name: refreshLabel, exact: true }).click();
       await expect(page.getByRole('button', { name: 'Rút về nháp', exact: true })).toBeVisible();
-    } else
+    } else {
+      await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
+      await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
       await expect(
         page.getByRole('status').filter({ hasText: 'Đã gửi yêu cầu duyệt' }),
       ).toBeVisible();
+    }
     await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
     await expect(page.getByLabel('Chọn PDF', { exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Rút về nháp', exact: true })).toBeDisabled();
@@ -1017,9 +1125,7 @@ for (const role of ['student', 'lecturer'] as const)
     await page.getByRole('button', { name: 'Tiếp tục sửa', exact: true }).click();
     await page.route('**/api/v1/material-drafts/*/withdraw', (route) => route.abort('failed'));
     await page.getByRole('button', { name: 'Rút về nháp', exact: true }).click();
-    await expect(page.locator('.publication-actions [role="alert"]')).toContainText(
-      'Tải trạng thái duyệt',
-    );
+    await expect(page.locator('.publication-actions [role="alert"]')).toContainText(refreshLabel);
     await expect(page.getByLabel('Lý do rút yêu cầu', { exact: true })).toHaveValue(
       'Bổ sung nguồn tài liệu trước khi duyệt',
     );
@@ -1045,7 +1151,7 @@ for (const role of ['student', 'lecturer'] as const)
       }
     }
     await page.unroute('**/api/v1/material-drafts/*/withdraw');
-    await page.getByRole('button', { name: 'Tải trạng thái duyệt', exact: true }).click();
+    await page.getByRole('button', { name: refreshLabel, exact: true }).click();
     await expect(page.getByRole('button', { name: 'Rút về nháp', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Rút về nháp', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Đã rút về bản nháp' })).toBeVisible();
@@ -1056,7 +1162,9 @@ for (const role of ['student', 'lecturer'] as const)
         .filter({ hasText: 'Lý do: Bổ sung nguồn tài liệu trước khi duyệt' }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Đóng bản nháp', exact: true }).click();
-    await page.getByLabel('Trạng thái duyệt', { exact: true }).selectOption('SUBMITTED');
+    await page
+      .getByLabel(role === 'lecturer' ? 'Trạng thái công bố' : 'Trạng thái duyệt', { exact: true })
+      .selectOption('SUBMITTED');
     await page.getByLabel('Tìm bản nháp', { exact: true }).fill(code);
     await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
     await expect(

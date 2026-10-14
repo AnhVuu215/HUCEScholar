@@ -1,5 +1,7 @@
 # Tiến độ HUCEScholar — 14/10/2026
 
+Cập nhật tiếp cùng ngày: A02 đã đổi sang **giảng viên tự công bố PDF, không cần admin duyệt hoặc nguồn/căn cứ quyền bắt buộc**. Bản tiến độ dưới đây là checkpoint thư viện cá nhân trước thay đổi này. Xem [mốc tự công bố](2026-10-14-lecturer-self-publication.md) cho hành vi và bằng chứng mới.
+
 Đối chiếu repository trên nhánh `codex/personal-library`. Đây là trạng thái ứng dụng local; không phải xác nhận triển khai production hoặc sử dụng dữ liệu HUCE thật.
 
 ## Đã triển khai

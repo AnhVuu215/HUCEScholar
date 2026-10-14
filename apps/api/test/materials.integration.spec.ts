@@ -603,6 +603,138 @@ describe('private material drafts', () => {
     );
     return result.body.item;
   }
+  it('lecturer self-publication accepts optional source metadata without relaxing student validation', async () => {
+    const fields = { ...body(), sourceReference: undefined, rightsBasis: undefined };
+    const created = await write('lecturer', fields);
+    expect(created.status).toBe(201);
+    expect(created.body.item).toMatchObject({ sourceReference: '', rightsBasis: '' });
+    expect((await write('lecturer', { ...fields, revision: 1 }, created.body.item.id)).status).toBe(
+      200,
+    );
+    expect((await write('student', fields)).status).toBe(400);
+    expect((await write('student', { ...body(), rightsBasis: '' })).status).toBe(400);
+  });
+  it('lecturer self-publication publishes a SAFE snapshot atomically without an admin request', async () => {
+    const item = await safeDraft('lecturer');
+    await db.query(
+      "UPDATE hucescholar.document_versions SET source_reference='',rights_basis='' WHERE id=$1",
+      [item.versionId],
+    );
+    const result = await publication('lecturer', item.id, 'publish', { revision: 2 });
+    expect(result.status).toBe(201);
+    expect(result.body.item).toMatchObject({
+      reviewStatus: 'APPROVED',
+      publicationMethod: 'LECTURER_SELF',
+      revision: 3,
+      editable: false,
+    });
+    expect(
+      (
+        await db.query('SELECT current_version_id FROM hucescholar.documents WHERE id=$1', [
+          item.id,
+        ])
+      ).rows[0].current_version_id,
+    ).toBe(item.versionId);
+    expect(
+      (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}/requests`)).body.total,
+    ).toBe(0);
+    expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
+      200,
+    );
+    expect((await publication('lecturer', item.id, 'publish', { revision: 2 })).status).toBe(409);
+    expect((await write('lecturer', { ...body(), revision: 3 }, item.id)).status).toBe(409);
+    const audit = await db.query(
+      "SELECT actor_id FROM hucescholar.audit_events WHERE entity_id=$1 AND event_type='MATERIAL_SELF_PUBLISHED'",
+      [item.id],
+    );
+    expect(audit.rows).toEqual([{ actor_id: users.lecturer }]);
+  });
+  it('lecturer self-publication enforces role, ownership, CSRF and file state', async () => {
+    const item = await create('lecturer');
+    for (const name of ['student', 'admin'])
+      expect((await publication(name, item.id, 'publish', { revision: 1 })).status).toBe(403);
+    expect((await publication('receiver', item.id, 'publish', { revision: 1 })).status).toBe(404);
+    await agents.lecturer
+      .post(`/api/v1/material-drafts/${item.id}/publish`)
+      .send({ revision: 1 })
+      .expect(403);
+    expect((await publication('lecturer', item.id, 'publish', { revision: 1 })).body.code).toBe(
+      'FILE_NOT_SAFE',
+    );
+    const attached = await upload('lecturer', item.id, 1);
+    expect(attached.status).toBe(201);
+    for (const state of ['CHECKING', 'FAILED']) {
+      await db.query(
+        'UPDATE hucescholar.files SET scan_status=$1 WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$2)',
+        [state, item.versionId],
+      );
+      expect((await publication('lecturer', item.id, 'publish', { revision: 2 })).body.code).toBe(
+        'FILE_NOT_SAFE',
+      );
+    }
+    expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
+      404,
+    );
+  });
+  it('lecturer self-publication serializes double publish and preserves hidden state on restore', async () => {
+    const item = await safeDraft('lecturer');
+    await db.query(
+      "UPDATE hucescholar.document_versions SET source_reference='',rights_basis='' WHERE id=$1",
+      [item.versionId],
+    );
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [item.id]);
+    const responses = await Promise.all(
+      [1, 2].map(() => publication('lecturer', item.id, 'publish', { revision: 2 })),
+    );
+    expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
+      404,
+    );
+    const restored = await lifecycleWrite(item.id, 'visibility', {
+      revision: await documentRevision(item.id),
+      visibility: 'VISIBLE',
+      reason: 'Restore synthetic self-publication',
+      resolved: true,
+    });
+    expect(restored.status).toBe(201);
+    expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
+      200,
+    );
+    const next = await publication('lecturer', item.id, 'versions', { revision: 3 });
+    expect(next.status).toBe(201);
+    expect(next.body.item).toMatchObject({
+      versionNo: 2,
+      reviewStatus: 'DRAFT',
+      publicationMethod: 'ADMIN_REVIEW',
+    });
+    expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
+      200,
+    );
+  });
+  it('lecturer self-publication rechecks revoked assignments and rejects stale input', async () => {
+    const item = await safeDraft('lecturer');
+    await db.query(
+      'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2,reason=$3 WHERE lecturer_id=$1 AND revoked_at IS NULL',
+      [users.lecturer, users.admin, 'Synthetic revocation'],
+    );
+    try {
+      expect((await publication('lecturer', item.id, 'publish', { revision: 2 })).body.code).toBe(
+        'ASSIGNMENT_REQUIRED',
+      );
+    } finally {
+      await db.query(
+        'UPDATE hucescholar.lecturer_assignments SET revoked_at=NULL,revoked_by=NULL,reason=NULL WHERE lecturer_id=$1',
+        [users.lecturer],
+      );
+    }
+    expect((await publication('lecturer', item.id, 'publish', { revision: 1 })).body.code).toBe(
+      'STALE_REVISION',
+    );
+    expect(
+      (await publication('lecturer', item.id, 'publish', { revision: 2, rightsConfirmed: true }))
+        .status,
+    ).toBe(400);
+  });
   it.each(['student', 'lecturer'])(
     '%s submits a frozen snapshot, withdraws with history and submits again',
     async (name) => {
