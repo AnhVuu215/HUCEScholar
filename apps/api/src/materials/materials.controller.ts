@@ -48,6 +48,15 @@ export class MaterialsController {
   ) {
     return this.materials.submit(req.user, id, body);
   }
+  @Post(':id/publish')
+  @Roles('LECTURER')
+  publish(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SubmitMaterialDto,
+  ) {
+    return this.materials.publish(req.user, id, body);
+  }
   @Post(':id/withdraw') withdraw(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,

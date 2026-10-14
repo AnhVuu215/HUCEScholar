@@ -14,7 +14,7 @@ web
 
 ## Users
 
-Sinh viên HUCE cần tìm và dùng học liệu trong quá trình học, đặc biệt khi ôn thi. Giảng viên biên soạn, cập nhật và gửi công bố giáo trình trong phạm vi phân công. Quản trị viên quản lý tài khoản, danh mục, phân công, kiểm duyệt và bàn giao.
+Sinh viên HUCE cần tìm và dùng học liệu trong quá trình học, đặc biệt khi ôn thi. Giảng viên upload và tự công bố PDF cho môn được phân công; không bắt buộc tài liệu HUCE hoặc khai báo căn cứ quyền. Quản trị viên quản lý tài khoản, danh mục, phân công, kiểm duyệt tài liệu sinh viên và bàn giao.
 
 ## Product Purpose
 
@@ -23,9 +23,10 @@ Tập trung trải nghiệm tìm học liệu, đọc tài liệu điện tử v
 ## Capabilities and Constraints
 
 - Ba role ADMIN, LECTURER, STUDENT; tài khoản do admin cấp/xác minh, không tự đăng ký hoặc SSO trong MVP.
-- Cả giảng viên và sinh viên gửi tài liệu đều qua kiểm duyệt. Admin không biên soạn thay giáo trình.
+- Quyết định mới14/10/2026: giảng viên tự công bố PDF sau khi quét SAFE, không cần admin duyệt. Nguồn tham khảo tùy chọn, không có ô căn cứ quyền bắt buộc. Tài liệu sinh viên vẫn qua kiểm duyệt; admin không biên soạn thay giáo trình.
 - Tài liệu sinh viên bổ sung tách biệt với giáo trình giảng viên. Chưa hạn chế đọc theo lớp đăng ký.
 - Đọc/tải phụ thuộc quyền nguồn, file an toàn, phiên bản được duyệt và tài liệu không bị ẩn.
+- APPROVED là trạng thái nội bộ của bản đã duyệt hoặc tự công bố; publicationMethod phân biệt ADMIN_REVIEW và LECTURER_SELF. Giao diện không mô tả tự công bố là admin đã duyệt. Giữ PDF25MiB, môn/phân công, ownership và ghi chú theo phiên bản.
 - Ghi chú riêng gắn người, phiên bản, trang. Bản PDF mới không tự chuyển ghi chú cũ. Chưa xuất PDF kèm ghi chú hoặc offline.
 - Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây cho cả ba vai trò. Đã lưu mở bản hiện hành; đọc gần đây giữ đúng phiên bản/trang. Bỏ lưu giữ ghi chú và tiến độ. Mục mất quyền chỉ hiện nhãn chung, không lộ metadata.
 - Thư viện mini là metadata và nguồn được phép; API trường và quyền lưu toàn văn chưa xác nhận.

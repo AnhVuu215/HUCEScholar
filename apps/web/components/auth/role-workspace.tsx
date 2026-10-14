@@ -22,7 +22,7 @@ const upcoming: Record<Role, string> = {
   ADMIN:
     'Bạn có thể quản lý tài khoản, danh mục, phân công và kiểm duyệt. Mở Quản lý học liệu để bàn giao giảng viên hoặc ẩn/khôi phục toàn tài liệu.',
   LECTURER:
-    'Bạn có thể xem phân công, chuẩn bị bản nháp, tải PDF, gửi/rút yêu cầu và xem quyết định. Sau duyệt hoặc từ chối, tạo phiên bản kế tiếp trong Học liệu của tôi. Mở Kho học liệu để đọc, ghi chú riêng và mở lại trang đã đọc.',
+    'Bạn có thể xem phân công, chuẩn bị bản nháp và tự công bố PDF sau khi file quét đạt, không cần admin duyệt. Cập nhật tài liệu bằng phiên bản kế tiếp trong Học liệu của tôi. Mở Kho học liệu để đọc, ghi chú riêng và mở lại trang đã đọc.',
   STUDENT:
     'Bạn có thể tìm và đọc trong Kho học liệu, ghi chú riêng theo trang, mở lại trang đã đọc, tải khi được phép, chuẩn bị tài liệu bổ sung và theo dõi kết quả duyệt.',
 };

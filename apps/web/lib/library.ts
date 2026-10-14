@@ -8,6 +8,7 @@ export interface LibraryItem {
   description: string;
   materialType: 'TEXTBOOK' | 'LECTURE' | 'EXERCISE' | 'EXAM' | 'REFERENCE' | 'OTHER';
   kind: string;
+  publicationMethod: 'ADMIN_REVIEW' | 'LECTURER_SELF';
   current: boolean;
   sourceReference: string;
   rightsBasis: string;
@@ -31,6 +32,7 @@ export function isLibraryItem(value: unknown): value is LibraryItem {
     ['documentId', 'versionId'].every(
       (k) => typeof r[k] === 'string' && /^[1-9]\d*$/.test(r[k] as string),
     ) &&
+    ['ADMIN_REVIEW', 'LECTURER_SELF'].includes(String(r.publicationMethod)) &&
     [
       'title',
       'authors',

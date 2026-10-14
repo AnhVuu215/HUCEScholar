@@ -1,5 +1,7 @@
 # HUCEScholar — Tech stack và kiến trúc MVP
 
+**Cập nhật sản phẩm14/10/2026:** giảng viên upload PDF từ nguồn tự chọn và tự công bố khi SAFE, không cần admin duyệt hoặc khai báo căn cứ quyền. Nguồn tham khảo tùy chọn; sinh viên vẫn qua kiểm duyệt. Migration007 thêm publication_method để phân biệt tự công bố với quyết định admin, giữ APPROVED terminal/current và trigger PostgreSQL. Phân công môn, giới hạn25MiB và ownership giữ nguyên. Xem [triển khai tự công bố](implementation/2026-10-14-lecturer-self-publication.md).
+
 Ngày quyết định: 11/10/2026. Trạng thái: chốt công nghệ MVP; đã có workspace Next.js/NestJS, migration PostgreSQL, đăng nhập/phân quyền, quản lý tài khoản, danh mục đào tạo, phân công, bản nháp, upload PDF riêng tư, gửi/rút, admin kiểm duyệt bản hiện hành, kho học liệu và reader PDF.js theo quyền. Chưa triển khai vận hành. Bằng chứng: [mốc khởi tạo](implementation/2026-10-11-foundation.md), [database và auth](implementation/2026-10-11-database-auth.md), [quản lý tài khoản](implementation/2026-10-11-account-management.md), [danh mục và phân công](implementation/2026-10-11-academic-catalog.md), [upload PDF](implementation/2026-10-11-private-pdf-upload.md).
 
 Người dùng đã chọn **web responsive + PWA cho MVP**. Một giao diện dùng trên máy tính, điện thoại và máy tính bảng; có thể thêm vào màn hình chính trên thiết bị/trình duyệt hỗ trợ. Chưa phát hành ứng dụng native trên App Store/Google Play. Việc cài PWA không đồng nghĩa đọc PDF offline.

@@ -1,5 +1,7 @@
 # HUCEScholar Database Design
 
+Cập nhật triển khai14/10/2026: migration `202610140001_lecturer_self_publication` thêm `document_versions.publication_method` mặc định ADMIN_REVIEW, nhận LECTURER_SELF chỉ khi APPROVED. Không thay trạng thái scan/visibility, không tạo yêu cầu duyệt giả. Giữ23bảng,47FK,7partial index và trigger bất biến; tổngCHECK63. Các hiện vật SQL/ERD/Word bên dưới vẫn là baseline lịch sử; schema Prisma và bảy migration là nguồn triển khai hiện tại. [Chi tiết tự công bố](../implementation/2026-10-14-lecturer-self-publication.md).
+
 Thiết kế dữ liệu ngày 10/10/2026, dựa trên proposal, use case và quy tắc nghiệp vụ phiên bản 1.1.
 
 - `HUCEScholar_schema_postgresql.sql`: schema SQL tham chiếu, tạo namespace `hucescholar` trong một database trống. Không phải migration cho database đang có dữ liệu.

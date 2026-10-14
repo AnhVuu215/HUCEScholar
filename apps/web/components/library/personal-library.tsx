@@ -123,7 +123,7 @@ export function PersonalLibrary() {
                           <p>{material.authors || 'Chưa ghi tác giả'}</p>
                           <p className="field-hint">
                             Phiên bản {material.versionNo} ·{' '}
-                            {material.current ? 'Bản công bố hiện hành' : 'Bản cũ đã duyệt'}
+                            {material.current ? 'Bản công bố hiện hành' : 'Bản công bố trước'}
                           </p>
                           {kind === 'recent' && <p>Đã đọc đến trang {entry.pageNumber}</p>}
                           <p className="field-hint">

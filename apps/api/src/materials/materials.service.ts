@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -31,6 +32,7 @@ const selection = {
   rights_basis: true,
   download_allowed: true,
   review_status: true,
+  publication_method: true,
   revision: true,
   file_id: true,
   rights_valid_until: true,
@@ -108,7 +110,11 @@ export class MaterialsService {
     )
       throw conflict('ASSIGNMENT_REQUIRED', 'Cần phân công hiện hành cho tất cả môn của bản nháp.');
   }
-  private fields(body: DraftFieldsDto) {
+  private fields(actor: Profile, body: DraftFieldsDto) {
+    if (actor.role === 'STUDENT' && (!body.sourceReference.trim() || !body.rightsBasis.trim()))
+      throw new BadRequestException(
+        'Bổ sung nguồn và căn cứ quyền sử dụng cho tài liệu sinh viên.',
+      );
     return {
       title: body.title,
       authors: body.authors,
@@ -165,6 +171,7 @@ export class MaterialsService {
         rightsBasis: row.rights_basis,
         downloadAllowed: row.download_allowed,
         reviewStatus: row.review_status,
+        publicationMethod: row.publication_method,
         fileState: row.files?.scan_status ?? 'MISSING',
         pdf: row.files
           ? {
@@ -346,7 +353,7 @@ export class MaterialsService {
           document_id: doc.id,
           version_no: 1,
           created_by: actorId,
-          ...this.fields(body),
+          ...this.fields(actor, body),
           version_courses: { create: ids.map((course_id) => ({ course_id })) },
         },
       });
@@ -374,7 +381,7 @@ export class MaterialsService {
       await this.checkCourses(tx, actor, ids);
       await tx.document_versions.update({
         where: { id: row.id },
-        data: { ...this.fields(body), revision: { increment: 1 }, updated_at: new Date() },
+        data: { ...this.fields(actor, body), revision: { increment: 1 }, updated_at: new Date() },
       });
       await tx.version_courses.deleteMany({
         where: { version_id: row.id, course_id: { notIn: ids } },
@@ -420,6 +427,45 @@ export class MaterialsService {
         'Học liệu đã thay đổi. Tải trạng thái mới trước khi tiếp tục.',
       );
     return { actorId, row, id };
+  }
+  async publish(actor: Profile, rawId: string, body: SubmitMaterialDto) {
+    if (actor.role !== 'LECTURER')
+      throw new ForbiddenException('Chỉ giảng viên tự công bố học liệu.');
+    return this.db.$transaction(async (tx) => {
+      const { actorId, row, id } = await this.lockOwned(tx, actor, rawId, body.revision);
+      if (row.review_status !== 'DRAFT') throw conflict('NOT_DRAFT', 'Chỉ công bố bản nháp.');
+      if (!row.title.trim() || !row.version_courses.length)
+        throw conflict('METADATA_REQUIRED', 'Bổ sung tiêu đề và môn trước khi công bố.');
+      if (row.rights_valid_until && row.rights_valid_until <= new Date())
+        throw conflict('RIGHTS_EXPIRED', 'Hạn sử dụng đã khai báo cho phiên bản này đã hết.');
+      await this.checkCourses(
+        tx,
+        actor,
+        row.version_courses.map((c) => c.courses.id),
+      );
+      if (row.file_id)
+        await tx.$queryRaw`SELECT id FROM hucescholar.files WHERE id=${row.file_id} FOR SHARE`;
+      const file = row.file_id ? await tx.files.findUnique({ where: { id: row.file_id } }) : null;
+      if (!file || file.scan_status !== 'SAFE')
+        throw conflict('FILE_NOT_SAFE', 'PDF phải qua kiểm tra kỹ thuật trước khi công bố.');
+      const now = new Date();
+      await tx.document_versions.update({
+        where: { id: row.id },
+        data: {
+          review_status: 'APPROVED',
+          publication_method: 'LECTURER_SELF',
+          revision: { increment: 1 },
+          updated_at: now,
+        },
+      });
+      // Keep visibility unchanged, including HIDDEN. This transaction owns the document lock.
+      await tx.documents.update({
+        where: { id },
+        data: { current_version_id: row.id, revision: { increment: 1 }, updated_at: now },
+      });
+      await this.audit(tx, actorId, id, 'MATERIAL_SELF_PUBLISHED');
+      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+    });
   }
   async submit(actor: Profile, rawId: string, body: SubmitMaterialDto) {
     return this.db.$transaction(async (tx) => {

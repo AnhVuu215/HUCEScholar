@@ -1,6 +1,8 @@
 # HUCEScholar Quy tắc nghiệp vụ và luồng công bố
 
-Ngày 09/10/2026. Phiên bản 1.1. Phục vụ thiết kế MVP.
+Khởi tạo09/10/2026; cập nhật quyết định sản phẩm14/10/2026, phiên bản1.2. Phục vụ MVP.
+
+Quyết định14/10 thay A02: giảng viên upload tài liệu PDF không giới hạn nguồn HUCE, nguồn tham khảo tùy chọn, không bắt buộc khai báo căn cứ quyền và tự công bố khi file SAFE. Môn/phân công và ownership vẫn được kiểm tra. Luồng sinh viên không đổi. Proposal/Word và prototype cũ là tài liệu lịch sử, không ghi đè hiện vật đã bàn giao.
 
 ## 1. Cơ sở quyết định
 
@@ -9,7 +11,7 @@ Người đề xuất đã chốt các phương án A01–A06 sau khi rà soát 
 | Mã | Chính sách MVP đã chốt |
 |---|---|
 | A01 | Admin cấp hoặc xác minh tài khoản từ danh sách hợp lệ; chưa tự đăng ký, chưa SSO. |
-| A02 | Giảng viên gửi công bố, admin duyệt. Giảng viên không tự công bố. |
+| A02 | Giảng viên tự công bố PDF SAFE của mình; không cần admin duyệt hoặc khai báo căn cứ quyền. Nguồn tham khảo tùy chọn. |
 | A03 | Tài khoản đã xác minh xem được học liệu đã công bố theo quyền tài liệu; chưa giới hạn theo lớp hoặc môn đăng ký. |
 | A04 | Sinh viên gửi tài liệu bổ sung có duyệt; không sửa giáo trình giảng viên. |
 | A05 | Tải file gốc nếu được phép; ghi chú riêng, chưa xuất PDF kèm ghi chú hoặc offline. |
@@ -24,7 +26,7 @@ Mọi quyền đều yêu cầu tài khoản hoạt động và kiểm tra tại
 | Tài khoản và role | Quản lý; giữ ít nhất một admin hoạt động | Không | Không |
 | Danh mục môn và phân công | Quản lý | Xem phân công của mình | Xem danh mục được phép |
 | Tạo và sửa giáo trình | Không biên soạn | Của mình và đúng phân công | Không |
-| Gửi công bố giáo trình | Không | Bản của mình, đủ điều kiện | Không |
+| Tự công bố học liệu giảng viên | Không | Bản của mình, SAFE, đúng phân công/revision | Không |
 | Gửi tài liệu bổ sung | Không | Dùng luồng học liệu giảng viên | Có; bài của mình |
 | Duyệt hoặc yêu cầu sửa | Có; đúng revision | Không | Không |
 | Ẩn hoặc khôi phục | Toàn tài liệu | Không | Không |
@@ -47,10 +49,13 @@ Admin được biên tập danh mục sách, tài khoản, phân công và quy�
 
 Lượt đọc mới chỉ được cấp khi tài khoản hợp lệ, file SAFE, phiên bản APPROVED, tài liệu VISIBLE và quyền truy cập hiện hành cho phép. Tải xuống cần thêm downloadAllowed. Bản nháp không xuất hiện cho người học chỉ vì tài liệu mang VISIBLE.
 
+APPROVED là trạng thái terminal dùng chung. publication_method=LECTURER_SELF ghi nhận giảng viên tự công bố, không tạo publication_requests và không giả quyết định admin. ADMIN_REVIEW mặc định cho dữ liệu cũ và duyệt sinh viên. Nguồn/căn cứ quyền trống hợp lệ với bản tự công bố, kể cả khi khôi phục tài liệu bị ẩn; vẫn kiểm tra hạn hiệu lực đã khai báo nếu có.
+
 ```mermaid
 stateDiagram-v2
     [*] --> DRAFT
     DRAFT --> SUBMITTED: Người gửi yêu cầu khi file SAFE
+    DRAFT --> APPROVED: Giảng viên tự công bố khi SAFE và đúng phân công
     SUBMITTED --> DRAFT: Người gửi rút hoặc admin bàn giao
     SUBMITTED --> CHANGES_REQUIRED: Admin yêu cầu sửa
     CHANGES_REQUIRED --> DRAFT: Người gửi bắt đầu chỉnh sửa
@@ -65,7 +70,8 @@ stateDiagram-v2
 | Từ | Tác nhân và thao tác | Điều kiện và kết quả |
 |---|---|---|
 | Chưa có bản | Giảng viên hoặc sinh viên tạo | Tạo DRAFT; file vào CHECKING, sau đó SAFE hoặc FAILED |
-| DRAFT | Chủ bản gửi công bố | File SAFE, metadata và nguồn/quyền đầy đủ; chuyển SUBMITTED |
+| DRAFT | Giảng viên tự công bố | SAFE, tiêu đề/môn hợp lệ, đúng phân công; APPROVED và current nguyên tử, không qua yêu cầu duyệt |
+| DRAFT | Sinh viên gửi công bố | SAFE, metadata và nguồn/quyền đầy đủ; chuyển SUBMITTED |
 | SUBMITTED | Chủ bản rút | Kiểm tra revision; về DRAFT rồi mới được sửa |
 | SUBMITTED | Admin yêu cầu sửa | Lý do bắt buộc; chuyển CHANGES_REQUIRED |
 | CHANGES_REQUIRED | Chủ bản chỉnh sửa | Về DRAFT; thay file thì kiểm tra file lại |
@@ -75,6 +81,8 @@ stateDiagram-v2
 | SUBMITTED | Admin bàn giao giáo trình | Đổi chủ và rút về DRAFT nguyên tử; người nhận rà soát/gửi lại |
 
 Lần công bố đầu có thể phục vụ người học khi đủ mọi điều kiện. Duyệt bản mới của tài liệu HIDDEN không tự mở lại tài liệu. Bản đang SUBMITTED không được sửa âm thầm; hai thao tác duyệt, rút hoặc bàn giao đồng thời chỉ một thao tác hợp lệ được lưu.
+
+HIDDEN và chống xung đột cũng áp dụng tự công bố. Yêu cầu giảng viên SUBMITTED/CHANGES_REQUIRED cũ không tự thành công bố; chủ rút/mở lại thành DRAFT rồi dùng Công bố. Endpoint submit legacy còn tương thích, giao diện giảng viên mới dùng publish.
 
 Phiên bản đã duyệt là bất biến. Bản mới không thay khóa ghi chú của bản cũ. Lịch sử phiên bản chỉ cấp quyền đọc với bản APPROVED còn an toàn, còn quyền sử dụng và tài liệu không bị ẩn; không lộ bản nháp hoặc bản bị từ chối.
 
