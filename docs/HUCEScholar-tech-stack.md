@@ -108,6 +108,8 @@ design/         prototype và nguồn thiết kế đã có
 
 Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; Đã có gửi/rút và admin kiểm duyệt/bản hiện hành; Đã có kho học liệu, reader PDF.js và tải theo quyền; Đã có ghi chú riêng theo trang và lưu tiến độ với kiểm soát revision; Đã có phiên bản kế tiếp, bàn giao và ẩn/khôi phục; revision tăng xuyên phiên bản, giữ ghi chú gắn PDF cũ. highlight chưa mở. S3 thật và deploy còn ở các mốc tiếp theo. Xem [ghi chú và tiến độ](implementation/2026-10-12-reader-notes-progress.md).
 
+Thư viện cá nhân đã dùng hai bảng hiện hữu `saved_documents` và `reading_progress`, không thêm migration. API lọc theo người dùng cho mọi vai trò và dùng chung điều kiện đọc với reader. Danh sách đã lưu trỏ document/bản hiện hành; đọc gần đây trỏ version/page. Mục không khả dụng không trả metadata học liệu. Không cache dữ liệu cá nhân. Xem [triển khai thư viện cá nhân](implementation/2026-10-12-personal-library.md).
+
 ## 9. Nguồn kỹ thuật chính thức đã đối chiếu
 
 - [Next.js: Progressive Web Apps](https://nextjs.org/docs/app/guides/progressive-web-apps) — manifest, cài lên màn hình chính và hướng dẫn theo nền tảng; cài PWA không bắt buộc có chế độ offline.

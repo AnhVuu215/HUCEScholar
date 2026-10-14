@@ -48,7 +48,7 @@ export default function HomePage() {
           <p className="scope-disclosure">
             Đã có tài khoản, danh mục, phân công, PDF riêng tư, kiểm duyệt, kho học liệu và trình
             đọc theo quyền, ghi chú riêng theo trang, lưu tiến độ, phiên bản kế tiếp, bàn giao và
-            ẩn/khôi phục học liệu.
+            ẩn/khôi phục học liệu, tài liệu đã lưu và đọc gần đây.
           </p>
           <dl className="scope-list">
             <div>
@@ -77,11 +77,11 @@ export default function HomePage() {
           className="content-section next-section"
           aria-labelledby="next-heading"
         >
-          <h2 id="next-heading">Mốc tiếp theo: thư viện cá nhân và PWA</h2>
+          <h2 id="next-heading">Mốc tiếp theo: nguồn sách và PWA</h2>
           <p>
             Đã có phiên bản kế tiếp, bàn giao và quản lý ẩn/khôi phục học liệu; ghi chú cũ vẫn gắn
-            với bản PDF ban đầu. Tiếp theo là thư viện cá nhân, nguồn sách được cấp quyền và kiểm
-            thử PWA qua HTTPS trên thiết bị thật.
+            với bản PDF ban đầu. Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây. Tiếp theo là
+            nguồn sách được cấp quyền và kiểm thử PWA qua HTTPS trên thiết bị thật.
           </p>
           <ul className="role-list">
             <li>
