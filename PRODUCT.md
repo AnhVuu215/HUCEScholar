@@ -27,6 +27,7 @@ Tập trung trải nghiệm tìm học liệu, đọc tài liệu điện tử v
 - Tài liệu sinh viên bổ sung tách biệt với giáo trình giảng viên. Chưa hạn chế đọc theo lớp đăng ký.
 - Đọc/tải phụ thuộc quyền nguồn, file an toàn, phiên bản được duyệt và tài liệu không bị ẩn.
 - Ghi chú riêng gắn người, phiên bản, trang. Bản PDF mới không tự chuyển ghi chú cũ. Chưa xuất PDF kèm ghi chú hoặc offline.
+- Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây cho cả ba vai trò. Đã lưu mở bản hiện hành; đọc gần đây giữ đúng phiên bản/trang. Bỏ lưu giữ ghi chú và tiến độ. Mục mất quyền chỉ hiện nhãn chung, không lộ metadata.
 - Thư viện mini là metadata và nguồn được phép; API trường và quyền lưu toàn văn chưa xác nhận.
 - Bàn giao chỉ giáo trình giảng viên; người nhận hoạt động và được phân công mọi môn liên quan. Bản đang gửi bị rút về nháp, lịch sử/tác giả/ghi chú được giữ.
 

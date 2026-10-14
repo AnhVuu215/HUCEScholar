@@ -39,7 +39,14 @@ export function RoleWorkspace({
   title?: string;
   description?: string;
   activeSection?:
-    'users' | 'catalog' | 'assignments' | 'materials' | 'moderation' | 'library' | 'lifecycle';
+    | 'users'
+    | 'catalog'
+    | 'assignments'
+    | 'materials'
+    | 'moderation'
+    | 'library'
+    | 'lifecycle'
+    | 'personal';
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -189,6 +196,14 @@ export function RoleWorkspace({
               aria-current={activeSection === 'library' ? 'page' : undefined}
             >
               Kho học liệu
+            </Link>
+          )}
+          {state.kind === 'ready' && (
+            <Link
+              href="/workspace/personal-library"
+              aria-current={activeSection === 'personal' ? 'page' : undefined}
+            >
+              Thư viện của tôi
             </Link>
           )}
         </nav>

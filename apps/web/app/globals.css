@@ -808,6 +808,36 @@ h2 {
 .lifecycle-history-pagination > * {
   white-space: nowrap;
 }
+.saved-control {
+  margin-block: 16px;
+}
+.saved-control > button {
+  margin: 0 8px 8px 0;
+}
+.personal-library > h2 {
+  margin-top: 28px;
+}
+.personal-library article {
+  width: 100%;
+  min-width: 0;
+}
+.personal-library article > .primary-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 12px;
+}
+.personal-pagination {
+  flex-wrap: wrap;
+}
+.personal-library > .user-form-actions {
+  align-items: center;
+  margin-top: 0;
+}
+.personal-library > .user-form-actions > button,
+.saved-control .user-form-actions > button {
+  margin-top: 0;
+}
 
 .catalog-tabs {
   display: flex;

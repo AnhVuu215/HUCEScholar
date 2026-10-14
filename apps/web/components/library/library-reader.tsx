@@ -11,6 +11,7 @@ import type {
 import { libraryVersion, libraryError, type LibraryItem } from '../../lib/library';
 import { ReaderNotes } from './reader-notes';
 import { useReadingProgress } from './use-reading-progress';
+import { SaveMaterial } from './save-material';
 
 export function LibraryReader({ id }: { id: string }) {
   const [item, setItem] = useState<LibraryItem | null>(null),
@@ -209,6 +210,7 @@ export function LibraryReader({ id }: { id: string }) {
                 {item.authors || 'Chưa ghi tác giả'} · Phiên bản {item.versionNo}
                 {!item.current ? ' · Bản cũ đã duyệt' : ''}
               </p>
+              <SaveMaterial key={item.documentId} documentId={item.documentId} />
               <div className="reader-toolbar" aria-label="Điều khiển đọc PDF">
                 <button
                   className="secondary-button"

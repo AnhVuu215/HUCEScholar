@@ -18,6 +18,10 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [Gửi/rút yêu cầu duyệt và lịch sử](docs/implementation/2026-10-12-publication-requests.md)
 - [Admin kiểm duyệt và bản hiện hành](docs/implementation/2026-10-12-admin-moderation.md)
 - [Kho học liệu, trình đọc và quyền tải](docs/implementation/2026-10-12-learning-library.md)
+- [Ghi chú riêng và tiến độ đọc](docs/implementation/2026-10-12-reader-notes-progress.md)
+- [Phiên bản, bàn giao và ẩn/khôi phục](docs/implementation/2026-10-12-material-lifecycle.md)
+- [Thư viện cá nhân](docs/implementation/2026-10-12-personal-library.md)
+- [Tiến độ và phần còn lại ngày 14/10/2026](docs/implementation/2026-10-14-project-status.md)
 - [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)
 - [Prototype thiết kế](design/wireframe/README.md)
 - [Proposal, use case và tài liệu bàn giao](docs/deliverables/)
@@ -93,6 +97,8 @@ pnpm test:e2e
 
 Integration và browser dùng riêng database `_test` + Redis **DB 15**, không chạy đồng thời vì suite reset vùng rate-limit test. Browser global setup flush DB 15 dành riêng cho dự án; không dùng DB 15 này cho việc khác. Test setup không drop database. Ca kiểm tra schema SQL dùng rollback; fixture API được dọn sau suite; dữ liệu synthetic do Playwright tạo chỉ tồn tại trong database test. Playwright tự chạy web/API ở 3100/3101 rồi dừng; giữ hai cổng trống. Trace tắt để tránh ghi lại mật khẩu/cookie.
 
+Chạy xong `check`/typecheck/build và Prisma generate **trước** browser; các lệnh này có thể sửa source sinh tự động, khiến API test chạy `--watch` khởi động lại giữa request PDF. Khi máy tải cao có thể dùng `pnpm test:e2e --workers=2`; không chạy codegen song song với bộ browser.
+
 Có thể dùng Chrome đã cài:
 
 ```powershell
@@ -120,10 +126,12 @@ Admin mở **Quản lý học liệu** tại `/workspace/admin/materials` để 
 
 ## Lộ trình còn lại
 
-1. Thư viện cá nhân và nguồn sách được cấp quyền.
+1. Nguồn sách được cấp quyền.
 2. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
 
 Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
+
+Ba vai trò mở **Thư viện của tôi** ở `/workspace/personal-library`. Trong reader chọn **Lưu tài liệu**; **Đã lưu** mở bản công bố hiện hành, **Đọc gần đây** mở đúng phiên bản/trang đã lưu tiến độ. Bỏ lưu cần xác nhận và giữ ghi chú/tiến độ. Mục bị ẩn, hết hạn quyền hoặc PDF không SAFE chỉ hiện thông báo không khả dụng; vẫn bỏ được liên kết đã lưu. Khi mất phản hồi, **Tải trạng thái lưu** đối chiếu server trước thử lại. Xem [thư viện cá nhân](docs/implementation/2026-10-12-personal-library.md).
 
 ```text
 apps/web/       Next.js App Router, login, tài khoản, danh mục, phân công và bản nháp/PDF

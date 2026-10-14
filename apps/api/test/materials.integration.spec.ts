@@ -1596,9 +1596,10 @@ describe('private material drafts', () => {
       );
     await scan(draft.versionId);
     expect((await publication('student', draft.id, 'submit', { revision: 3 })).status).toBe(201);
-    const request = (await agents.admin.get('/api/v1/admin/publication-requests')).body.items.find(
-      (r: { documentId: string }) => r.documentId === draft.id,
-    );
+    // Read this document's history; the global queue is oldest-first and may span pages.
+    const request = (
+      await agents.student.get(`/api/v1/material-drafts/${draft.id}/requests`).expect(200)
+    ).body.items[0];
     expect(
       (await review(request.id, { ...decision('REJECTED'), submittedRevision: 4 })).status,
     ).toBe(201);
@@ -1617,9 +1618,9 @@ describe('private material drafts', () => {
       (await publication('student', draft.id, 'submit', { revision: attached.body.item.revision }))
         .status,
     ).toBe(201);
-    const pending = (await agents.admin.get('/api/v1/admin/publication-requests')).body.items.find(
-      (r: { documentId: string }) => r.documentId === draft.id,
-    );
+    const pending = (
+      await agents.student.get(`/api/v1/material-drafts/${draft.id}/requests`).expect(200)
+    ).body.items[0];
     expect(
       (
         await review(pending.id, {

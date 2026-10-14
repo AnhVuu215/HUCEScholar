@@ -83,6 +83,8 @@ try {
     ['progress-student', 'STUDENT'],
     ['versions-admin', 'ADMIN'],
     ['versions-student', 'STUDENT'],
+    ['personal-admin', 'ADMIN'],
+    ['personal-student', 'STUDENT'],
     ['lifecycle-admin', 'ADMIN'],
     ['lifecycle-lecturer', 'LECTURER'],
     ['lifecycle-receiver', 'LECTURER'],

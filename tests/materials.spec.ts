@@ -92,7 +92,7 @@ async function markSyntheticSafe(id: string, pageCount = 1) {
   try {
     // Explicit synthetic scan fixture; does not claim real scanner evidence.
     const result = await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-personal-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
       [id, pageCount],
     );
     expect(result.rowCount).toBe(1);
@@ -328,6 +328,127 @@ async function openPersonalReader(page: Page, prefix: string) {
   ).toBeVisible();
   return `/api/v1/library/versions/${item.versionId}`;
 }
+async function capturePersonal(page: Page, prefix: string) {
+  if (process.env.CAPTURE_PERSONAL_UI !== '1') return;
+  mkdirSync('.impeccable/review/personal', { recursive: true });
+  for (const [name, width, height] of [
+    ['desktop', 1440, 1000],
+    ['tablet', 768, 1024],
+    ['mobile', 360, 900],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    if (prefix === 'reader-') {
+      await expect
+        .poll(() =>
+          page.locator('.reader-stage').evaluate((stage) => {
+            const canvas = stage.querySelector('canvas');
+            return (
+              !!canvas &&
+              Math.abs(
+                canvas.getBoundingClientRect().width - Math.max(160, stage.clientWidth - 64),
+              ) < 3
+            );
+          }),
+        )
+        .toBe(true);
+    } else {
+      for (const link of await page.locator('.personal-library article > .primary-button').all()) {
+        const box = await link.boundingBox();
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: `.impeccable/review/personal/${prefix}${name}.png`,
+      fullPage: true,
+    });
+  }
+}
+test('personal library saves after response loss, shows recent page and removes only its saved link', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  // A failed initial read must not be mistaken for an unsaved document.
+  await page.route('**/api/v1/personal-library/saved/*', (route) =>
+    route.request().method() === 'GET' ? route.abort() : route.continue(),
+  );
+  const path = await openPersonalReader(page, 'e2e-personal');
+  await expect(page.getByRole('alert').filter({ hasText: 'Tải trạng thái lưu' })).toBeVisible();
+  await expect(page.locator('.saved-control > button').first()).toBeDisabled();
+  await page.getByRole('button', { name: 'Tải trạng thái lưu', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Tải trạng thái lưu', exact: true })).toBeEnabled();
+  await expect(page.locator('.saved-control > button').first()).toBeDisabled();
+  await page.unroute('**/api/v1/personal-library/saved/*');
+  await page.getByRole('button', { name: 'Tải trạng thái lưu', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lưu tài liệu', exact: true })).toBeEnabled();
+  const material = await (await page.request.get(path)).json();
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã lưu tiến độ · Trang 2' }),
+  ).toBeVisible();
+  await page.route('**/api/v1/personal-library/saved/*', async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    await route.fetch();
+    await route.abort();
+  });
+  await page.getByRole('button', { name: 'Lưu tài liệu', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Tải trạng thái lưu' })).toBeVisible();
+  await page.unroute('**/api/v1/personal-library/saved/*');
+  await page.getByRole('button', { name: 'Tải trạng thái lưu', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Bỏ lưu tài liệu', exact: true })).toBeEnabled();
+  await capturePersonal(page, 'reader-');
+  await page.getByRole('link', { name: 'Thư viện của tôi', exact: true }).click();
+  const row = page.getByRole('article', { name: material.item.title, exact: true });
+  await expect(row).toBeVisible();
+  await page.getByRole('button', { name: 'Đọc gần đây', exact: true }).click();
+  await expect(row.getByText('Đã đọc đến trang 2', { exact: true })).toBeVisible();
+  await capturePersonal(page, 'recent-');
+  await row.getByRole('link', { name: 'Đọc tiếp', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 2 / 2' }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Thư viện của tôi', exact: true }).click();
+  await expect(row).toBeVisible();
+  await capturePersonal(page, '');
+  const savedList = await (await page.request.get('/api/v1/personal-library/saved')).json();
+  await page.route('**/api/v1/personal-library/saved?*', (route) => {
+    const pageNumber = Number(new URL(route.request().url()).searchParams.get('page'));
+    return route.fulfill({ json: { ...savedList, total: 13, limit: 12, page: pageNumber } });
+  });
+  await page.getByRole('button', { name: 'Đã lưu', exact: true }).click();
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Trang 2/2' })).toBeFocused();
+  await page.getByRole('button', { name: 'Trang trước', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Trang 1/2' })).toBeFocused();
+  await page.unroute('**/api/v1/personal-library/saved?*');
+  await page.getByRole('button', { name: 'Đã lưu', exact: true }).click();
+  await row.getByRole('button', { name: 'Bỏ lưu tài liệu', exact: true }).click();
+  await page.route('**/api/v1/personal-library/saved/*', async (route) => {
+    if (route.request().method() !== 'DELETE') return route.continue();
+    await route.fetch();
+    await route.abort();
+  });
+  await row.getByRole('button', { name: 'Xác nhận bỏ lưu', exact: true }).click();
+  await expect(row.getByRole('alert')).toContainText('Tải trạng thái lưu');
+  await page.unroute('**/api/v1/personal-library/saved/*');
+  await row.getByRole('button', { name: 'Tải trạng thái lưu', exact: true }).click();
+  await expect(row).toHaveCount(0);
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Ghi chú và tiến độ được giữ nguyên.' }),
+  ).toBeFocused();
+  await page.getByRole('button', { name: 'Đọc gần đây', exact: true }).click();
+  await expect(row).toBeVisible();
+  await page.route('**/api/v1/personal-library/recent?*', (route) => route.abort());
+  await page.reload();
+  await page.getByRole('button', { name: 'Đọc gần đây', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Thử tải thư viện', exact: true })).toBeVisible();
+  await page.unroute('**/api/v1/personal-library/recent?*');
+  await page.getByRole('button', { name: 'Thử tải thư viện', exact: true }).click();
+  await expect(row).toBeVisible();
+});
 test('lifecycle owner creates one successor after a lost response and can inspect the original review history', async ({
   page,
 }) => {
