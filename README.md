@@ -130,9 +130,19 @@ Admin mở **Quản lý học liệu** tại `/workspace/admin/materials` để 
 ## Lộ trình còn lại
 
 1. Nguồn sách được cấp quyền.
-2. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
+2. Môi trường pilot: S3 private, HTTPS, backup/phục hồi và kiểm thử trên thiết bị thật.
 
 Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
+
+## PWA
+
+Mở `/install` từ trang chủ, đăng nhập hoặc menu không gian để xem hướng dẫn cài. Nút **Cài ứng dụng** chỉ xuất hiện khi trình duyệt cung cấp prompt; Safari/iOS dùng hướng dẫn menu. Chưa kiểm chứng cài trên thiết bị thật hoặc domain HTTPS.
+
+Production đăng ký worker khi trình duyệt hỗ trợ secure context. Dev mặc định không đăng ký; bật thử bằng PowerShell `$env:NEXT_PUBLIC_ENABLE_PWA = '1'` trước `pnpm --filter @hucescholar/web dev`. Bỏ biến chỉ ngừng đăng ký mới; worker đã cài vẫn tồn tại theo vòng đời browser, có thể gỡ trong DevTools → Application → Service Workers khi kết thúc thử nghiệm. Biến được Next đọc lúc build; không thay thế HTTPS khi triển khai.
+
+`scripts/pwa-assets.mjs` chạy trước dev/build, sinh icon PNG từ monogram H riêng và compile `scripts/pwa-worker.ts` thành `public/sw.js` (bị Git bỏ qua). Worker được typecheck với WebWorker lib; không thêm dependency. Khi sửa tài nguyên precache, tăng phiên bản cache trong worker. Bản cập nhật chờ đóng các tab cũ, không tự reload làm mất bản soạn.
+
+Worker chỉ giữ sáu asset public cố định: offline HTML tự chứa và icon. Không cache HTML/RSC/Next chunks, API, cookie phiên, PDF, ghi chú, URL có query/token hoặc nguồn ngoài. Khi hard navigation trong app thất bại do mạng, hiện trang mất kết nối chung; HTTP401/404/500 giữ nguyên. Mất mạng không thể đọc PDF hoặc lưu ghi chú, không có background sync. Chi tiết: [mốc PWA](docs/implementation/2026-10-15-pwa-foundation.md).
 
 Ba vai trò mở **Thư viện của tôi** ở `/workspace/personal-library`. Trong reader chọn **Lưu tài liệu**; **Đã lưu** mở bản công bố hiện hành, **Đọc gần đây** mở đúng phiên bản/trang đã lưu tiến độ. Bỏ lưu cần xác nhận và giữ ghi chú/tiến độ. Mục bị ẩn, hết hạn quyền hoặc PDF không SAFE chỉ hiện thông báo không khả dụng; vẫn bỏ được liên kết đã lưu. Khi mất phản hồi, **Tải trạng thái lưu** đối chiếu server trước thử lại. Xem [thư viện cá nhân](docs/implementation/2026-10-12-personal-library.md).
 

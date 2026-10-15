@@ -10,8 +10,8 @@
   "scripts": {
     "dev": "concurrently --kill-others --names api,web \"pnpm --filter @hucescholar/api dev\" \"pnpm --filter @hucescholar/web dev\"",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck && tsc -p tsconfig.tools.json",
-    "lint": "pnpm -r lint && eslint tests playwright.config.ts",
+    "typecheck": "pnpm -r typecheck && tsc -p tsconfig.tools.json && tsc -p scripts/tsconfig.pwa.json",
+    "lint": "pnpm -r lint && eslint tests playwright.config.ts scripts/pwa-worker.ts scripts/pwa-assets.mjs",
     "test": "pnpm --filter @hucescholar/api test",
     "test:e2e": "playwright test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",

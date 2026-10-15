@@ -52,6 +52,10 @@ export default function LoginPage() {
           <Link className="project-link" href="/project">
             Xem tiến độ dự án
           </Link>
+          <br />
+          <Link className="project-link" href="/install">
+            Cài ứng dụng trên thiết bị
+          </Link>
         </div>
       </main>
     </div>

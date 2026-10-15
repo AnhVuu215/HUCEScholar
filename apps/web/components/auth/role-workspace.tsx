@@ -182,6 +182,7 @@ export function RoleWorkspace({
             </Link>
           )}
           <Link href="/project">Tiến độ dự án</Link>
+          <Link href="/install">Cài ứng dụng</Link>
           {state.kind === 'ready' && state.user.role === 'ADMIN' && (
             <Link
               href="/workspace/admin/materials"

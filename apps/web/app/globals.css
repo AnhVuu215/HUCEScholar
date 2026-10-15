@@ -212,6 +212,21 @@ button:disabled {
   width: 100%;
   max-width: 400px;
 }
+.install-box {
+  max-width: 480px;
+}
+.install-guide {
+  margin-top: 24px;
+}
+.install-guide h2 {
+  margin: 32px 0 12px;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.install-guide p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .auth-description {
   margin-top: 16px;
   color: var(--muted);

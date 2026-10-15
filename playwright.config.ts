@@ -26,13 +26,19 @@ export default defineConfig({
       url: 'http://127.0.0.1:3101/api/v1/health',
       env: { ...testEnvironment, PORT: '3101', HOST: '127.0.0.1', NODE_ENV: 'test' },
       reuseExistingServer: false,
-      timeout: 60_000,
+      // Prisma generation + Nest watch compilation can exceed a minute on a cold Windows run.
+      timeout: 120_000,
     },
     {
-      command: 'node ../../scripts/pdfjs-assets.mjs && pnpm exec next dev --hostname 127.0.0.1 --port 3100',
+      command:
+        'node ../../scripts/pdfjs-assets.mjs && node ../../scripts/pwa-assets.mjs && pnpm exec next dev --hostname 127.0.0.1 --port 3100',
       cwd: './apps/web',
       url: 'http://127.0.0.1:3100',
-      env: { API_PROXY_TARGET: 'http://127.0.0.1:3101', NODE_ENV: 'development' },
+      env: {
+        API_PROXY_TARGET: 'http://127.0.0.1:3101',
+        NODE_ENV: 'development',
+        NEXT_PUBLIC_ENABLE_PWA: '1',
+      },
       reuseExistingServer: false,
       timeout: 90_000,
     },
