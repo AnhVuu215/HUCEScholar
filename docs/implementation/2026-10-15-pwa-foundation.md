@@ -22,6 +22,7 @@ Task tiếp theo từ roadmap, base `e1fada0`, branch `codex/pwa-foundation`. Gi
 - Captures1440/768/360 và offline360/1440 không tràn document; đã xem trực tiếp desktop/mobile/offline/icon. Detector một lượt20advisory thuộc type/color ramp của DESIGN.md dành riêng prototype; giữ hệ thống ứng dụng hiện hữu và heading offline fluid, không đổi wireframe để làm detector xanh.
 - Đọc raw error-context của một ca login đã in nhầm credential fixture. Đã chạy lại test setup, đổi password/CSRF secret chỉ cho `hucescholar_test` và cấu hình test trong `.local/test.env`; không đổi tài khoản demo hoặc DBlocal. Reader log helper sau đó che password. Không đưa credential/error-context vào Git.
 - Preview được mở lại sau khi tiến trình nền dừng khi phiên được tiếp tục; chỉ tạo process khi cổng trống. Trang `/install` đã hiện trong tab IAB và được giữ làm deliverable; screenshot `.local/pwa-demo-install.png`. Không sửa cấu hình hệ thống để tự khởi động app.
+- Khi tiếp tục phiên buổi tối, Docker daemon đang tắt nên API không khởi động và proxy trả500. Mở lại Docker Desktop, PostgreSQL/Redis/ClamAV healthy rồi chỉ start API ở cổng trống. Smoke có assertion sau phục hồi đạt: install/sw/manifest200, APIhealth200/no-store, auth/me401/no-store, workspace200/private-no-store. Hai trạng thái được phân biệt trong `.local/pwa-runtime-before-recovery.json` và `pwa-runtime-smoke.json`. App local cần các dịch vụ Docker đang chạy; không bật tự khởi động hệ thống.
 
 ## Giới hạn và bước sau
 
