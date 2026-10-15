@@ -95,6 +95,8 @@ design/         prototype và nguồn thiết kế đã có
 
 ## 7. PWA và thiết bị
 
+Mốc15/10/2026 đã có manifest/icon PNG192/512/maskable/Apple180, `/install` và worker static allowlist cho offline fallback. Worker không cache app HTML, Next chunks/RSC hoặc dữ liệu riêng; dev opt-in, production đăng ký trong secure context. Không tự reload khi có bản cập nhật. Đây là nền tảng local, chưa xác nhận cài qua domain HTTPS hoặc thiết bị thật. Xem [mốc PWA](implementation/2026-10-15-pwa-foundation.md).
+
 - Manifest, icon riêng và chế độ standalone; hướng dẫn cài theo khả năng trình duyệt. HTTPS khi triển khai. Service worker chỉ precache tài nguyên công khai của app shell/offline fallback; không cache API auth, metadata cá nhân, PDF, ghi chú hoặc URL có token.
 - Không thêm push notification, OCR, đọc PDF offline hoặc app native chỉ vì PWA hỗ trợ một số khả năng này.
 - Laptop: bảng quản trị đầy đủ và reader có vùng phụ. Tablet: hỗ trợ cảm ứng, xoay ngang/dọc, thu gọn sidebar. Điện thoại: một cột, điều khiển chạm, ghi chú theo ngữ cảnh trang. Responsive không phải thu nhỏ desktop.

@@ -293,7 +293,7 @@ export default function HomePage() {
               </ul>
               <p className="current-next">
                 Đã có kiểm duyệt, kho học liệu, trình đọc PDF, ghi chú riêng theo trang và lưu tiến
-                độ đọc. Cài đặt PWA sẽ được bổ sung sau.
+                độ đọc. Đã có hướng dẫn cài PWA trên thiết bị hỗ trợ.
               </p>
             </div>
           </div>
@@ -351,8 +351,8 @@ export default function HomePage() {
               <summary>Có cần tải ứng dụng về máy không?</summary>
               <p>
                 Bạn sử dụng trực tiếp trên trình duyệt của máy tính, điện thoại và máy tính bảng.
-                Khả năng cài đặt PWA đang được hoàn thiện; chưa có ứng dụng native hoặc hỗ trợ đọc
-                PDF offline.
+                Bạn có thể <Link href="/install">xem hướng dẫn cài PWA</Link> để mở từ màn hình
+                chính trên thiết bị hỗ trợ. PDF và ghi chú vẫn cần kết nối mạng.
               </p>
             </details>
           </div>

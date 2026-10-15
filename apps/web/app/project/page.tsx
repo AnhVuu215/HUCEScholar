@@ -65,8 +65,9 @@ export default function HomePage() {
             <div>
               <dt>PWA</dt>
               <dd>
-                Đã có manifest cơ bản. Khả năng cài đặt trên từng thiết bị sẽ được kiểm tra ở mốc
-                PWA; chưa hỗ trợ đọc offline.
+                Đã có icon, hướng dẫn cài và trang báo mất mạng công khai. PDF và ghi chú vẫn cần
+                kết nối mạng; HTTPS và cài trên thiết bị thật cần được kiểm chứng ở môi trường
+                pilot.
               </dd>
             </div>
           </dl>
@@ -77,11 +78,11 @@ export default function HomePage() {
           className="content-section next-section"
           aria-labelledby="next-heading"
         >
-          <h2 id="next-heading">Mốc tiếp theo: nguồn sách và PWA</h2>
+          <h2 id="next-heading">Mốc tiếp theo: môi trường pilot và thiết bị thật</h2>
           <p>
             Đã có phiên bản kế tiếp, bàn giao và quản lý ẩn/khôi phục học liệu; ghi chú cũ vẫn gắn
             với bản PDF ban đầu. Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây. Tiếp theo là
-            nguồn sách được cấp quyền và kiểm thử PWA qua HTTPS trên thiết bị thật.
+            S3 private, HTTPS, backup/phục hồi và kiểm thử cài PWA trên thiết bị thật.
           </p>
           <ul className="role-list">
             <li>
@@ -90,7 +91,7 @@ export default function HomePage() {
             </li>
             <li>
               <strong>Giảng viên</strong>
-              <span>Biên soạn và gửi công bố giáo trình.</span>
+              <span>Upload và tự công bố PDF sau khi quét an toàn.</span>
             </li>
             <li>
               <strong>Sinh viên</strong>
