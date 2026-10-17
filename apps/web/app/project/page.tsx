@@ -78,11 +78,13 @@ export default function HomePage() {
           className="content-section next-section"
           aria-labelledby="next-heading"
         >
-          <h2 id="next-heading">Mốc tiếp theo: môi trường pilot và thiết bị thật</h2>
+          <h2 id="next-heading">Mốc tiếp theo: hoàn thiện trải nghiệm trên web</h2>
           <p>
             Đã có phiên bản kế tiếp, bàn giao và quản lý ẩn/khôi phục học liệu; ghi chú cũ vẫn gắn
-            với bản PDF ban đầu. Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây. Tiếp theo là
-            S3 private, HTTPS, backup/phục hồi và kiểm thử cài PWA trên thiết bị thật.
+            với bản PDF ban đầu. Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây. Trình đọc
+            bảo vệ bản soạn ghi chú khi dùng Quay lại/Tiến tới trong ứng dụng. Các phần web còn
+            thiếu gồm highlight văn bản và tự đổi/khôi phục mật khẩu. Tạm hoãn cài PWA và kiểm thử
+            thiết bị thật; môi trường pilot vẫn cần S3 private, HTTPS và backup/phục hồi.
           </p>
           <ul className="role-list">
             <li>

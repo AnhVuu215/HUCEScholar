@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { PwaRegistration } from '../components/pwa/registration';
 import { InstallProvider } from '../components/pwa/install-provider';
+import { HistoryLeaveGuard } from '../components/history-leave-guard';
 
 export const metadata: Metadata = {
   title: 'HUCEScholar — Không gian học liệu',
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="vi">
       <body>
         <InstallProvider>
+          <HistoryLeaveGuard />
           <PwaRegistration />
           {children}
         </InstallProvider>

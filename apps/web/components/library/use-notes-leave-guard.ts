@@ -1,9 +1,18 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useEffectEvent } from 'react';
+import { registerHistoryLeaveGuard } from '../../lib/history-leave-guard';
 export function useNotesLeaveGuard(dirty: boolean, busy: boolean) {
+  const isGuarded = useEffectEvent(() => dirty || busy);
+  const canLeave = useEffectEvent(
+    () =>
+      (!dirty && !busy) ||
+      (!busy && window.confirm('Bạn có ghi chú chưa lưu. Rời trang và bỏ thay đổi?')),
+  );
   useEffect(() => {
     if (!dirty && !busy) return;
+    const unregisterHistory = registerHistoryLeaveGuard(() => canLeave());
     const leave = (event: BeforeUnloadEvent) => {
+      if (!isGuarded()) return;
       event.preventDefault();
       event.returnValue = '';
     };
@@ -29,7 +38,7 @@ export function useNotesLeaveGuard(dirty: boolean, busy: boolean) {
           link.pathname !== location.pathname &&
           !link.pathname.endsWith('/download'));
       if (!leaving) return;
-      if (busy || !window.confirm('Bạn có ghi chú chưa lưu. Rời trang và bỏ thay đổi?')) {
+      if (!canLeave()) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -37,6 +46,7 @@ export function useNotesLeaveGuard(dirty: boolean, busy: boolean) {
     window.addEventListener('beforeunload', leave);
     document.addEventListener('click', navigate, true);
     return () => {
+      unregisterHistory();
       window.removeEventListener('beforeunload', leave);
       document.removeEventListener('click', navigate, true);
     };

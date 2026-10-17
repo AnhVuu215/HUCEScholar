@@ -81,7 +81,7 @@ Sinh viên chọn **Gửi duyệt** khi PDF SAFE rồi xác nhận phiên bản/
 
 Admin mở **Kiểm duyệt học liệu** ở `/workspace/admin/moderation`, lọc yêu cầu và mở chi tiết. Chỉ PDF SAFE với snapshot còn khớp được mở ở tab mới. Chọn quyết định, nhập lý do, duyệt cần xác nhận đã kiểm tra nội dung/quyền; xác nhận inline để lưu. Duyệt đặt bản hiện hành, không tự mở tài liệu HIDDEN. Khi mất kết nối, **Tải trạng thái yêu cầu** trước retry.
 
-Ba vai trò mở **Kho học liệu** ở `/workspace/library`, tìm tiêu đề/tác giả, lọc môn/loại/nguồn và chọn **Đọc tài liệu**. Reader chuyển trang, zoom, xoay và chọn chữ nếu PDF có text layer. Nguồn/quyền nằm trong phần mở rộng inline; **Tải PDF gốc** chỉ xuất hiện khi được phép. Mỗi lượt metadata/file kiểm tra APPROVED + VISIBLE + SAFE + hạn quyền; admin không vượt điều kiện này. Ghi chú riêng gắn phiên bản/trang, có tạo/sửa/xóa; lỗi lưu giữ bản soạn, retry tạo giữ request ID để tránh nhân đôi. Lưu trước khi dùng Back/Forward của trình duyệt: cảnh báo rời trang hiện chỉ bao phủ link trong app, đăng xuất và đóng/tải lại trang. Tiến độ chỉ lưu trang render thành công, mở lại sau khi máy chủ xác nhận; xung đột tab yêu cầu tải lại. Khi lỗi tải tiến độ có thể đọc từ trang 1 mà không ghi. Chưa có highlight hoặc PDF offline. Chi tiết: [ghi chú và tiến độ](docs/implementation/2026-10-12-reader-notes-progress.md). `dev`/`build` chuẩn bị worker, CMaps, font và wasm PDF.js cùng version vào public; không dùng CDN.
+Ba vai trò mở **Kho học liệu** ở `/workspace/library`, tìm tiêu đề/tác giả, lọc môn/loại/nguồn và chọn **Đọc tài liệu**. Reader chuyển trang, zoom, xoay và chọn chữ nếu PDF có text layer. Nguồn/quyền nằm trong phần mở rộng inline; **Tải PDF gốc** chỉ xuất hiện khi được phép. Mỗi lượt metadata/file kiểm tra APPROVED + VISIBLE + SAFE + hạn quyền; admin không vượt điều kiện này. Ghi chú riêng gắn phiên bản/trang, có tạo/sửa/xóa; lỗi lưu giữ bản soạn, retry tạo giữ request ID để tránh nhân đôi. Guard Back/Forward trong lịch sử ứng dụng giữ bản soạn khi chọn ở lại và chặn khi đang lưu; link/logout/unload vẫn có guard. Phạm vi browser và giới hạn: [checkpoint web](docs/implementation/2026-10-17-web-reader-history.md). Tiến độ chỉ lưu trang render thành công, mở lại sau khi máy chủ xác nhận; xung đột tab yêu cầu tải lại. Khi lỗi tải tiến độ có thể đọc từ trang 1 mà không ghi. Chưa có highlight hoặc PDF offline. Chi tiết: [ghi chú và tiến độ](docs/implementation/2026-10-12-reader-notes-progress.md). `dev`/`build` chuẩn bị worker, CMaps, font và wasm PDF.js cùng version vào public; không dùng CDN.
 
 Để chạy kiểm tra file local, bật profile Docker riêng: `docker compose --env-file infra/.env -f infra/compose.yaml --profile files up -d --build clamav file-worker`. API và worker dùng chung `.local/files` ngoài webroot. Production yêu cầu S3 private; chưa tạo dịch vụ cloud. Hướng dẫn, giới hạn và bằng chứng quét thật ở tài liệu upload phía trên.
 
@@ -129,8 +129,9 @@ Admin mở **Quản lý học liệu** tại `/workspace/admin/materials` để 
 
 ## Lộ trình còn lại
 
-1. Nguồn sách được cấp quyền.
-2. Môi trường pilot: S3 private, HTTPS, backup/phục hồi và kiểm thử trên thiết bị thật.
+1. Hoàn thiện web: highlight văn bản và tự đổi/buộc đổi mật khẩu khởi tạo; reset cần SMTP.
+2. Nguồn nội dung có quyền rõ ràng; môi trường pilot S3 private, HTTPS, backup/phục hồi.
+3. Cài PWA và kiểm thử thiết bị thật đang tạm hoãn theo yêu cầu người dùng. Xem [tiến độ17/10](docs/implementation/2026-10-17-web-reader-history.md).
 
 Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
 
