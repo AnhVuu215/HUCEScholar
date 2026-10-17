@@ -1886,6 +1886,192 @@ describe('private material drafts', () => {
       if (pending) expect((await pending).status).toBe(404);
     }
   });
+  const highlightAnchor = () => ({
+    coordinateSpace: 'normalized-pdf-v1',
+    quote: 'Original selected text',
+    quads: [[0.1, 0.8, 0.6, 0.8, 0.6, 0.75, 0.1, 0.75]],
+  });
+  it('text highlights are private, version-bound, immutable anchors and idempotent with CAS edits', async () => {
+    const { path, id } = await readingFixture();
+    const data = {
+      pageNumber: 1,
+      content: '',
+      color: '#FFF59D',
+      anchor: highlightAnchor(),
+      requestId: randomUUID(),
+    };
+    const created = await readingWrite('student', `${path}/highlights`, data);
+    expect(created.status).toBe(201);
+    expect(created.headers['cache-control']).toBe('no-store');
+    expect(created.body.item).toMatchObject({
+      kind: 'TEXT_HIGHLIGHT',
+      anchor: data.anchor,
+      color: data.color,
+      content: '',
+      revision: 1,
+    });
+    const target = `${path}/highlights/${created.body.item.id}`;
+    expect((await readingWrite('student', `${path}/highlights`, data)).body.item.id).toBe(
+      created.body.item.id,
+    );
+    for (const changed of [
+      { color: '#A5D6A7' },
+      { content: 'different' },
+      { anchor: { ...data.anchor, quote: 'different' } },
+      { pageNumber: 2 },
+    ])
+      expect(
+        (await readingWrite('student', `${path}/highlights`, { ...data, ...changed })).status,
+      ).toBe(409);
+    for (const role of ['admin', 'lecturer', 'other']) {
+      expect(
+        (await agents[role].get(`${path}/highlights?pageNumber=1`).expect(200)).body.items,
+      ).toEqual([]);
+      expect(
+        (
+          await readingWrite(
+            role,
+            target,
+            { revision: 1, content: 'stolen', color: '#90CAF9' },
+            'patch',
+          )
+        ).status,
+      ).toBe(404);
+      expect((await readingWrite(role, target, { revision: 1 }, 'delete')).status).toBe(404);
+    }
+    expect((await agents.student.get(`${path}/notes?pageNumber=1`)).body.items).toEqual([]);
+    expect(
+      (
+        await readingWrite(
+          'student',
+          `${path}/notes/${created.body.item.id}`,
+          { revision: 1 },
+          'delete',
+        )
+      ).status,
+    ).toBe(404);
+    const wrongVersion = await readingFixture();
+    expect(
+      (
+        await readingWrite(
+          'student',
+          `${wrongVersion.path}/highlights/${created.body.item.id}`,
+          { revision: 1 },
+          'delete',
+        )
+      ).status,
+    ).toBe(404);
+    const updates = await Promise.all(
+      ['A', 'B'].map((content) =>
+        readingWrite('student', target, { revision: 1, content, color: '#90CAF9' }, 'patch'),
+      ),
+    );
+    expect(updates.map((r) => r.status).sort()).toEqual([200, 409]);
+    const saved = (await agents.student.get(`${path}/highlights?pageNumber=1`)).body.items[0];
+    expect(saved).toMatchObject({ revision: 2, color: '#90CAF9', anchor: data.anchor });
+    expect((await readingWrite('student', target, { revision: 1 }, 'delete')).status).toBe(409);
+    expect(
+      (
+        await readingWrite(
+          'student',
+          target,
+          { revision: 2, anchor: data.anchor, content: 'move', color: '#90CAF9' },
+          'patch',
+        )
+      ).status,
+    ).toBe(400);
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [id]);
+    await agents.student.get(`${path}/highlights?pageNumber=1`).expect(404);
+    expect((await readingWrite('student', target, { revision: 2 }, 'delete')).status).toBe(404);
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [id]);
+    expect((await readingWrite('student', target, { revision: 2 }, 'delete')).status).toBe(204);
+    await request(app.getHttpServer()).get(`${path}/highlights?pageNumber=1`).expect(401);
+    await agents.student.post(`${path}/highlights`).send(data).expect(403);
+  });
+  it('text highlights reject malformed anchors and scan pages, paginate and accept bounded full-size content', async () => {
+    const { path, versionId } = await readingFixture();
+    const data = {
+      pageNumber: 1,
+      content: '',
+      color: '#FFF59D',
+      anchor: highlightAnchor(),
+      requestId: randomUUID(),
+    };
+    for (const invalid of [
+      { pageNumber: 4 },
+      { pageNumber: 0 },
+      { userId: users.other },
+      { color: 'red' },
+      { color: '#ffffff' },
+      { content: 'x'.repeat(4001) },
+      { anchor: null },
+      { anchor: { ...data.anchor, extra: true } },
+      { anchor: { ...data.anchor, quote: ' ' } },
+      ...[
+        [],
+        [[0, 0, 0, 0, 0, 0, 0, 0]],
+        [[-0.1, 0, 1, 0, 1, 1, 0, 1]],
+        [[0, 0, 1, 0, 1, 1, 0]],
+        [[0, 0, 1, 0, 1, 1, 0, '1']],
+        Array(101).fill(data.anchor.quads[0]),
+      ].map((quads) => ({ anchor: { ...data.anchor, quads } })),
+    ])
+      expect(
+        (
+          await readingWrite('student', `${path}/highlights`, {
+            ...data,
+            requestId: randomUUID(),
+            ...invalid,
+          })
+        ).status,
+      ).toBe(400);
+    const large = {
+      ...data,
+      content: 'ệ'.repeat(4000),
+      anchor: {
+        ...data.anchor,
+        quote: 'ệ'.repeat(2000),
+        quads: Array(100).fill(data.anchor.quads[0]),
+      },
+    };
+    expect((await readingWrite('student', `${path}/highlights`, large)).status).toBe(201);
+    // Larger annotation bodies must not relax the existing 16KiB limit on other routes.
+    expect(
+      (
+        await readingWrite('student', `${path}/notes`, {
+          content: 'ệ'.repeat(6000),
+          pageNumber: 1,
+          requestId: randomUUID(),
+        })
+      ).status,
+    ).toBe(413);
+    for (let i = 0; i < 30; i++)
+      expect(
+        (await readingWrite('student', `${path}/highlights`, { ...data, requestId: randomUUID() }))
+          .status,
+      ).toBe(201);
+    const first = (await agents.student.get(`${path}/highlights?pageNumber=1`).expect(200)).body;
+    expect(first.items).toHaveLength(30);
+    expect(
+      (
+        await agents.student
+          .get(`${path}/highlights?pageNumber=1&cursor=${first.nextCursor}`)
+          .expect(200)
+      ).body.items,
+    ).toHaveLength(1);
+    expect(
+      (await agents.student.get(`${path}/highlights?pageNumber=2`).expect(200)).body.items,
+    ).toEqual([]);
+    await db.query(
+      'UPDATE hucescholar.files SET has_text_layer=false WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)',
+      [versionId],
+    );
+    expect(
+      (await readingWrite('student', `${path}/highlights`, { ...data, requestId: randomUUID() }))
+        .status,
+    ).toBe(400);
+  });
+
   it('reading notes are private to each role and cannot be accessed by another owner or admin', async () => {
     const { path } = await readingFixture();
     const note = await readingWrite('student', `${path}/notes`, {

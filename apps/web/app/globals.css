@@ -68,12 +68,55 @@
   min-height: 240px;
 }
 .reader-page {
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
   position: relative;
   margin: 0 auto;
   background: var(--paper);
 }
 .reader-page canvas {
   display: block;
+}
+.pdf-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pdf-highlight {
+  position: absolute;
+  opacity: 0.65;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.reader-highlight-tools {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--paper);
+}
+.highlight-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 0;
+}
+.highlight-quote {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--ground);
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reader-highlights select {
+  min-height: 44px;
+  padding: 8px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
 }
 .reader-source {
   margin: 24px 0;

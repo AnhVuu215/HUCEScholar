@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, PayloadTooLargeException, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -12,7 +12,19 @@ export function configureApplication(app: INestApplication, trustedProxyIps: str
   });
   app.use(helmet());
   app.use(cookieParser());
-  (app as NestExpressApplication).useBodyParser('json', { limit: '16kb' });
+  // Quotes, quad coordinates and a full-size private note can exceed the default small body.
+  (app as NestExpressApplication).useBodyParser('json', {
+    limit: '64kb',
+    verify: (req: Request, _res: Response, body: Buffer) => {
+      if (
+        body.length > 16 * 1024 &&
+        !/^\/api\/v1\/library\/versions\/[1-9]\d{0,18}\/highlights(?:\/[1-9]\d{0,18})?(?:\?|$)/.test(
+          req.url ?? '',
+        )
+      )
+        throw new PayloadTooLargeException();
+    },
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,

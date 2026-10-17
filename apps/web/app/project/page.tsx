@@ -82,9 +82,10 @@ export default function HomePage() {
           <p>
             Đã có phiên bản kế tiếp, bàn giao và quản lý ẩn/khôi phục học liệu; ghi chú cũ vẫn gắn
             với bản PDF ban đầu. Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây. Trình đọc
-            bảo vệ bản soạn ghi chú khi dùng Quay lại/Tiến tới trong ứng dụng. Các phần web còn
-            thiếu gồm highlight văn bản và tự đổi/khôi phục mật khẩu. Tạm hoãn cài PWA và kiểm thử
-            thiết bị thật; môi trường pilot vẫn cần S3 private, HTTPS và backup/phục hồi.
+            bảo vệ bản soạn ghi chú khi dùng Quay lại/Tiến tới trong ứng dụng; đã có tô sáng chữ và
+            ghi chú riêng theo đoạn PDF. Phần tài khoản còn thiếu tự đổi/khôi phục mật khẩu. Tạm
+            hoãn cài PWA và kiểm thử thiết bị thật; môi trường pilot vẫn cần S3 private, HTTPS và
+            backup/phục hồi.
           </p>
           <ul className="role-list">
             <li>
