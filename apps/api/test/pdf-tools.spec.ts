@@ -85,7 +85,7 @@ describe('bounded PDF checks', () => {
       try {
         const scan = clamScan(path, '127.0.0.1', address.port, 1000);
         if (reply === 'stream: OK\0') await expect(scan).resolves.toBeUndefined();
-        else await expect(scan).rejects.toThrow();
+        else await expect(scan).rejects.toMatchObject({ retryable: !reply.includes(' FOUND') });
       } finally {
         await new Promise<void>((resolve) => server.close(() => resolve()));
       }

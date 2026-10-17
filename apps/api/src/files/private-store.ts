@@ -10,6 +10,7 @@ import { copyFile, mkdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
+import { DOCX_MIME } from './receive-docx';
 export interface ByteRange {
   start: number;
   end: number;
@@ -22,13 +23,22 @@ export class PrivateStore implements OnModuleDestroy {
     this.s3 =
       config.driver === 's3' ? new S3Client({ region: config.region, maxAttempts: 2 }) : null;
   }
-  private path(key: string) {
-    if (!/^quarantine\/[a-f0-9-]{36}\.pdf$/.test(key))
+  private path(key: string, source = false) {
+    if (!(source ? /^sources\/[a-f0-9-]{36}\.docx$/ : /^quarantine\/[a-f0-9-]{36}\.pdf$/).test(key))
       throw new Error('Invalid private object key.');
     return join(this.config.root, key);
   }
-  async put(key: string, source: string, size: number) {
-    const path = this.path(key);
+  putSource(key: string, source: string, size: number) {
+    return this.put(key, source, size, true);
+  }
+  readSource(key: string, range?: ByteRange) {
+    return this.read(key, range, true);
+  }
+  removeSource(key: string) {
+    return this.remove(key, true);
+  }
+  async put(key: string, source: string, size: number, isSource = false) {
+    const path = this.path(key, isSource);
     if (this.s3) {
       await this.s3.send(
         new PutObjectCommand({
@@ -36,7 +46,7 @@ export class PrivateStore implements OnModuleDestroy {
           Key: key,
           Body: createReadStream(source),
           ContentLength: size,
-          ContentType: 'application/pdf',
+          ContentType: isSource ? DOCX_MIME : 'application/pdf',
           IfNoneMatch: '*',
         }),
         { abortSignal: AbortSignal.timeout(30_000) },
@@ -46,8 +56,8 @@ export class PrivateStore implements OnModuleDestroy {
       await copyFile(source, path, constants.COPYFILE_EXCL);
     }
   }
-  async read(key: string, range?: ByteRange): Promise<Readable> {
-    const path = this.path(key);
+  async read(key: string, range?: ByteRange, isSource = false): Promise<Readable> {
+    const path = this.path(key, isSource);
     if (
       range &&
       (!Number.isSafeInteger(range.start) ||
@@ -76,8 +86,8 @@ export class PrivateStore implements OnModuleDestroy {
     }
     return object.Body;
   }
-  async remove(key: string) {
-    const path = this.path(key);
+  async remove(key: string, isSource = false) {
+    const path = this.path(key, isSource);
     if (this.s3)
       await this.s3.send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: key }), {
         abortSignal: AbortSignal.timeout(10_000),

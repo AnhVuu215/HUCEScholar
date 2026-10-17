@@ -8,8 +8,11 @@ import { ScanProcessor } from './files/scan-processor';
 import { PDF_QUEUE, queueConnection } from './files/scan-queue';
 import { parseAuthEnvironment } from './auth/auth.config';
 import { SafeLogger } from './safe-logger';
+import { MaterialDraftCoreModule } from './materials/material-draft-core.module';
+import { SourceConversionProcessor } from './materials/source-conversion.processor';
+import { SOURCE_QUEUE } from './files/source-conversion-queue';
 
-@Module({ imports: [DatabaseModule, FilesModule] })
+@Module({ imports: [DatabaseModule, FilesModule, MaterialDraftCoreModule] })
 class FileWorkerModule {}
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(FileWorkerModule, {
@@ -18,6 +21,18 @@ async function bootstrap() {
   });
   const processor = app.get(ScanProcessor);
   const config = parseAuthEnvironment(process.env);
+  const sources = app.get(SourceConversionProcessor);
+  const sourceWorker = new Worker(
+    SOURCE_QUEUE,
+    (job) => sources.process(String(job.data.sourceId)),
+    { connection: queueConnection(config.redisUrl, true), concurrency: 1 },
+  );
+  sourceWorker.on('error', () =>
+    Logger.warn('Source worker connection interrupted.', 'FileWorker'),
+  );
+  sourceWorker.on('failed', () =>
+    Logger.warn('Source conversion attempt interrupted.', 'FileWorker'),
+  );
   const worker = new Worker(
     PDF_QUEUE,
     (job) =>
@@ -34,6 +49,7 @@ async function bootstrap() {
     reconciling = true;
     try {
       await processor.reconcile();
+      await sources.reconcile();
     } catch {
       Logger.warn('PDF reconciliation interrupted; will retry.', 'FileWorker');
     } finally {
@@ -48,6 +64,7 @@ async function bootstrap() {
     closing = true;
     clearInterval(interval);
     await worker.close();
+    await sourceWorker.close();
     await app.close();
   };
   process.once('SIGINT', () => void close());

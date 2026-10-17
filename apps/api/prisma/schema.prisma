@@ -12,6 +12,37 @@ datasource db {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model document_source_uploads {
+  id BigInt @id @default(autoincrement())
+  version_id BigInt
+  uploaded_by BigInt
+  request_id String @db.Uuid
+  object_key String @unique @db.VarChar(500)
+  original_name String @db.VarChar(255)
+  mime_type String @default("application/vnd.openxmlformats-officedocument.wordprocessingml.document") @db.VarChar(80)
+  byte_size BigInt
+  sha256 String @db.Char(64)
+  scan_status String @default("CHECKING") @db.VarChar(8)
+  checked_at DateTime? @db.Timestamptz(6)
+  conversion_status String @default("QUEUED") @db.VarChar(12)
+  error_code String? @db.VarChar(40)
+  rendered_file_id BigInt?
+  converter_build String? @db.VarChar(200)
+  processing_token String? @db.Uuid
+  lease_expires_at DateTime? @db.Timestamptz(6)
+  attempt_count Int @default(0)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  version document_versions @relation("SourceVersion", fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  current_versions document_versions[] @relation("CurrentSource")
+  uploader users @relation(fields: [uploaded_by], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  rendition files? @relation(fields: [rendered_file_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@unique([uploaded_by, request_id], map: "ux_source_owner_request")
+  @@unique([version_id, id], map: "ux_source_version_id")
+  @@index([id], map: "ix_source_pending", where: raw("((conversion_status)::text = ANY (ARRAY['QUEUED'::text, 'RUNNING'::text]))"))
+  @@schema("hucescholar")
+}
+
 model annotations {
   id                BigInt            @id @default(autoincrement())
   request_id        String            @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -134,6 +165,9 @@ model document_versions {
   document_id                                                  BigInt                @unique(map: "ux_one_working_version", where: raw("((review_status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'CHANGES_REQUIRED'::character varying])::text[]))"))
   version_no                                                   Int
   file_id                                                      BigInt?
+  source_upload_id                                              BigInt?
+  source_upload                                                 document_source_uploads? @relation("CurrentSource", fields: [id, source_upload_id], references: [version_id, id], onDelete: Restrict, onUpdate: NoAction, map: "fk_version_source_same_version")
+  source_uploads                                                document_source_uploads[] @relation("SourceVersion")
   created_by                                                   BigInt
   title                                                        String                @db.VarChar(300)
   authors                                                      String                @default("")
@@ -212,6 +246,7 @@ model faculties {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model files {
+  source_renditions document_source_uploads[]
   id                BigInt              @id @default(autoincrement())
   uploaded_by       BigInt
   object_key        String              @unique @db.VarChar(500)
@@ -413,6 +448,7 @@ model saved_documents {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model users {
+  source_uploads document_source_uploads[]
   id                                                            BigInt                  @id @default(autoincrement())
   email                                                         String                  @unique @db.VarChar(254)
   display_name                                                  String                  @db.VarChar(150)

@@ -1,4 +1,17 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { Roles, RolesGuard, SessionGuard } from '../auth/session.guard';
 import {
@@ -9,9 +22,13 @@ import {
   SubmitMaterialDto,
   WithdrawMaterialDto,
   UpdateDraftDto,
+  SourceRetryDto,
 } from './materials.dto';
 import { MaterialsService } from './materials.service';
 import { DraftPdfService } from './draft-pdf.service';
+import { SourceUploadService } from './source-upload.service';
+import { DOCX_MIME } from '../files/receive-docx';
+import { LibraryService } from './library.service';
 @Controller('material-drafts')
 @UseGuards(SessionGuard, RolesGuard)
 @Roles('LECTURER', 'STUDENT')
@@ -19,6 +36,8 @@ export class MaterialsController {
   constructor(
     private readonly materials: MaterialsService,
     private readonly pdf: DraftPdfService,
+    private readonly source: SourceUploadService,
+    private readonly library: LibraryService,
   ) {}
   @Post(':id/versions') nextVersion(
     @Req() req: AuthenticatedRequest,
@@ -73,6 +92,33 @@ export class MaterialsController {
   }
   @Post(':id/pdf') upload(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.pdf.upload(req.user, id, req);
+  }
+  @Post(':id/file')
+  @HttpCode(202)
+  @Roles('LECTURER')
+  uploadFile(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return req.get('Content-Type')?.split(';')[0].trim().toLowerCase() === DOCX_MIME
+      ? this.source.upload(req.user, id, req)
+      : this.pdf.upload(req.user, id, req);
+  }
+  @Post(':id/source/retry')
+  @HttpCode(202)
+  @Roles('LECTURER')
+  retrySource(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SourceRetryDto,
+  ) {
+    return this.source.retry(req.user, id, body);
+  }
+  @Get(':id/preview')
+  @Roles('LECTURER')
+  preview(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.library.draftPreview(req.user, id, res);
   }
   @Get('courses') courses(@Req() req: AuthenticatedRequest, @Query() query: DraftListDto) {
     return this.materials.courses(req.user, query);

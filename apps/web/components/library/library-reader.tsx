@@ -287,16 +287,32 @@ export function LibraryReader({ id }: { id: string }) {
                   Xoay trang
                 </button>
                 {item.downloadAllowed ? (
-                  <a
-                    className="secondary-button"
-                    href={`/api/v1/library/versions/${item.versionId}/download`}
-                  >
-                    Tải PDF gốc
-                  </a>
+                  <>
+                    <a
+                      className="secondary-button"
+                      href={`/api/v1/library/versions/${item.versionId}/download`}
+                    >
+                      {item.sourceFile ? 'Tải bản PDF' : 'Tải PDF gốc'}
+                    </a>
+                    {item.sourceFile && (
+                      <a
+                        className="secondary-button"
+                        href={`/api/v1/library/versions/${item.versionId}/source-download`}
+                      >
+                        Tải Word gốc
+                      </a>
+                    )}
+                  </>
                 ) : (
                   <span className="field-hint">Chỉ đọc trong hệ thống</span>
                 )}
               </div>
+              {item.sourceFile && (
+                <p className="field-hint">
+                  Bản đọc được chuyển từ Word. Ghi chú và vùng tô sáng được lưu riêng trên phiên bản
+                  PDF này.
+                </p>
+              )}
               <p role="status">
                 {rendered === renderKey
                   ? `Đã hiển thị trang ${page} / ${pdf?.numPages}`

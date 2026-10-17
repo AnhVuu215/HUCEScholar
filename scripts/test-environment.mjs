@@ -70,6 +70,7 @@ try {
   // Keep independent browser suites below the real per-account login limit.
   const accounts = [
     ['admin', 'ADMIN'],
+    ['users-admin', 'ADMIN'],
     ['catalog-admin', 'ADMIN'],
     ['assignments-admin', 'ADMIN'],
     ['drafts-admin', 'ADMIN'],
@@ -91,6 +92,9 @@ try {
     ['personal-student', 'STUDENT'],
     ['selfpublish-admin', 'ADMIN'],
     ['selfpublish-lecturer', 'LECTURER'],
+    ['docx-admin', 'ADMIN'],
+    ['docx-lecturer', 'LECTURER'],
+    ['docx-student', 'STUDENT'],
     ['lifecycle-admin', 'ADMIN'],
     ['lifecycle-lecturer', 'LECTURER'],
     ['lifecycle-receiver', 'LECTURER'],

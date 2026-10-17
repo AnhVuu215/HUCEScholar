@@ -49,6 +49,33 @@ services:
       retries: 10
       start_period: 120s
 
+  docx-converter:
+    profiles: ['files']
+    image: hucescholar-docx-converter:local
+    build:
+      context: ..
+      dockerfile: infra/docx-converter.Dockerfile
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ['/tmp:size=512m,uid=1000,gid=1000,mode=1777']
+    networks: [docx-internal]
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   file-worker:
     profiles: ['files']
     build:
@@ -64,6 +91,8 @@ services:
       FILE_LOCAL_ROOT: /data/files
       CLAMAV_HOST: clamav
       CLAMAV_PORT: '3310'
+      DOCX_CONVERTER_URL: http://docx-converter:8080
+    networks: [default, docx-internal]
     volumes:
       - ../.local/files:/data/files
     depends_on:
@@ -77,6 +106,10 @@ services:
     cpus: 1.0
     pids_limit: 64
     security_opt: ['no-new-privileges:true']
+
+networks:
+  docx-internal:
+    internal: true
 
 volumes:
   postgres_data:

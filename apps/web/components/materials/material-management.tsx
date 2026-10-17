@@ -61,7 +61,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
             ? 'Bản nháp học liệu cho các môn bạn phụ trách.'
             : 'Tài liệu bổ sung của bạn, tách biệt với giáo trình giảng viên.'}{' '}
           {role === 'LECTURER'
-            ? 'Lưu thông tin, đính kèm PDF rồi công bố sau khi file quét đạt. Không cần tài liệu HUCE hoặc admin duyệt.'
+            ? 'Chọn PDF hoặc DOCX, nhập thông tin rồi lưu. Xem trước và tự công bố khi bản đọc đã sẵn sàng. Không cần tài liệu HUCE hoặc admin duyệt.'
             : 'Lưu thông tin, mở lại bản nháp rồi đính kèm PDF. Khi PDF đã qua kiểm tra, bạn có thể gửi yêu cầu duyệt hoặc rút về nháp để sửa.'}
         </p>
         <button
@@ -208,13 +208,20 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
                           {publicationLabel(item)}
                         </span>
                         <p className="field-hint">
-                          {item.fileState === 'MISSING'
-                            ? 'Chưa có PDF'
-                            : item.fileState === 'CHECKING'
-                              ? 'PDF đang kiểm tra'
-                              : item.fileState === 'FAILED'
-                                ? 'PDF không đạt kiểm tra'
-                                : 'PDF đã kiểm tra'}
+                          {item.source && item.source.conversionState !== 'READY'
+                            ? {
+                                QUEUED: 'Word đang chờ chuyển PDF',
+                                RUNNING: 'Word đang tạo bản đọc PDF',
+                                FAILED: 'Word chưa tạo được bản đọc',
+                                CANCELLED: 'Nguồn Word đã dừng xử lý',
+                              }[item.source.conversionState]
+                            : item.fileState === 'MISSING'
+                              ? 'Chưa có PDF'
+                              : item.fileState === 'CHECKING'
+                                ? 'PDF đang kiểm tra'
+                                : item.fileState === 'FAILED'
+                                  ? 'PDF không đạt kiểm tra'
+                                  : 'PDF đã kiểm tra'}
                         </p>
                         {item.editBlock === 'ASSIGNMENT_REQUIRED' && (
                           <p className="field-hint">Cần kiểm tra phân công</p>

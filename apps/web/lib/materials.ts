@@ -45,6 +45,14 @@ export interface MaterialDraft {
     pageCount: number | null;
     hasTextLayer: boolean | null;
   } | null;
+  source?: {
+    id: string;
+    name: string;
+    byteSize: number;
+    scanState: 'CHECKING' | 'SAFE' | 'FAILED';
+    conversionState: 'QUEUED' | 'RUNNING' | 'READY' | 'FAILED' | 'CANCELLED';
+    errorCode: string | null;
+  } | null;
   kind: 'LECTURER_MATERIAL' | 'STUDENT_SUPPLEMENT';
   title: string;
   authors: string;
@@ -104,6 +112,22 @@ function isDraft(value: unknown): value is MaterialDraft {
       String(d.reviewStatus),
     ) &&
     ['MISSING', 'CHECKING', 'SAFE', 'FAILED'].includes(String(d.fileState)) &&
+    (d.source == null ||
+      (typeof d.source === 'object' &&
+        'id' in d.source &&
+        isId(d.source.id) &&
+        'name' in d.source &&
+        typeof d.source.name === 'string' &&
+        'byteSize' in d.source &&
+        Number.isSafeInteger(d.source.byteSize) &&
+        'scanState' in d.source &&
+        ['CHECKING', 'SAFE', 'FAILED'].includes(String(d.source.scanState)) &&
+        'conversionState' in d.source &&
+        ['QUEUED', 'RUNNING', 'READY', 'FAILED', 'CANCELLED'].includes(
+          String(d.source.conversionState),
+        ) &&
+        'errorCode' in d.source &&
+        (d.source.errorCode === null || typeof d.source.errorCode === 'string'))) &&
     (d.pdf === null ||
       (!!d.pdf &&
         typeof d.pdf === 'object' &&
@@ -244,6 +268,37 @@ export async function uploadDraftPdf(current: MaterialDraft, file: File) {
         body: file,
       },
       120_000,
+    ),
+  );
+}
+export async function uploadDraftFile(current: MaterialDraft, file: File, uploadId: string) {
+  const word = /\.docx$/i.test(file.name);
+  return readItem(
+    await apiRequest(
+      `/material-drafts/${current.id}/file`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': word
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : 'application/pdf',
+          'X-CSRF-Token': await csrfToken(),
+          'X-File-Name': encodeURIComponent(file.name),
+          'If-Match': `"${current.revision}"`,
+          'X-Upload-Id': uploadId,
+        },
+        body: file,
+      },
+      120_000,
+    ),
+  );
+}
+export async function retryDraftSource(current: MaterialDraft) {
+  return readItem(
+    await academicWrite(
+      `/material-drafts/${current.id}/source/retry`,
+      { revision: current.revision, sourceUploadId: current.source?.id },
+      'POST',
     ),
   );
 }

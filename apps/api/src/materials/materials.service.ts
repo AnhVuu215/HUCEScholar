@@ -35,6 +35,16 @@ const selection = {
   publication_method: true,
   revision: true,
   file_id: true,
+  source_upload: {
+    select: {
+      id: true,
+      original_name: true,
+      byte_size: true,
+      scan_status: true,
+      conversion_status: true,
+      error_code: true,
+    },
+  },
   rights_valid_until: true,
   updated_at: true,
   files: {
@@ -173,6 +183,16 @@ export class MaterialsService {
         reviewStatus: row.review_status,
         publicationMethod: row.publication_method,
         fileState: row.files?.scan_status ?? 'MISSING',
+        source: row.source_upload
+          ? {
+              id: String(row.source_upload.id),
+              name: row.source_upload.original_name,
+              byteSize: Number(row.source_upload.byte_size),
+              scanState: row.source_upload.scan_status,
+              conversionState: row.source_upload.conversion_status,
+              errorCode: row.source_upload.error_code,
+            }
+          : null,
         pdf: row.files
           ? {
               name: row.files.original_name,
@@ -399,7 +419,7 @@ export class MaterialsService {
       return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
     });
   }
-  async lockDraft(tx: Prisma.TransactionClient, actor: Profile, rawId: string, revision: number) {
+  async lockDraft(tx: Prisma.TransactionClient, actor: Profile, rawId: string, revision?: number) {
     const result = await this.lockOwned(tx, actor, rawId, revision);
     const { row } = result;
     if (row.review_status !== 'DRAFT') throw conflict('NOT_DRAFT', 'Chỉ thay PDF của bản nháp.');
@@ -414,14 +434,14 @@ export class MaterialsService {
     tx: Prisma.TransactionClient,
     actor: Profile,
     rawId: string,
-    revision: number,
+    revision?: number,
   ) {
     const id = academicId(rawId);
     const actorId = await this.begin(tx, actor);
     await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${id} AND manager_id=${actorId} FOR UPDATE`;
     const row = await this.read(tx, actor, id);
     await tx.$queryRaw`SELECT id FROM hucescholar.document_versions WHERE id=${row.id} FOR UPDATE`;
-    if (row.revision !== revision)
+    if (revision !== undefined && row.revision !== revision)
       throw conflict(
         'STALE_REVISION',
         'Học liệu đã thay đổi. Tải trạng thái mới trước khi tiếp tục.',
