@@ -7,6 +7,13 @@ import { parseEnv } from 'node:util';
 import { readerPdf } from './helpers/reader-pdf';
 
 async function readerChoice(page: Page, label: string, option: string) {
+  if (label === 'Màu tô sáng') {
+    await page
+      .getByRole('group', { name: label, exact: true })
+      .getByRole('radio', { name: option, exact: true })
+      .check();
+    return;
+  }
   await page.getByRole('combobox', { name: label, exact: true }).click();
   await page.getByRole('option', { name: option, exact: true }).click();
 }
@@ -718,6 +725,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
     .locator('.textLayer span')
     .filter({ hasText: 'HUCEScholar reader fixture' })
     .first();
+  await text.scrollIntoViewIfNeeded();
   const box = (await text.boundingBox())!;
   await page.mouse.move(box.x + 1, box.y + box.height / 2);
   await page.mouse.down();
@@ -758,7 +766,9 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Lưu vùng tô', exact: true })).toBeEnabled();
   await expect(editor).toHaveAttribute('readonly', '');
-  await expect(page.getByLabel('Màu tô sáng', { exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole('group', { name: 'Màu tô sáng', exact: true }).getByRole('radio').first(),
+  ).toBeDisabled();
   await page.unroute('**/api/v1/auth/csrf');
   await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
   const list = (await (await page.request.get(`${path}/highlights?pageNumber=1`)).json()).items;
@@ -805,6 +815,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await expect(row.getByText('Điểm cần nhớ <b>riêng tư</b>', { exact: true })).toBeVisible();
   expect(await row.locator('b').count()).toBe(0);
   // Click through the overlay into the PDF text, then edit the existing selection.
+  await overlay.scrollIntoViewIfNeeded();
   const hit = (await overlay.boundingBox())!;
   await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
   await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
