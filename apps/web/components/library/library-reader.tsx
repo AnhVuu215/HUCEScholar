@@ -14,6 +14,7 @@ import { useReadingProgress } from './use-reading-progress';
 import { SaveMaterial } from './save-material';
 import { ReaderHighlights } from './reader-highlights';
 import type { HighlightSurface } from '../../lib/highlight-geometry';
+import { SelectField } from '../ui/select-field';
 
 export function LibraryReader({ id }: { id: string }) {
   const [surface, setSurface] = useState<HighlightSurface | null>(null);
@@ -257,25 +258,24 @@ export function LibraryReader({ id }: { id: string }) {
                 >
                   Trang sau
                 </button>
-                <label>
-                  Mức phóng{' '}
-                  <select
-                    aria-label="Mức phóng"
-                    value={zoom}
-                    disabled={!pdf}
-                    onChange={(e) => {
-                      setRendered('');
-                      setZoom(e.target.value);
-                    }}
-                  >
-                    <option value="fit">Vừa chiều rộng</option>
-                    {[0.75, 1, 1.25, 1.5, 2].map((v) => (
-                      <option key={v} value={v}>
-                        {v * 100}%
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <SelectField
+                  id="reader-zoom"
+                  label="Mức phóng"
+                  size="default"
+                  value={zoom}
+                  disabled={!pdf}
+                  onChange={(value) => {
+                    setRendered('');
+                    setZoom(value);
+                  }}
+                  options={[
+                    { value: 'fit', label: 'Vừa chiều rộng' },
+                    ...[0.75, 1, 1.25, 1.5, 2].map((value) => ({
+                      value: String(value),
+                      label: `${value * 100}%`,
+                    })),
+                  ]}
+                />
                 <button
                   className="secondary-button"
                   disabled={!pdf}

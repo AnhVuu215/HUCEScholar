@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'pdfjs-dist/web/pdf_viewer.css';
+@import './workspace-ui.css';
 
 .library-list {
   list-style: none;
@@ -52,7 +53,7 @@
 .reader-toolbar select {
   min-height: 44px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   padding: 8px;
   background: var(--paper);
   color: var(--ink);
@@ -114,7 +115,7 @@
   padding: 8px;
   max-width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   background: var(--paper);
   color: var(--ink);
 }
@@ -157,6 +158,10 @@
   --danger-bg: #fbefed;
   --positive: #235d46;
   --positive-bg: #edf7f1;
+  --control-height: 44px;
+  --control-form-height: 48px;
+  --control-radius: 8px;
+  --popup-radius: 12px;
 }
 
 * {
@@ -289,10 +294,11 @@ button:disabled {
 .form-field textarea,
 .form-field select,
 .users-management select {
-  min-height: 48px;
+  min-height: var(--control-form-height);
   width: 100%;
   border: 1px solid #b8c9de;
-  border-radius: 6px;
+  border-radius: var(--control-radius);
+  line-height: 1.5;
   padding: 10px 12px;
   color: var(--ink);
   background: var(--paper);
@@ -350,7 +356,7 @@ button:disabled {
   flex-shrink: 0;
   padding: 8px 20px;
   border: 1px solid #b8c9de;
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   color: var(--ink);
   background: var(--paper);
 }
@@ -597,12 +603,11 @@ h2 {
   font-size: 0.875rem;
 }
 .primary-button {
-  min-height: 44px;
-  margin-top: 16px;
+  min-height: var(--control-height);
   padding: 8px 20px;
   background: var(--accent);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   color: var(--paper);
   font-weight: 600;
 }
@@ -749,13 +754,57 @@ h2 {
 .danger-button {
   min-height: 44px;
   padding: 8px 20px;
-  border: 0;
-  border-radius: 6px;
+  border: 1px solid var(--danger);
+  border-radius: var(--control-radius);
   color: var(--paper);
   background: var(--danger);
 }
 .danger-button:hover {
   background: #732b25;
+}
+.primary-button,
+.secondary-button,
+.quiet-button,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--control-height);
+  line-height: 1.4;
+  vertical-align: middle;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.quiet-button {
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--ink);
+}
+.quiet-button:hover {
+  background: var(--ground);
+}
+.control-form,
+.users-filters > .primary-button,
+.users-filters > .secondary-button {
+  min-height: var(--control-form-height);
+}
+.login-form > .primary-button {
+  margin-top: 24px;
+  min-height: var(--control-form-height);
+}
+.connection .primary-button {
+  margin-top: 16px;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+button[aria-busy='true'] {
+  cursor: progress;
 }
 .confirmation-identity {
   margin-top: 16px;

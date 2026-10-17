@@ -14,6 +14,7 @@ import {
 } from '../../lib/highlights';
 import { quadBounds, selectedAnchor, type HighlightSurface } from '../../lib/highlight-geometry';
 import { useNotesLeaveGuard } from './use-notes-leave-guard';
+import { SelectField } from '../ui/select-field';
 
 type Draft = {
   page: number;
@@ -286,19 +287,15 @@ export function ReaderHighlights({
               {draft.original ? 'Sửa vùng tô' : 'Vùng tô đang soạn'} · Trang {draft.page}
             </h4>
             <blockquote className="highlight-quote">{draft.anchor.quote}</blockquote>
-            <label htmlFor="highlight-color">Màu tô sáng</label>
-            <select
+            <SelectField
               id="highlight-color"
+              label="Màu tô sáng"
+              size="default"
               value={color}
               disabled={locked}
-              onChange={(e) => setColor(e.target.value as HighlightColor)}
-            >
-              {Object.entries(highlightColors).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setColor(value as HighlightColor)}
+              options={Object.entries(highlightColors).map(([value, label]) => ({ value, label }))}
+            />
             <label htmlFor="highlight-content">Ghi chú cho đoạn tô</label>
             <textarea
               ref={input}

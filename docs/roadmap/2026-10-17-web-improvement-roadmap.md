@@ -6,6 +6,12 @@ Cập nhật: 17/10/2026. Mốc đối chiếu: commit `b7cef22`, nhánh `codex/
 
 Đây là đề xuất phát triển sau khi đọc code, schema, CI và nhật ký triển khai. Các hạng mục bên dưới chưa được triển khai chỉ vì xuất hiện trong kế hoạch. Không dùng số lượng test hoặc số bảng để suy ra phần trăm hoàn thành sản phẩm.
 
+## Bổ sung yêu cầu V2 ngày 17/10
+
+Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.
+
+V2 tái sử dụng LEARN-01, READ-01 và AUTH-01 bên dưới; không tạo hai backlog thực hiện độc lập. UPLOAD-02 đã có trên nhánh tính năng, xem [kết quả PDF/DOCX](../implementation/2026-10-17-lecturer-pdf-docx-upload.md). Các điều kiện tài khoản, báo cáo, vận hành và pilot dưới đây vẫn hiệu lực dù ưu tiên cải thiện UI trước.
+
 ## 1. Hướng đi đề xuất
 
 HUCEScholar nên giúp người học hoàn thành một vòng học tập: **tìm đúng tài liệu → đọc → ghi lại điều cần nhớ → quay lại ôn tập**. Hiện hệ thống đã đi khá xa ở ba bước đầu; bước ôn tập và trải nghiệm quay lại còn nhiều cơ hội cải thiện.
