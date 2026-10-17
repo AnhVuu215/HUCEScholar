@@ -5,6 +5,12 @@ export const highlightColors = {
   '#90CAF9': 'Xanh dương',
 } as const;
 export type HighlightColor = keyof typeof highlightColors;
+export function isHighlightColor(value: unknown): value is HighlightColor {
+  return typeof value === 'string' && Object.hasOwn(highlightColors, value);
+}
+export function highlightColorLabel(color: string): string {
+  return isHighlightColor(color) ? highlightColors[color] : `Màu đã lưu (${color.toUpperCase()})`;
+}
 export interface HighlightAnchor {
   coordinateSpace: 'normalized-pdf-v1';
   quote: string;
@@ -17,7 +23,7 @@ export interface TextHighlight {
   kind: 'TEXT_HIGHLIGHT';
   anchor: HighlightAnchor;
   content: string;
-  color: HighlightColor;
+  color: string;
   revision: number;
   updatedAt: string;
 }
@@ -36,7 +42,8 @@ function isHighlight(v: unknown): v is TextHighlight {
     r.kind === 'TEXT_HIGHLIGHT' &&
     typeof r.content === 'string' &&
     Array.from(r.content).length <= 4000 &&
-    Object.hasOwn(highlightColors, r.color) &&
+    typeof r.color === 'string' &&
+    /^#[0-9a-f]{6}$/i.test(r.color) &&
     typeof r.updatedAt === 'string' &&
     !!a &&
     a.coordinateSpace === 'normalized-pdf-v1' &&
