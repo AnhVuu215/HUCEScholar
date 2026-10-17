@@ -209,8 +209,8 @@ export default function HomePage() {
             ))}
           </div>
           <div className="landing-catalog-note">
-            <p>Chưa có học liệu được công bố.</p>
-            <span>Các chủ đề trên chỉ minh họa cách tổ chức học liệu trong tương lai.</span>
+            <p>Các bìa sách chỉ là minh họa.</p>
+            <span>Đăng nhập để xem học liệu đã công bố trong Kho học liệu.</span>
           </div>
         </section>
 
@@ -274,7 +274,8 @@ export default function HomePage() {
                 <li>
                   <strong>Bản nháp của riêng bạn</strong>
                   <span>
-                    Lưu thông tin, chọn môn liên quan và ghi rõ nguồn, căn cứ quyền sử dụng.
+                    Lưu thông tin và chọn môn liên quan. Nguồn tham khảo là tùy chọn với học liệu
+                    giảng viên.
                   </span>
                 </li>
                 <li>
@@ -286,14 +287,14 @@ export default function HomePage() {
                 <li>
                   <strong>Mỗi vai trò, một không gian</strong>
                   <span>
-                    Giảng viên chuẩn bị giáo trình theo phân công. Sinh viên đóng góp tài liệu bổ
-                    sung.
+                    Giảng viên tự công bố sau khi PDF quét đạt. Tài liệu sinh viên bổ sung được gửi
+                    kiểm duyệt.
                   </span>
                 </li>
               </ul>
               <p className="current-next">
-                Đã có kiểm duyệt, kho học liệu, trình đọc PDF, ghi chú riêng theo trang và lưu tiến
-                độ đọc. Đã có hướng dẫn cài PWA trên thiết bị hỗ trợ.
+                Tìm học liệu, đọc PDF, tô sáng đoạn chữ và lưu ghi chú riêng ngay trên web. Mở lại
+                đúng trang sau khi tiến độ được lưu thành công.
               </p>
             </div>
           </div>
@@ -333,10 +334,11 @@ export default function HomePage() {
             <details>
               <summary>Đã đọc và ghi chú trên PDF được chưa?</summary>
               <p>
-                Đã có kho học liệu và trình đọc PDF cho tài khoản được cấp. Tài liệu phải đã duyệt,
-                an toàn, đang hiển thị và còn quyền sử dụng; tải bản gốc cần được cho phép riêng. Đã
-                có ghi chú riêng theo trang và mở lại trang đã đọc sau khi lưu thành công. Highlight
-                và đọc offline chưa được hỗ trợ. Chưa có học liệu trường được cấp quyền thật.
+                Đã có kho học liệu và trình đọc PDF cho tài khoản được cấp. Bạn có thể ghi chú riêng
+                theo trang, tô sáng đoạn chữ trên PDF có lớp văn bản và mở lại trang đã đọc sau khi
+                lưu thành công. PDF scan vẫn dùng được ghi chú theo trang. Tài liệu phải đã công bố,
+                an toàn và đang hiển thị; tải bản gốc cần được cho phép riêng. PDF và ghi chú vẫn
+                cần kết nối mạng.
               </p>
             </details>
             <details>
@@ -365,7 +367,7 @@ export default function HomePage() {
                 <br />
                 cùng nhau xây dựng.
               </h2>
-              <p>Bắt đầu với một bản nháp học liệu của bạn.</p>
+              <p>Tìm tài liệu cho môn học hoặc đóng góp học liệu của bạn.</p>
             </div>
             <Link href="/login" className="landing-button landing-button-light">
               Vào không gian của bạn <Arrow />

@@ -6,12 +6,12 @@ const guides = {
   'Sinh viên': [
     ['Nhận tài khoản', 'Sử dụng tài khoản sinh viên đã được quản trị viên cấp và xác minh.'],
     [
-      'Chuẩn bị tài liệu bổ sung',
-      'Vào Học liệu của tôi, tạo bản nháp và chọn môn liên quan. Ghi rõ nguồn và căn cứ quyền sử dụng.',
+      'Tìm và đọc học liệu',
+      'Mở Kho học liệu, tìm theo tiêu đề hoặc tác giả và lọc theo môn. Chọn Đọc tài liệu để mở PDF.',
     ],
     [
-      'Đính kèm PDF',
-      'Lưu thông tin, mở lại bản nháp rồi tải PDF lên. Bấm Cập nhật trạng thái để xem kết quả kiểm tra.',
+      'Ghi chú và học tiếp',
+      'Ghi chú riêng theo trang hoặc tô sáng đoạn chữ. Thư viện của tôi giữ tài liệu đã lưu và đọc gần đây. Muốn đóng góp tài liệu bổ sung, mở Học liệu của tôi.',
     ],
   ],
   'Giảng viên': [

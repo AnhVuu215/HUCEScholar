@@ -7,7 +7,7 @@ export default function HomePage() {
       <a href="#noi-dung" className="skip-link">
         Bỏ qua điều hướng
       </a>
-      <aside className="sidebar">
+      <aside className="workspace-sidebar">
         <a className="brand" href="#noi-dung" aria-label="HUCEScholar — đầu trang">
           <span className="brand-mark" aria-hidden="true">
             H
