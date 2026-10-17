@@ -6,7 +6,9 @@ if (!password) throw new Error('Run pnpm test:setup before browser tests.');
 
 async function login(page: Page, role = 'admin') {
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(`e2e-${role}@example.test`);
+  await page
+    .getByLabel('Email', { exact: true })
+    .fill(`e2e-${role === 'admin' ? 'users-admin' : role}@example.test`);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(password!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await expect(page).toHaveURL(`/workspace/${role}`);

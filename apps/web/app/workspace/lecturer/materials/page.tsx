@@ -8,7 +8,7 @@ export default function LecturerMaterialsPage() {
     <RoleWorkspace
       role="LECTURER"
       title="Học liệu của tôi"
-      description="Upload PDF và tự công bố tài liệu cho các môn được phân công."
+      description="Upload PDF hoặc DOCX và tự công bố tài liệu cho các môn được phân công."
       activeSection="materials"
     >
       <MaterialManagement role="LECTURER" />

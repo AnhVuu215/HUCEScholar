@@ -17,6 +17,7 @@ export interface LibraryItem {
   pageCount: number;
   hasTextLayer: boolean;
   byteSize: number;
+  sourceFile?: { name: string; byteSize: number; format: 'DOCX' } | null;
   courses: { id: string; code: string; name: string }[];
 }
 export interface LibraryList {
@@ -48,6 +49,14 @@ export function isLibraryItem(value: unknown): value is LibraryItem {
     typeof r.downloadAllowed === 'boolean' &&
     typeof r.hasTextLayer === 'boolean' &&
     typeof r.current === 'boolean' &&
+    (r.sourceFile == null ||
+      (typeof r.sourceFile === 'object' &&
+        'format' in r.sourceFile &&
+        r.sourceFile.format === 'DOCX' &&
+        'name' in r.sourceFile &&
+        typeof r.sourceFile.name === 'string' &&
+        'byteSize' in r.sourceFile &&
+        Number.isSafeInteger(r.sourceFile.byteSize))) &&
     (r.rightsValidUntil === null || typeof r.rightsValidUntil === 'string') &&
     Array.isArray(r.courses) &&
     r.courses.every(

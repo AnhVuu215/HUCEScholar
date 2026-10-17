@@ -94,7 +94,9 @@ export default function HomePage() {
             </li>
             <li>
               <strong>Giảng viên</strong>
-              <span>Upload và tự công bố PDF sau khi quét an toàn.</span>
+              <span>
+                Upload PDF/DOCX, xem trước bản đọc và tự công bố sau khi kiểm tra an toàn.
+              </span>
             </li>
             <li>
               <strong>Sinh viên</strong>

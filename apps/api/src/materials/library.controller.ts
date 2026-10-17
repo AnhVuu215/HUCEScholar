@@ -33,4 +33,12 @@ export class LibraryController {
   ) {
     return this.library.file(req.user, id, true, range, res);
   }
+  @Get('versions/:id/source-download') sourceDownload(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Headers('range') range: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.library.file(req.user, id, true, range, res, true);
+  }
 }

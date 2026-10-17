@@ -5,6 +5,12 @@ import { createConnection } from 'node:net';
 import { once } from 'node:events';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
 
+export class FileCheckError extends Error {
+  constructor(readonly retryable: boolean) {
+    super(retryable ? 'File check temporarily unavailable.' : 'File check rejected.');
+  }
+}
+
 export function parsePdfInfo(output: string) {
   const pages = Number(/^Pages:\s+(\d+)\s*$/m.exec(output)?.[1]);
   if (
@@ -47,7 +53,7 @@ export function runTool(
     });
     child.on('error', () => {
       clearTimeout(timer);
-      reject(new Error('PDF tool unavailable.'));
+      reject(new FileCheckError(true));
     });
     child.on('close', (code) => {
       clearTimeout(timer);
@@ -67,19 +73,19 @@ export async function clamScan(
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await new Promise<void>((resolve, reject) => {
-      timer = setTimeout(() => socket.destroy(new Error('Scanner timeout.')), timeout);
-      socket.on('error', () => reject(new Error('Scanner unavailable.')));
+      timer = setTimeout(() => socket.destroy(new FileCheckError(true)), timeout);
+      socket.on('error', () => reject(new FileCheckError(true)));
       socket.on('close', () => {
-        if (!response.includes('\0')) reject(new Error('Scanner disconnected.'));
+        if (!response.includes('\0')) reject(new FileCheckError(true));
       });
       socket.on('data', (data: Buffer) => {
         response += data.toString('utf8');
         if (response.length > 1024) {
           socket.destroy();
-          reject(new Error('Invalid scanner response.'));
+          reject(new FileCheckError(true));
         } else if (response.includes('\0')) {
           if (response === 'stream: OK\0') resolve();
-          else reject(new Error('Scanner rejected PDF.'));
+          else reject(new FileCheckError(!/^stream: .+ FOUND\0$/.test(response)));
         }
       });
       socket.once('connect', () => {
@@ -92,7 +98,7 @@ export async function clamScan(
             if (!socket.write(Buffer.concat([size, bytes]))) await once(socket, 'drain');
           }
           socket.write(Buffer.alloc(4));
-        })().catch(() => reject(new Error('Scanner stream failed.')));
+        })().catch(() => reject(new FileCheckError(true)));
       });
     });
   } finally {

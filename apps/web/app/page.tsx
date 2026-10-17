@@ -281,7 +281,8 @@ export default function HomePage() {
                 <li>
                   <strong>PDF được kiểm tra trước</strong>
                   <span>
-                    Đính kèm PDF tối đa 25 MiB vào bản nháp và theo dõi kết quả kiểm tra kỹ thuật.
+                    Giảng viên đính kèm PDF hoặc DOCX tối đa 25 MiB. Word được chuyển thành bản PDF
+                    để đọc và ghi chú.
                   </span>
                 </li>
                 <li>

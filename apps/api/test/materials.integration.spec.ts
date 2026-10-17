@@ -12,11 +12,16 @@ import { MaterialsService } from '../src/materials/materials.service';
 import { PrivateStore } from '../src/files/private-store';
 import { ScanQueue } from '../src/files/scan-queue';
 import { ScanProcessor } from '../src/files/scan-processor';
-import { PdfScanner } from '../src/files/pdf-scanner';
+import { clamScan, PdfScanner } from '../src/files/pdf-scanner';
 import { createReadStream } from 'node:fs';
 import { get as httpGet } from 'node:http';
 import type { Readable } from 'node:stream';
 import { DatabaseService } from '../src/database/database.module';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { DOCX_MIME } from '../src/files/receive-docx';
+import { DocxTools, SourceConversionProcessor } from '../src/materials/source-conversion.processor';
+import { SourceConversionQueue } from '../src/files/source-conversion-queue';
 
 type Browser = ReturnType<typeof request.agent>;
 const origin = 'http://127.0.0.1:3100';
@@ -112,6 +117,13 @@ describe('private material drafts', () => {
         )
       ).rows;
       for (const row of keys) await app.get(PrivateStore).remove(row.object_key);
+      const sources = (
+        await db.query(
+          'SELECT object_key FROM hucescholar.document_source_uploads WHERE uploaded_by=ANY($1::bigint[])',
+          [Object.values(users)],
+        )
+      ).rows;
+      for (const row of sources) await app.get(PrivateStore).removeSource(row.object_key);
     }
     await app?.close();
     if (db) {
@@ -160,12 +172,21 @@ describe('private material drafts', () => {
           ids,
         ]);
         await db.query(
+          'UPDATE hucescholar.document_versions SET source_upload_id=null WHERE created_by=ANY($1::bigint[])',
+          [ids],
+        );
+        await db.query(
+          'DELETE FROM hucescholar.document_source_uploads WHERE uploaded_by=ANY($1::bigint[])',
+          [ids],
+        );
+        await db.query(
           'DELETE FROM hucescholar.document_versions WHERE created_by=ANY($1::bigint[])',
           [ids],
         );
         await db.query('DELETE FROM hucescholar.documents WHERE created_by=ANY($1::bigint[])', [
           ids,
         ]);
+        await db.query('SET CONSTRAINTS ALL IMMEDIATE');
         await db.query(
           'ALTER TABLE hucescholar.document_versions ENABLE TRIGGER tr_protect_version',
         );
@@ -2568,6 +2589,387 @@ describe('private material drafts', () => {
       expect((await review(item.requestId, decision())).body.code).toBe('MANAGER_UNAVAILABLE');
     } finally {
       await db.query("UPDATE hucescholar.users SET status='ACTIVE' WHERE id=$1", [users.other]);
+    }
+  });
+  async function wordUpload(
+    item: { id: string; revision: number },
+    name = 'lecturer',
+    requestId = randomUUID(),
+    bytes?: Buffer,
+  ) {
+    const agent = agents[name],
+      csrf = (await agent.get('/api/v1/auth/csrf')).body.csrfToken;
+    return agent
+      .post(`/api/v1/material-drafts/${item.id}/file`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .set('Content-Type', DOCX_MIME)
+      .set('X-File-Name', encodeURIComponent('Bài giảng.docx'))
+      .set('If-Match', `"${item.revision}"`)
+      .set('X-Upload-Id', requestId)
+      .send(bytes ?? (await readFile(join(__dirname, 'fixtures/docx/vietnamese.docx'))));
+  }
+  async function pendingWord() {
+    const item = await create();
+    const uploaded = await wordUpload(item);
+    expect(uploaded.status).toBe(202);
+    return uploaded.body.item;
+  }
+  function fakeWordTools() {
+    const scan = jest.spyOn(app.get(DocxTools), 'scanSource').mockResolvedValue();
+    const convert = jest
+      .spyOn(app.get(DocxTools), 'convert')
+      .mockImplementation(async (_input, output) => {
+        await writeFile(output, Buffer.from('%PDF-1.7\nsynthetic rendition'));
+        return { converterBuild: 'test converter' };
+      });
+    const pdf = jest
+      .spyOn(app.get(PdfScanner), 'scan')
+      .mockResolvedValue({ pageCount: 2, hasTextLayer: true });
+    return () => {
+      scan.mockRestore();
+      convert.mockRestore();
+      pdf.mockRestore();
+    };
+  }
+  it('DOCX is lecturer-only, private and idempotent, without leaking object keys', async () => {
+    const student = await create('student');
+    expect((await wordUpload(student, 'student')).status).toBe(403);
+    const item = await create(),
+      uploadId = randomUUID();
+    const first = await wordUpload(item, 'lecturer', uploadId);
+    expect(first.status).toBe(202);
+    expect(first.body.item).toMatchObject({
+      fileState: 'MISSING',
+      pdf: null,
+      source: { scanState: 'CHECKING', conversionState: 'QUEUED' },
+    });
+    expect(JSON.stringify(first.body)).not.toMatch(/object_key|sha256|processing_token/);
+    const replay = await wordUpload(item, 'lecturer', uploadId);
+    expect(replay.status).toBe(202);
+    expect(replay.body.item.revision).toBe(first.body.item.revision);
+    expect(
+      (await wordUpload(item, 'lecturer', uploadId, Buffer.from('PK\x03\x04different'))).status,
+    ).toBe(409);
+    expect(
+      (await publication('lecturer', item.id, 'publish', { revision: first.body.item.revision }))
+        .body.code,
+    ).toBe('FILE_NOT_SAFE');
+  });
+  it('DOCX rendition keeps edited metadata and supports exact original download after publication', async () => {
+    const item = await pendingWord(),
+      restore = fakeWordTools();
+    try {
+      await write(
+        'lecturer',
+        {
+          ...body(),
+          title: 'Metadata edited during conversion',
+          downloadAllowed: true,
+          revision: item.revision,
+        },
+        item.id,
+      );
+      await app.get(SourceConversionProcessor).process(item.source.id);
+      const current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      expect(current).toMatchObject({
+        title: 'Metadata edited during conversion',
+        fileState: 'SAFE',
+        source: { conversionState: 'READY', scanState: 'SAFE' },
+      });
+      await agents.lecturer.get(`/api/v1/material-drafts/${item.id}/preview`).expect(200);
+      await agents.receiver.get(`/api/v1/material-drafts/${item.id}/preview`).expect(404);
+      expect(
+        (await publication('lecturer', item.id, 'publish', { revision: current.revision })).status,
+      ).toBe(201);
+      const original = await agents.student
+        .get(`/api/v1/library/versions/${current.versionId}/source-download`)
+        .buffer(true)
+        .parse((res, cb) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
+      expect(original.status).toBe(200);
+      expect(original.headers['content-type']).toContain(DOCX_MIME);
+      expect(original.body).toEqual(
+        await readFile(join(__dirname, 'fixtures/docx/vietnamese.docx')),
+      );
+      expect(
+        (await agents.student.get(`/api/v1/library/versions/${current.versionId}/download`))
+          .headers['content-type'],
+      ).toContain('application/pdf');
+      await app.get(SourceConversionProcessor).process(item.source.id);
+      expect(
+        (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item.revision,
+      ).toBe(current.revision + 1);
+    } finally {
+      restore();
+    }
+  });
+  it('DOCX duplicate workers claim once; replacing with PDF prevents stale attachment', async () => {
+    const item = await pendingWord(),
+      restore = fakeWordTools();
+    const tools = app.get(DocxTools);
+    let entered!: () => void, release!: () => void;
+    const barrier = new Promise<void>((r) => (entered = r)),
+      wait = new Promise<void>((r) => (release = r));
+    const convert = jest.spyOn(tools, 'convert').mockImplementation(async (_input, output) => {
+      entered();
+      await wait;
+      await writeFile(output, '%PDF-1.7\nold');
+      return { converterBuild: 'test' };
+    });
+    try {
+      const work = app.get(SourceConversionProcessor).process(item.source.id);
+      await barrier;
+      await app.get(SourceConversionProcessor).process(item.source.id);
+      expect(convert).toHaveBeenCalledTimes(1);
+      expect((await upload('lecturer', item.id, item.revision)).status).toBe(201);
+      release();
+      await work;
+      const current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      expect(current.source).toBeNull();
+      expect(current.pdf.name).toContain('.pdf');
+      expect(
+        (
+          await db.query(
+            'SELECT conversion_status FROM hucescholar.document_source_uploads WHERE id=$1',
+            [item.source.id],
+          )
+        ).rows[0].conversion_status,
+      ).toBe('CANCELLED');
+    } finally {
+      release();
+      restore();
+    }
+  });
+  it('DOCX old lease cannot overwrite a newer claim', async () => {
+    const item = await pendingWord(),
+      restore = fakeWordTools();
+    let entered!: () => void, release!: () => void;
+    const barrier = new Promise<void>((r) => (entered = r)),
+      wait = new Promise<void>((r) => (release = r));
+    let calls = 0;
+    jest.spyOn(app.get(DocxTools), 'convert').mockImplementation(async (_input, output) => {
+      if (++calls === 1) {
+        entered();
+        await wait;
+      }
+      await writeFile(output, '%PDF-1.7\nlease');
+      return { converterBuild: 'test' };
+    });
+    try {
+      const old = app.get(SourceConversionProcessor).process(item.source.id);
+      await barrier;
+      await db.query(
+        "UPDATE hucescholar.document_source_uploads SET lease_expires_at=now()-interval '1 second' WHERE id=$1",
+        [item.source.id],
+      );
+      await app.get(SourceConversionProcessor).process(item.source.id);
+      const ready = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      release();
+      await old;
+      expect((await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item).toEqual(
+        ready,
+      );
+    } finally {
+      release();
+      restore();
+    }
+  });
+  it.each(['source', 'output'])(
+    'DOCX retries a scanner connection outage at %s without marking content unsafe',
+    async (stage) => {
+      const item = await pendingWord(),
+        restore = fakeWordTools();
+      const unavailable = (path: string) => clamScan(path, '127.0.0.1', 0, 1000);
+      if (stage === 'source')
+        jest.spyOn(app.get(DocxTools), 'scanSource').mockImplementation(unavailable);
+      else
+        jest.spyOn(app.get(PdfScanner), 'scan').mockImplementation(async (path) => {
+          await unavailable(path);
+          return { pageCount: 1, hasTextLayer: true };
+        });
+      try {
+        await expect(app.get(SourceConversionProcessor).process(item.source.id)).rejects.toThrow();
+        const current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+        expect(current.source).toMatchObject({
+          conversionState: 'QUEUED',
+          errorCode: 'PROCESSOR_UNAVAILABLE',
+          scanState: stage === 'source' ? 'CHECKING' : 'SAFE',
+        });
+      } finally {
+        restore();
+      }
+    },
+  );
+  it('DOCX invalid content fails closed; transient conversion can retry', async () => {
+    const item = await pendingWord(),
+      restore = fakeWordTools();
+    const convert = jest
+      .spyOn(app.get(DocxTools), 'convert')
+      .mockRejectedValue(new Error('PROCESSOR_UNAVAILABLE'));
+    try {
+      for (let i = 0; i < 2; i++)
+        await expect(app.get(SourceConversionProcessor).process(item.source.id)).rejects.toThrow();
+      await app.get(SourceConversionProcessor).process(item.source.id);
+      let current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      expect(current.source).toMatchObject({
+        conversionState: 'FAILED',
+        errorCode: 'PROCESSOR_UNAVAILABLE',
+      });
+      expect(
+        (
+          await publication('lecturer', item.id, 'source/retry', {
+            revision: current.revision,
+            sourceUploadId: item.source.id,
+          })
+        ).status,
+      ).toBe(202);
+      convert.mockRejectedValue(new Error('INVALID_DOCX'));
+      await app.get(SourceConversionProcessor).process(item.source.id);
+      current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      expect(current.source.conversionState).toBe('FAILED');
+      expect(
+        (
+          await publication('lecturer', item.id, 'source/retry', {
+            revision: current.revision,
+            sourceUploadId: item.source.id,
+          })
+        ).status,
+      ).toBe(409);
+    } finally {
+      restore();
+    }
+  });
+  it('DOCX reconciliation restores a lost enqueue', async () => {
+    const queue = app.get(SourceConversionQueue);
+    const spy = jest.spyOn(queue, 'enqueue').mockRejectedValueOnce(new Error('queue unavailable'));
+    const item = await pendingWord();
+    spy.mockRestore();
+    await app.get(SourceConversionProcessor).reconcile();
+    expect(await queue.queue.getJob(`source-${item.source.id}`)).toBeDefined();
+  });
+  it('DOCX commit acknowledgment loss retains source bytes and replays the same upload', async () => {
+    const item = await create(),
+      requestId = randomUUID();
+    const database = app.get(DatabaseService),
+      original = database.$transaction.bind(database);
+    let count = 0;
+    const transaction = jest
+      .spyOn(database, '$transaction')
+      .mockImplementation(async (callback) => {
+        const result = await original(callback);
+        if (++count === 2) throw new Error('Commit acknowledgment lost');
+        return result;
+      });
+    const remove = jest.spyOn(app.get(PrivateStore), 'removeSource');
+    try {
+      expect((await wordUpload(item, 'lecturer', requestId)).status).toBe(503);
+      expect(remove).not.toHaveBeenCalled();
+    } finally {
+      transaction.mockRestore();
+      remove.mockRestore();
+    }
+    const replay = await wordUpload(item, 'lecturer', requestId);
+    expect(replay.status).toBe(202);
+    expect(
+      (
+        await db.query(
+          'SELECT count(*)::int n FROM hucescholar.document_source_uploads WHERE version_id=$1',
+          [item.versionId],
+        )
+      ).rows[0].n,
+    ).toBe(1);
+  });
+  it('DOCX rendition commit acknowledgment loss keeps the READY PDF', async () => {
+    const item = await pendingWord(),
+      restore = fakeWordTools();
+    const database = app.get(DatabaseService),
+      original = database.$transaction.bind(database);
+    const transaction = jest
+      .spyOn(database, '$transaction')
+      .mockImplementation(async (callback) => {
+        await original(callback);
+        throw new Error('Commit acknowledgment lost');
+      });
+    const remove = jest.spyOn(app.get(PrivateStore), 'remove');
+    try {
+      await expect(app.get(SourceConversionProcessor).process(item.source.id)).rejects.toThrow();
+      expect(remove).not.toHaveBeenCalled();
+    } finally {
+      transaction.mockRestore();
+      remove.mockRestore();
+      restore();
+    }
+    expect(
+      (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item.source
+        .conversionState,
+    ).toBe('READY');
+    await agents.lecturer.get(`/api/v1/material-drafts/${item.id}/preview`).expect(200);
+  });
+  it('DOCX processing rechecks revoked assignments and ownership transfers', async () => {
+    const revoked = await pendingWord(),
+      transferred = await pendingWord(),
+      restore = fakeWordTools();
+    try {
+      expect(
+        (
+          await lifecycleWrite(transferred.id, 'transfer', {
+            revision: await documentRevision(transferred.id),
+            recipientId: users.receiver,
+            reason: 'Synthetic pending source transfer',
+          })
+        ).status,
+      ).toBe(201);
+      await app.get(SourceConversionProcessor).process(transferred.source.id);
+      expect(
+        (await agents.receiver.get(`/api/v1/material-drafts/${transferred.id}`)).body.item,
+      ).toMatchObject({ fileState: 'MISSING', source: { conversionState: 'CANCELLED' } });
+      await db.query(
+        'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2 WHERE lecturer_id=$1 AND revoked_at IS NULL',
+        [users.lecturer, users.admin],
+      );
+      await app.get(SourceConversionProcessor).process(revoked.source.id);
+      expect(
+        (await agents.lecturer.get(`/api/v1/material-drafts/${revoked.id}`)).body.item,
+      ).toMatchObject({ fileState: 'MISSING', source: { conversionState: 'CANCELLED' } });
+    } finally {
+      restore();
+      await db.query(
+        'UPDATE hucescholar.lecturer_assignments SET revoked_at=null,revoked_by=null WHERE lecturer_id=$1 AND course_id=$2',
+        [users.lecturer, courses[0]],
+      );
+    }
+  });
+  it('DOCX download permission blocks both Word and PDF, and hidden sources cannot be downloaded', async () => {
+    const item = await pendingWord(),
+      restore = fakeWordTools();
+    try {
+      await app.get(SourceConversionProcessor).process(item.source.id);
+      let current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      expect(
+        (await publication('lecturer', item.id, 'publish', { revision: current.revision })).status,
+      ).toBe(201);
+      await agents.student
+        .get(`/api/v1/library/versions/${item.versionId}/source-download`)
+        .expect(403);
+      await agents.student.get(`/api/v1/library/versions/${item.versionId}/download`).expect(403);
+      await agents.student.get(`/api/v1/library/versions/${item.versionId}/pdf`).expect(200);
+      await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [item.id]);
+      await agents.student
+        .get(`/api/v1/library/versions/${item.versionId}/source-download`)
+        .expect(404);
+      current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      const next = await publication('lecturer', item.id, 'versions', {
+        revision: current.revision,
+      });
+      expect(next.status).toBe(201);
+      expect(next.body.item.source).toBeNull();
+      expect(next.body.item.pdf).toBeNull();
+    } finally {
+      restore();
     }
   });
   it('retains metadata after revocation but blocks edits even by dropping old courses', async () => {

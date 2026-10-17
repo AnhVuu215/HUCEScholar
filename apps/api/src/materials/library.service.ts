@@ -13,6 +13,8 @@ import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { PrivateStore, type ByteRange } from '../files/private-store';
 import { LibraryListDto } from './library.dto';
+import { DOCX_MIME } from '../files/receive-docx';
+import { MaterialsService } from './materials.service';
 
 const selection = {
   id: true,
@@ -29,6 +31,15 @@ const selection = {
   download_allowed: true,
   updated_at: true,
   files: { select: { id: true, byte_size: true, page_count: true, has_text_layer: true } },
+  source_upload: {
+    select: {
+      original_name: true,
+      byte_size: true,
+      conversion_status: true,
+      scan_status: true,
+      rendered_file_id: true,
+    },
+  },
   version_courses: { select: { courses: { select: { id: true, code: true, name: true } } } },
   documents_document_versions_document_idTodocuments: {
     select: { kind: true, current_version_id: true },
@@ -60,6 +71,16 @@ function serialize(v: LibraryRow) {
     pageCount: v.files!.page_count,
     hasTextLayer: v.files!.has_text_layer,
     byteSize: Number(v.files!.byte_size),
+    sourceFile:
+      v.source_upload?.conversion_status === 'READY' &&
+      v.source_upload.scan_status === 'SAFE' &&
+      v.source_upload.rendered_file_id === v.files?.id
+        ? {
+            name: v.source_upload.original_name,
+            byteSize: Number(v.source_upload.byte_size),
+            format: 'DOCX' as const,
+          }
+        : null,
     courses: v.version_courses.map(({ courses: c }) => ({
       id: String(c.id),
       code: c.code,
@@ -87,6 +108,7 @@ export class LibraryService {
   constructor(
     private readonly db: DatabaseService,
     private readonly store: PrivateStore,
+    private readonly materials: MaterialsService,
   ) {}
   async courses() {
     const rows = await this.db.version_courses.findMany({
@@ -179,6 +201,7 @@ export class LibraryService {
     download: boolean,
     range: string | undefined,
     response: Response,
+    original = false,
   ) {
     const id = academicId(rawId);
     // Document-first locks serialize new grants with hide/version decisions; checked bytes already granted cannot be recalled.
@@ -189,6 +212,18 @@ export class LibraryService {
           code: 'DOWNLOAD_NOT_ALLOWED',
           message: 'Nguồn tài liệu chỉ cho phép đọc trong hệ thống.',
         });
+      if (original) {
+        const source = await tx.document_source_uploads.findFirst({
+          where: {
+            current_versions: { some: { id } },
+            scan_status: 'SAFE',
+            conversion_status: 'READY',
+            rendered_file_id: row.files!.id,
+          },
+        });
+        if (!source) throw new NotFoundException('Phiên bản này không có Word gốc khả dụng.');
+        return source;
+      }
       return await tx.files.findUniqueOrThrow({ where: { id: row.files!.id } });
     });
     const size = Number(file.byte_size);
@@ -201,7 +236,9 @@ export class LibraryService {
       return new StreamableFile(Buffer.alloc(0));
     }
     try {
-      const stream = await this.store.read(file.object_key, selected);
+      const stream = original
+        ? await this.store.readSource(file.object_key, selected)
+        : await this.store.read(file.object_key, selected);
       const disconnect = () => stream.destroy();
       response.once('close', disconnect);
       stream.once('close', () => response.off('close', disconnect));
@@ -215,12 +252,40 @@ export class LibraryService {
         response.setHeader('Content-Range', `bytes ${selected.start}-${selected.end}/${size}`);
       }
       return new StreamableFile(stream, {
-        type: 'application/pdf',
-        disposition: `${download ? 'attachment' : 'inline'}; filename="material.pdf"`,
+        type: original ? DOCX_MIME : 'application/pdf',
+        disposition: original
+          ? `attachment; filename="material.docx"; filename*=UTF-8''${encodeURIComponent(file.original_name).replace(/['()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())}`
+          : `${download ? 'attachment' : 'inline'}; filename="material.pdf"`,
         length: selected ? selected.end - selected.start + 1 : size,
       });
     } catch {
       throw new ServiceUnavailableException('Chưa mở được PDF. Kiểm tra kết nối rồi thử lại.');
+    }
+  }
+
+  async draftPreview(actor: Profile, rawId: string, response: Response) {
+    const file = await this.db.$transaction(async (tx) => {
+      const { row } = await this.materials.lockDraft(tx, actor, rawId);
+      const file = row.file_id ? await tx.files.findUnique({ where: { id: row.file_id } }) : null;
+      if (
+        !file ||
+        file.scan_status !== 'SAFE' ||
+        (row.source_upload && row.source_upload.conversion_status !== 'READY')
+      )
+        throw new NotFoundException('Bản đọc chưa sẵn sàng.');
+      return file;
+    });
+    try {
+      const stream = await this.store.read(file.object_key);
+      response.once('close', () => stream.destroy());
+      if ('pending' in stream && stream.pending) await once(stream, 'open');
+      return new StreamableFile(stream, {
+        type: 'application/pdf',
+        disposition: 'inline; filename="preview.pdf"',
+        length: Number(file.byte_size),
+      });
+    } catch {
+      throw new ServiceUnavailableException('Chưa mở được bản đọc.');
     }
   }
 

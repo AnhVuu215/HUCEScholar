@@ -1,5 +1,7 @@
 # HUCEScholar — Tech stack và kiến trúc MVP
 
+**Cập nhật17/10/2026:** giảng viên upload PDF/DOCX; nguồn Word và PDF rendition tách bảng, migration008 nâng schema lên24bảng. Worker quét nguồn/đầu ra, LibreOffice/Python validator chạy trong converter nội bộ cách ly; reader vẫn PDF.js, giữ ghi chú theo PDF/version. [Triển khai và giới hạn](implementation/2026-10-17-lecturer-pdf-docx-upload.md).
+
 **Cập nhật sản phẩm14/10/2026:** giảng viên upload PDF từ nguồn tự chọn và tự công bố khi SAFE, không cần admin duyệt hoặc khai báo căn cứ quyền. Nguồn tham khảo tùy chọn; sinh viên vẫn qua kiểm duyệt. Migration007 thêm publication_method để phân biệt tự công bố với quyết định admin, giữ APPROVED terminal/current và trigger PostgreSQL. Phân công môn, giới hạn25MiB và ownership giữ nguyên. Xem [triển khai tự công bố](implementation/2026-10-14-lecturer-self-publication.md).
 
 Ngày quyết định: 11/10/2026. Trạng thái: chốt công nghệ MVP; đã có workspace Next.js/NestJS, migration PostgreSQL, đăng nhập/phân quyền, quản lý tài khoản, danh mục đào tạo, phân công, bản nháp, upload PDF riêng tư, gửi/rút, admin kiểm duyệt bản hiện hành, kho học liệu và reader PDF.js theo quyền. Chưa triển khai vận hành. Bằng chứng: [mốc khởi tạo](implementation/2026-10-11-foundation.md), [database và auth](implementation/2026-10-11-database-auth.md), [quản lý tài khoản](implementation/2026-10-11-account-management.md), [danh mục và phân công](implementation/2026-10-11-academic-catalog.md), [upload PDF](implementation/2026-10-11-private-pdf-upload.md).
@@ -14,10 +16,10 @@ Người dùng đã chọn **web responsive + PWA cho MVP**. Một giao diện d
 | Frontend | React + Next.js App Router | Giao diện responsive và PWA; giữ hướng thiết kế navy v2 |
 | CSS | Tailwind CSS + CSS variables | CSS sản phẩm và surface brief là nguồn hiện hành; DESIGN.md/sidecar giữ phạm vi wireframe lịch sử |
 | Backend | NestJS, REST API, OpenAPI | Auth, phân quyền, học liệu, phiên bản, kiểm duyệt, ghi chú và thư viện |
-| Database | PostgreSQL | Kế thừa mô hình 23 bảng và các ràng buộc đã thiết kế |
+| Database | PostgreSQL | Schema triển khai 24 bảng, gồm nguồn DOCX riêng và các ràng buộc đã thiết kế |
 | Truy cập dữ liệu/migration | Prisma ORM + migration SQL tùy chỉnh | Truy vấn có type; giữ nguyên CHECK, partial index, trigger và function PostgreSQL |
 | PDF reader | Mozilla PDF.js (`pdfjs-dist`) | Render PDF, text layer, chuyển trang, zoom; lớp ghi chú do HUCEScholar xây riêng |
-| File production | Amazon S3, bucket private | Lưu PDF theo phiên bản; PostgreSQL chỉ giữ metadata và object key |
+| File production | Amazon S3, bucket private | Lưu Word gốc và PDF theo phiên bản; PostgreSQL chỉ giữ metadata và object key |
 | Tác vụ nền | BullMQ + Redis, worker từ codebase NestJS | Kiểm tra file và gửi email có retry; Redis không giữ dữ liệu học tập chính |
 | Kiểm tra PDF | ClamAV + Poppler (`pdfinfo`, `pdftotext`) trong worker | Quét mã độc, xác định số trang/text layer và kiểm tra khả năng đọc file |
 | Email | SMTP qua Nodemailer | Gửi hướng dẫn tài khoản/reset; tài khoản SMTP cấu hình theo môi trường |

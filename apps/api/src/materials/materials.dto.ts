@@ -53,6 +53,9 @@ export class MaterialHistoryDto extends DraftListDto {
 export class SubmitMaterialDto {
   @IsInt() @Min(1) @Max(2147483646) revision!: number;
 }
+export class SourceRetryDto extends SubmitMaterialDto {
+  @IsString() @Matches(/^[1-9]\d{0,18}$/) sourceUploadId!: string;
+}
 export class WithdrawMaterialDto extends SubmitMaterialDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(1000) reason!: string;
 }

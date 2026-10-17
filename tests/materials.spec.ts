@@ -393,17 +393,17 @@ test('lecturer self-publication needs no rights declaration or admin decision an
     .getByRole('button', { name: `Mở bản nháp PDF tự công bố ${code}`, exact: true })
     .click();
   await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toBeDisabled();
-  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
+  await page.getByLabel('File tài liệu (PDF hoặc DOCX)', { exact: true }).setInputFiles({
     name: 'self-published.pdf',
     mimeType: 'application/pdf',
     buffer: readerPdf(),
   });
-  await page.getByRole('button', { name: 'Tải PDF lên', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu và tải file lên', exact: true }).click();
   await expect(page.getByText('Lần lưu 2', { exact: false })).toBeVisible();
   const item = (await (await page.request.get('/api/v1/material-drafts?search=' + code)).json())
     .items[0];
   await markSyntheticSafe(item.id, 2);
-  await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
+  await page.getByRole('button', { name: 'Cập nhật trạng thái file', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toBeEnabled();
   await page.route('**/api/v1/material-drafts/*/publish', async (route) => {
     await route.fetch();
@@ -1415,17 +1415,31 @@ for (const role of ['student', 'lecturer'] as const)
       .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
       .click();
     await expect(page.getByRole('button', { name: actionLabel, exact: true })).toBeDisabled();
-    await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
-      name: 'synthetic-publication.pdf',
-      mimeType: 'application/pdf',
-      buffer: Buffer.from('%PDF-1.7\nSynthetic publication fixture'),
-    });
-    await page.getByRole('button', { name: 'Tải PDF lên', exact: true }).click();
+    await page
+      .getByLabel(role === 'lecturer' ? 'File tài liệu (PDF hoặc DOCX)' : 'Chọn PDF', {
+        exact: true,
+      })
+      .setInputFiles({
+        name: 'synthetic-publication.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from('%PDF-1.7\nSynthetic publication fixture'),
+      });
+    await page
+      .getByRole('button', {
+        name: role === 'lecturer' ? 'Lưu và tải file lên' : 'Tải PDF lên',
+        exact: true,
+      })
+      .click();
     await expect(page.getByText('Lần lưu 2', { exact: false })).toBeVisible();
     const item = (await (await page.request.get('/api/v1/material-drafts?search=' + code)).json())
       .items[0];
     await markSyntheticSafe(item.id);
-    await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
+    await page
+      .getByRole('button', {
+        name: role === 'lecturer' ? 'Cập nhật trạng thái file' : 'Cập nhật trạng thái',
+        exact: true,
+      })
+      .click();
     await page.getByLabel('Tác giả', { exact: false }).fill('Chưa lưu');
     await expect(page.getByRole('button', { name: actionLabel, exact: true })).toBeDisabled();
     await page.getByLabel('Tác giả', { exact: false }).fill('Tác giả kiểm thử');
@@ -1466,7 +1480,11 @@ for (const role of ['student', 'lecturer'] as const)
       ).toBeVisible();
     }
     await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
-    await expect(page.getByLabel('Chọn PDF', { exact: true })).toBeDisabled();
+    await expect(
+      page.getByLabel(role === 'lecturer' ? 'File tài liệu (PDF hoặc DOCX)' : 'Chọn PDF', {
+        exact: true,
+      }),
+    ).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Rút về nháp', exact: true })).toBeDisabled();
     if (role === 'student' && process.env.CAPTURE_PUBLICATION_UI === '1') {
       mkdirSync('.impeccable/review/publication', { recursive: true });

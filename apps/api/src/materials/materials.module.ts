@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MaterialsController } from './materials.controller';
-import { MaterialsService } from './materials.service';
+import { MaterialDraftCoreModule } from './material-draft-core.module';
 import { AuthModule } from '../auth/auth.module';
 import { FilesModule } from '../files/files.module';
 import { DraftPdfService } from './draft-pdf.service';
@@ -15,7 +15,7 @@ import { LifecycleService } from './lifecycle.service';
 import { PersonalLibraryController } from './personal-library.controller';
 import { PersonalLibraryService } from './personal-library.service';
 @Module({
-  imports: [AuthModule, FilesModule],
+  imports: [AuthModule, FilesModule, MaterialDraftCoreModule],
   controllers: [
     MaterialsController,
     ModerationController,
@@ -25,7 +25,6 @@ import { PersonalLibraryService } from './personal-library.service';
     PersonalLibraryController,
   ],
   providers: [
-    MaterialsService,
     DraftPdfService,
     ModerationService,
     LibraryService,

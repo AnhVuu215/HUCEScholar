@@ -75,7 +75,12 @@ export class DraftPdfService {
         });
         await tx.document_versions.update({
           where: { id: row.id },
-          data: { file_id: file.id, revision: { increment: 1 }, updated_at: new Date() },
+          data: {
+            file_id: file.id,
+            source_upload_id: null,
+            revision: { increment: 1 },
+            updated_at: new Date(),
+          },
         });
         await tx.documents.update({
           where: { id: documentId },

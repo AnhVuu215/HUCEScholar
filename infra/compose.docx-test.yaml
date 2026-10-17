@@ -1,0 +1,9 @@
+# Opt-in real conversion verification, isolated from the local application DB and files.
+services:
+  file-worker:
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://hucescholar:${POSTGRES_PASSWORD}@postgres:5432/hucescholar_test
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/15
+    volumes:
+      - ../.local/files-test:/data/files

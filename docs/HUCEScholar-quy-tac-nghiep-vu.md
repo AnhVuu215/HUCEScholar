@@ -1,8 +1,10 @@
 # HUCEScholar Quy tắc nghiệp vụ và luồng công bố
 
-Khởi tạo09/10/2026; cập nhật quyết định sản phẩm14/10/2026, phiên bản1.2. Phục vụ MVP.
+Khởi tạo09/10/2026; cập nhật quyết định sản phẩm14/10/2026, phiên bản1.3. Phục vụ MVP.
 
 Quyết định14/10 thay A02: giảng viên upload tài liệu PDF không giới hạn nguồn HUCE, nguồn tham khảo tùy chọn, không bắt buộc khai báo căn cứ quyền và tự công bố khi file SAFE. Môn/phân công và ownership vẫn được kiểm tra. Luồng sinh viên không đổi. Proposal/Word và prototype cũ là tài liệu lịch sử, không ghi đè hiện vật đã bàn giao.
+
+Quyết định17/10: giảng viên nhận PDF/DOCX trong cùng form. DOCX tạo PDF để đọc/tô/note, giữ Word gốc; scan nguồn, conversion và scan PDF độc lập trạng thái công bố/hiển thị. Chỉ công bố khi nguồn SAFE, conversion READY và PDF SAFE. Tải Word/PDF cùng phụ thuộc download_allowed; bản công bố và anchor cũ bất biến. Sinh viên vẫn PDF có kiểm duyệt. Xem [triển khai](implementation/2026-10-17-lecturer-pdf-docx-upload.md).
 
 ## 1. Cơ sở quyết định
 

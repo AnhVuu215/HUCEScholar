@@ -6,6 +6,7 @@ import {
   materialError,
   materialTypes,
   saveDraft,
+  uploadDraftFile,
   type DraftFields,
   type MaterialDraft,
 } from '../../lib/materials';
@@ -13,6 +14,10 @@ import { CatalogPicker, type CatalogChoice } from '../academic/catalog-picker';
 import { DraftPdf } from './draft-pdf';
 import { PublicationActions } from './publication-actions';
 import { VersionHistory } from './version-history';
+import { ApiError } from '../../lib/auth';
+import { MaterialFilePicker } from './material-file-picker';
+import { MaterialFileStatus } from './material-file-status';
+import { MaterialReconciliation } from './material-reconciliation';
 
 export function MaterialEditor({
   id,
@@ -105,8 +110,16 @@ function DraftForm({
 }) {
   const lecturer = role === 'LECTURER';
   const [current, setCurrent] = useState(initial);
+  const [latest, setLatest] = useState<MaterialDraft | null>(null);
+  const [reconciled, setReconciled] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [pdfSelected, setPdfSelected] = useState(false);
+  const [studentPdfSelected, setPdfSelected] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadId, setUploadId] = useState('');
+  const [fileUncertain, setFileUncertain] = useState(false);
+  const [createUncertain, setCreateUncertain] = useState(false);
+  const [notice, setNotice] = useState('');
+  const pdfSelected = lecturer ? !!file : studentPdfSelected;
   const [publicationBusy, setPublicationBusy] = useState(false);
   const [publicationDirty, setPublicationDirty] = useState(false);
   const [publicationUncertain, setPublicationUncertain] = useState(false);
@@ -183,6 +196,8 @@ function DraftForm({
     };
   }, [dirty, pdfBusy, publicationBusy, pending]);
   function acceptCurrent(item: MaterialDraft) {
+    setLatest(null);
+    setReconciled(false);
     updated(item);
     setCurrent(item);
     setFields(fieldsFor(item));
@@ -204,31 +219,115 @@ function DraftForm({
     setError(message);
     requestAnimationFrame(() => errorMessage.current?.focus());
   }
+  function updateFileState(item: MaterialDraft) {
+    if (
+      !current ||
+      item.versionId !== current.versionId ||
+      item.revision < Math.max(current.revision, latest?.revision ?? 0)
+    )
+      return;
+    if (JSON.stringify(fieldsFor(item)) !== JSON.stringify(fieldsFor(current))) {
+      if (!latest || JSON.stringify(fieldsFor(item)) !== JSON.stringify(fieldsFor(latest)))
+        setReconciled(false);
+      setLatest(item);
+      // File-only progress can advance immediately. Keep the original metadata CAS
+      // revision until the user explicitly reconciles and saves the remote snapshot.
+      setCurrent({
+        ...current,
+        pdf: item.pdf,
+        source: item.source,
+        fileState: item.fileState,
+        updatedAt: item.updatedAt,
+        reviewStatus: item.reviewStatus,
+        publicationMethod: item.publicationMethod,
+        editable: item.editable,
+        editBlock: item.editBlock,
+      });
+    } else if (latest) {
+      // Another tab restored the original metadata; still require acknowledgment.
+      if (JSON.stringify(fieldsFor(item)) !== JSON.stringify(fieldsFor(latest)))
+        setReconciled(false);
+      setLatest(item);
+    } else setCurrent(item);
+    updated(item);
+  }
+  async function recoverFile() {
+    if (!current || pending) return;
+    setPending(true);
+    setError('');
+    try {
+      const item = await currentDraft(current.id);
+      updateFileState(item);
+      setFileUncertain(false);
+      setNotice(
+        'Đã tải trạng thái máy chủ. File đang chọn được giữ lại; kiểm tra trước khi tải lại.',
+      );
+    } catch (failure) {
+      fail(materialError(failure));
+    } finally {
+      setPending(false);
+    }
+  }
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (pending || pdfBusy || publicationBusy || publicationUncertain || !editable) return;
+    if (
+      pending ||
+      pdfBusy ||
+      publicationBusy ||
+      publicationUncertain ||
+      fileUncertain ||
+      createUncertain ||
+      (!!latest && !reconciled) ||
+      !editable
+    )
+      return;
     if (!fields.courseIds.length) {
       fail('Thêm ít nhất một môn học liên quan trước khi lưu.');
       return;
     }
     setPending(true);
     setError('');
+    setNotice('');
+    let stage: 'metadata' | 'file' = 'metadata';
     try {
-      await saveDraft(fields, current ?? undefined);
-      saved();
+      const item =
+        current && !metadataDirty && !latest
+          ? current
+          : await saveDraft(fields, latest ?? current ?? undefined);
+      if (!lecturer || !file) {
+        saved();
+        return;
+      }
+      acceptCurrent(item);
+      stage = 'file';
+      const attached = await uploadDraftFile(item, file, uploadId);
+      acceptCurrent(attached);
+      setFile(null);
+      setNotice(
+        'Đã lưu thông tin và file riêng tư. Chờ kiểm tra rồi xem trước bản PDF trước khi công bố.',
+      );
     } catch (failure) {
+      if (lecturer && (!(failure instanceof ApiError) || failure.status >= 500)) {
+        if (stage === 'metadata' && !current) setCreateUncertain(true);
+        else setFileUncertain(true);
+      }
+      if (lecturer && failure instanceof ApiError && failure.code === 'STALE_REVISION')
+        setFileUncertain(true);
       fail(materialError(failure));
+    } finally {
       setPending(false);
     }
   }
   return (
     <section className="user-editor" aria-labelledby="draft-editor-title">
       <h2 id="draft-editor-title" ref={heading} tabIndex={-1}>
-        {initial ? 'Thông tin bản nháp' : 'Bản nháp mới'}
+        {current ? 'Thông tin bản nháp' : 'Bản nháp mới'}
       </h2>
       <p className="field-hint">
-        {current ? `Phiên bản ${current.versionNo} · Lần lưu ${current.revision}. ` : ''}Lưu thông
-        tin trước khi thêm PDF. Học liệu chưa được công bố khi đang nháp hoặc chờ duyệt.
+        {current ? `Phiên bản ${current.versionNo} · Lần lưu ${current.revision}. ` : ''}
+        {lecturer
+          ? 'Chọn file, nhập tiêu đề và môn học rồi lưu. Học liệu chỉ xuất hiện cho người đọc sau khi bạn công bố.'
+          : 'Lưu thông tin trước khi thêm PDF. Học liệu chưa được công bố khi đang nháp hoặc chờ duyệt.'}
       </p>
       {!editable && (
         <p
@@ -249,12 +348,59 @@ function DraftForm({
           {error}
         </p>
       )}
+      {notice && (
+        <p role="status" className="user-success">
+          {notice}
+        </p>
+      )}
+      {createUncertain && (
+        <p role="alert" className="form-error">
+          Chưa xác nhận được bản nháp đã tạo. Đóng biểu mẫu và kiểm tra danh sách học liệu trước khi
+          tạo lại. Nội dung đang nhập và file vẫn còn trong biểu mẫu này.
+        </p>
+      )}
+      {fileUncertain && (
+        <div className="draft-discard">
+          <p role="alert">
+            Chưa xác nhận được lần lưu hoặc tải file. Cập nhật trạng thái trước khi thử lại để tránh
+            ghi đè bản mới.
+          </p>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={pending}
+            onClick={() => void recoverFile()}
+          >
+            Kiểm tra lần tải lên
+          </button>
+        </div>
+      )}
       <form onSubmit={(event) => void submit(event)}>
         <fieldset
-          disabled={pending || pdfBusy || publicationBusy || publicationUncertain || !editable}
+          disabled={
+            pending ||
+            pdfBusy ||
+            publicationBusy ||
+            publicationUncertain ||
+            createUncertain ||
+            fileUncertain ||
+            !editable
+          }
           className="draft-fields"
         >
           <legend className="sr-only">Metadata học liệu</legend>
+          {lecturer && (
+            <MaterialFilePicker
+              file={file}
+              disabled={pending}
+              changed={(selected) => {
+                setFile(selected);
+                setUploadId(selected ? crypto.randomUUID() : '');
+                if (selected && !fields.title.trim())
+                  update('title', selected.name.replace(/\.(pdf|docx)$/i, '').slice(0, 300));
+              }}
+            />
+          )}
           <div className="user-fields">
             <div className="form-field draft-wide">
               <label htmlFor="draft-title">Tiêu đề học liệu</label>
@@ -395,7 +541,7 @@ function DraftForm({
             />
             <span>
               {lecturer
-                ? 'Cho phép người đọc tải PDF gốc'
+                ? 'Cho phép người đọc tải file gốc và bản PDF'
                 : 'Đề nghị cho phép tải sau khi được duyệt'}
             </span>
           </label>
@@ -405,6 +551,15 @@ function DraftForm({
               : 'Lựa chọn này chưa cấp quyền tải. Học liệu còn phải được quản trị viên duyệt và công bố.'}
           </p>
         </fieldset>
+        {latest && (
+          <MaterialReconciliation
+            latest={latest}
+            reconciled={reconciled}
+            confirm={setReconciled}
+            useServer={() => acceptCurrent(latest)}
+            disabled={pending || pdfBusy || publicationBusy}
+          />
+        )}
         {confirm && (
           <div
             className="draft-discard"
@@ -463,10 +618,17 @@ function DraftForm({
             <button
               className="primary-button"
               disabled={
-                pending || pdfBusy || pdfSelected || publicationBusy || publicationUncertain
+                pending ||
+                pdfBusy ||
+                (!lecturer && pdfSelected) ||
+                publicationBusy ||
+                publicationUncertain ||
+                fileUncertain ||
+                createUncertain ||
+                (!!latest && !reconciled)
               }
             >
-              {pending ? 'Đang lưu…' : 'Lưu bản nháp'}
+              {pending ? 'Đang lưu…' : lecturer && file ? 'Lưu và tải file lên' : 'Lưu bản nháp'}
             </button>
           )}
           <button
@@ -486,7 +648,7 @@ function DraftForm({
           </button>
         </div>
       </form>
-      {current && (
+      {current && !lecturer && (
         <DraftPdf
           current={current}
           metadataDirty={metadataDirty || pending}
@@ -496,10 +658,25 @@ function DraftForm({
           selectionChanged={setPdfSelected}
         />
       )}
+      {current && lecturer && (
+        <MaterialFileStatus
+          current={current}
+          changed={updateFileState}
+          blocked={pending || publicationBusy || fileUncertain || createUncertain || !!latest}
+        />
+      )}
       {current && (
         <PublicationActions
           current={current}
-          blocked={metadataDirty || pending || pdfBusy || pdfSelected}
+          blocked={
+            metadataDirty ||
+            pending ||
+            pdfBusy ||
+            pdfSelected ||
+            fileUncertain ||
+            createUncertain ||
+            !!latest
+          }
           changed={acceptCurrent}
           busy={setPublicationBusy}
           reasonChanged={setPublicationDirty}

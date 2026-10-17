@@ -59,6 +59,7 @@ export function PublicationActions({
     current.reviewStatus === 'DRAFT' &&
     current.editable &&
     current.fileState === 'SAFE' &&
+    (!current.source || current.source.conversionState === 'READY') &&
     current.courses.every((c) => c.active);
   async function run(action: 'submit' | 'withdraw' | 'reopen' | 'refresh' | 'next' | 'publish') {
     if (locked || (action !== 'refresh' && uncertain)) return;
