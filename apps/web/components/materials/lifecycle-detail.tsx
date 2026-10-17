@@ -8,7 +8,7 @@ import {
   transferRecipients,
   type MaterialLifecycle,
 } from '../../lib/lifecycle';
-import { reviewStatuses } from '../../lib/materials';
+import { publicationLabel } from '../../lib/materials';
 export function LifecycleDetail({
   id,
   close,
@@ -145,8 +145,7 @@ export function LifecycleDetail({
             <div>
               <dt>Phiên bản mới nhất</dt>
               <dd>
-                {current.latest.versionNo} ·{' '}
-                {reviewStatuses[current.latest.reviewStatus as keyof typeof reviewStatuses]}
+                {current.latest.versionNo} · {publicationLabel(current.latest)}
               </dd>
             </div>
             <div>

@@ -27,6 +27,7 @@ const versionSelect = {
   document_id: true,
   title: true,
   review_status: true,
+  publication_method: true,
   source_reference: true,
   rights_basis: true,
   rights_valid_until: true,
@@ -42,6 +43,7 @@ const versionItem = (v: Version | null) =>
         versionNo: v.version_no,
         title: v.title,
         reviewStatus: v.review_status,
+        publicationMethod: v.publication_method,
         fileState: v.files?.scan_status ?? 'MISSING',
       }
     : null;
@@ -342,8 +344,8 @@ export class LifecycleService {
           !v ||
           v.review_status !== 'APPROVED' ||
           file?.scan_status !== 'SAFE' ||
-          !v.source_reference.trim() ||
-          !v.rights_basis.trim() ||
+          (v.publication_method !== 'LECTURER_SELF' &&
+            (!v.source_reference.trim() || !v.rights_basis.trim())) ||
           (v.rights_valid_until && v.rights_valid_until <= new Date())
         )
           throw fail(

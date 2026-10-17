@@ -19,11 +19,13 @@ export function MaterialEditor({
   close,
   saved,
   updated,
+  role,
 }: {
   id?: string;
   close: () => void;
   saved: () => void;
   updated: (item: MaterialDraft) => void;
+  role: 'LECTURER' | 'STUDENT';
 }) {
   const [initial, setInitial] = useState<MaterialDraft | null>(null);
   const [loading, setLoading] = useState(!!id);
@@ -74,7 +76,7 @@ export function MaterialEditor({
         </button>
       </section>
     );
-  return <DraftForm initial={initial} close={close} saved={saved} updated={updated} />;
+  return <DraftForm initial={initial} close={close} saved={saved} updated={updated} role={role} />;
 }
 function fieldsFor(initial: MaterialDraft | null): DraftFields {
   return {
@@ -93,12 +95,15 @@ function DraftForm({
   close,
   saved,
   updated,
+  role,
 }: {
   initial: MaterialDraft | null;
   close: () => void;
   saved: () => void;
   updated: (item: MaterialDraft) => void;
+  role: 'LECTURER' | 'STUDENT';
 }) {
+  const lecturer = role === 'LECTURER';
   const [current, setCurrent] = useState(initial);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfSelected, setPdfSelected] = useState(false);
@@ -303,30 +308,34 @@ function DraftForm({
               <label htmlFor="draft-source">Nguồn tài liệu</label>
               <textarea
                 id="draft-source"
-                required
+                required={!lecturer}
                 maxLength={1000}
                 aria-describedby="source-hint"
                 value={fields.sourceReference}
                 onChange={(e) => update('sourceReference', e.target.value)}
               />
               <p id="source-hint" className="field-hint">
-                Ghi nguồn xuất bản, đường dẫn nguồn hoặc tài liệu do bạn biên soạn.
+                {lecturer
+                  ? 'Không bắt buộc. Bạn có thể ghi tác giả, nơi xuất bản hoặc đường dẫn để người đọc tham khảo; không giới hạn tài liệu HUCE.'
+                  : 'Ghi nguồn xuất bản, đường dẫn nguồn hoặc tài liệu do bạn biên soạn.'}
               </p>
             </div>
-            <div className="form-field">
-              <label htmlFor="draft-rights">Căn cứ quyền sử dụng</label>
-              <textarea
-                id="draft-rights"
-                required
-                maxLength={1000}
-                aria-describedby="rights-hint"
-                value={fields.rightsBasis}
-                onChange={(e) => update('rightsBasis', e.target.value)}
-              />
-              <p id="rights-hint" className="field-hint">
-                Ghi giấy phép, sự cho phép của tác giả hoặc căn cứ bạn có quyền chia sẻ.
-              </p>
-            </div>
+            {!lecturer && (
+              <div className="form-field">
+                <label htmlFor="draft-rights">Căn cứ quyền sử dụng</label>
+                <textarea
+                  id="draft-rights"
+                  required
+                  maxLength={1000}
+                  aria-describedby="rights-hint"
+                  value={fields.rightsBasis}
+                  onChange={(e) => update('rightsBasis', e.target.value)}
+                />
+                <p id="rights-hint" className="field-hint">
+                  Ghi giấy phép, sự cho phép của tác giả hoặc căn cứ bạn có quyền chia sẻ.
+                </p>
+              </div>
+            )}
           </div>
           <div className="draft-courses">
             <h3>Môn liên quan</h3>
@@ -384,10 +393,16 @@ function DraftForm({
               checked={fields.downloadAllowed}
               onChange={(e) => update('downloadAllowed', e.target.checked)}
             />
-            <span>Đề nghị cho phép tải sau khi được duyệt</span>
+            <span>
+              {lecturer
+                ? 'Cho phép người đọc tải PDF gốc'
+                : 'Đề nghị cho phép tải sau khi được duyệt'}
+            </span>
           </label>
           <p className="field-hint">
-            Lựa chọn này chưa cấp quyền tải. Học liệu còn phải được quản trị viên duyệt và công bố.
+            {lecturer
+              ? 'Lựa chọn tải có hiệu lực sau khi bạn công bố tài liệu đã qua kiểm tra kỹ thuật.'
+              : 'Lựa chọn này chưa cấp quyền tải. Học liệu còn phải được quản trị viên duyệt và công bố.'}
           </p>
         </fieldset>
         {confirm && (

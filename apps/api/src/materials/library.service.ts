@@ -22,6 +22,7 @@ const selection = {
   authors: true,
   description: true,
   material_type: true,
+  publication_method: true,
   source_reference: true,
   rights_basis: true,
   rights_valid_until: true,
@@ -49,6 +50,7 @@ function serialize(v: LibraryRow) {
     authors: v.authors,
     description: v.description,
     materialType: v.material_type,
+    publicationMethod: v.publication_method,
     kind: v.documents_document_versions_document_idTodocuments.kind,
     current: v.documents_document_versions_document_idTodocuments.current_version_id === v.id,
     sourceReference: v.source_reference,
@@ -163,6 +165,13 @@ export class LibraryService {
       async (tx) => ({ item: serialize(await this.readable(tx, academicId(rawId))) }),
       { isolationLevel: 'RepeatableRead' },
     );
+  }
+  async readableItems(tx: Prisma.TransactionClient, ids: bigint[]) {
+    const rows = await tx.document_versions.findMany({
+      where: { AND: [{ id: { in: ids } }, available()] },
+      select: selection,
+    });
+    return new Map(rows.map((row) => [String(row.id), serialize(row)]));
   }
   async file(
     actor: Profile,

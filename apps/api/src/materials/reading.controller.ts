@@ -23,10 +23,41 @@ import {
   UpdateNoteDto,
 } from './reading.dto';
 import { ReadingService } from './reading.service';
+import { CreateHighlightDto, UpdateHighlightDto } from './highlight.dto';
 @Controller('library/versions/:id')
 @UseGuards(SessionGuard, CsrfGuard)
 export class ReadingController {
   constructor(private readonly reading: ReadingService) {}
+  @Get('highlights') highlights(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query() query: NotesQueryDto,
+  ) {
+    return this.reading.highlights(req.user, id, query);
+  }
+  @Post('highlights') createHighlight(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: CreateHighlightDto,
+  ) {
+    return this.reading.createHighlight(req.user, id, dto);
+  }
+  @Patch('highlights/:noteId') updateHighlight(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('noteId') noteId: string,
+    @Body() dto: UpdateHighlightDto,
+  ) {
+    return this.reading.updateHighlight(req.user, id, noteId, dto);
+  }
+  @Delete('highlights/:noteId') @HttpCode(204) removeHighlight(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('noteId') noteId: string,
+    @Body() dto: ReadingRevisionDto,
+  ) {
+    return this.reading.remove(req.user, id, noteId, dto, 'TEXT_HIGHLIGHT');
+  }
   @Get('notes') notes(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,

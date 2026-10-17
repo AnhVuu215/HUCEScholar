@@ -5,6 +5,7 @@ import {
   materialVersions,
   publicationHistory,
   reviewStatuses,
+  publicationLabel,
   type DraftList,
   type MaterialDraft,
   type PublicationHistory,
@@ -31,7 +32,7 @@ export function VersionHistory({ current }: { current: MaterialDraft }) {
         if (!controller.signal.aborted) setError(materialError(e));
       });
     return () => controller.abort();
-  }, [current.id, current.versionId, page, attempt]);
+  }, [current.id, current.versionId, current.revision, page, attempt]);
   useEffect(() => {
     if (!selected) return;
     const controller = new AbortController();
@@ -46,7 +47,7 @@ export function VersionHistory({ current }: { current: MaterialDraft }) {
         if (!controller.signal.aborted) setHistoryError(materialError(e));
       });
     return () => controller.abort();
-  }, [current.id, selected, historyPage, attempt]);
+  }, [current.id, current.revision, selected, historyPage, attempt]);
   return (
     <section className="draft-pdf" aria-label="Lịch sử phiên bản">
       <h3>Lịch sử phiên bản</h3>
@@ -63,13 +64,15 @@ export function VersionHistory({ current }: { current: MaterialDraft }) {
             {data.items.map((v) => (
               <li key={v.versionId}>
                 <strong>
-                  Phiên bản {v.versionNo} ·{' '}
-                  {reviewStatuses[v.reviewStatus as keyof typeof reviewStatuses]}
+                  Phiên bản {v.versionNo} · {publicationLabel(v)}
                 </strong>
                 <p>{v.title}</p>
                 <p className="field-hint">
                   Cập nhật {new Date(v.updatedAt).toLocaleString('vi-VN')}
                 </p>
+                {v.publicationMethod === 'LECTURER_SELF' ? (
+                  <p className="field-hint">Cách công bố: giảng viên tự công bố.</p>
+                ) : null}
                 <button
                   type="button"
                   className="text-button"
@@ -80,7 +83,10 @@ export function VersionHistory({ current }: { current: MaterialDraft }) {
                     setHistoryPage(1);
                   }}
                 >
-                  Xem lần duyệt phiên bản {v.versionNo}
+                  {v.publicationMethod === 'LECTURER_SELF'
+                    ? 'Xem lịch sử yêu cầu phiên bản'
+                    : 'Xem lần duyệt phiên bản'}{' '}
+                  {v.versionNo}
                 </button>
               </li>
             ))}

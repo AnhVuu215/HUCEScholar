@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node ../../scripts/pdfjs-assets.mjs && next dev --hostname 127.0.0.1 --port 3000",
-    "build": "node ../../scripts/pdfjs-assets.mjs && next build",
+    "dev": "node ../../scripts/pdfjs-assets.mjs && node ../../scripts/pwa-assets.mjs && next dev --hostname 127.0.0.1 --port 3000",
+    "build": "node ../../scripts/pdfjs-assets.mjs && node ../../scripts/pwa-assets.mjs && next build",
     "start": "next start --hostname 127.0.0.1 --port 3000",
     "lint": "eslint app components lib next.config.ts",
     "typecheck": "next typegen && tsc --noEmit"

@@ -6,12 +6,12 @@ export const metadata: Metadata = { title: 'Đăng nhập — HUCEScholar' };
 
 export default function LoginPage() {
   return (
-    <div className="auth-layout">
+    <div className="auth-layout login-layout">
       <a href="#dang-nhap" className="skip-link">
         Đến biểu mẫu đăng nhập
       </a>
       <section className="auth-story" aria-label="HUCEScholar">
-        <Link className="brand" href="/" aria-label="HUCEScholar — trang dự án">
+        <Link className="brand" href="/" aria-label="HUCEScholar — trang chủ">
           <span className="brand-mark" aria-hidden="true">
             H
           </span>
@@ -51,6 +51,10 @@ export default function LoginPage() {
           </p>
           <Link className="project-link" href="/project">
             Xem tiến độ dự án
+          </Link>
+          <br />
+          <Link className="project-link" href="/install">
+            Cài ứng dụng trên thiết bị
           </Link>
         </div>
       </main>

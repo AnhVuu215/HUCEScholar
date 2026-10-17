@@ -1,5 +1,7 @@
 # HUCEScholar — Tech stack và kiến trúc MVP
 
+**Cập nhật sản phẩm14/10/2026:** giảng viên upload PDF từ nguồn tự chọn và tự công bố khi SAFE, không cần admin duyệt hoặc khai báo căn cứ quyền. Nguồn tham khảo tùy chọn; sinh viên vẫn qua kiểm duyệt. Migration007 thêm publication_method để phân biệt tự công bố với quyết định admin, giữ APPROVED terminal/current và trigger PostgreSQL. Phân công môn, giới hạn25MiB và ownership giữ nguyên. Xem [triển khai tự công bố](implementation/2026-10-14-lecturer-self-publication.md).
+
 Ngày quyết định: 11/10/2026. Trạng thái: chốt công nghệ MVP; đã có workspace Next.js/NestJS, migration PostgreSQL, đăng nhập/phân quyền, quản lý tài khoản, danh mục đào tạo, phân công, bản nháp, upload PDF riêng tư, gửi/rút, admin kiểm duyệt bản hiện hành, kho học liệu và reader PDF.js theo quyền. Chưa triển khai vận hành. Bằng chứng: [mốc khởi tạo](implementation/2026-10-11-foundation.md), [database và auth](implementation/2026-10-11-database-auth.md), [quản lý tài khoản](implementation/2026-10-11-account-management.md), [danh mục và phân công](implementation/2026-10-11-academic-catalog.md), [upload PDF](implementation/2026-10-11-private-pdf-upload.md).
 
 Người dùng đã chọn **web responsive + PWA cho MVP**. Một giao diện dùng trên máy tính, điện thoại và máy tính bảng; có thể thêm vào màn hình chính trên thiết bị/trình duyệt hỗ trợ. Chưa phát hành ứng dụng native trên App Store/Google Play. Việc cài PWA không đồng nghĩa đọc PDF offline.
@@ -93,6 +95,8 @@ design/         prototype và nguồn thiết kế đã có
 
 ## 7. PWA và thiết bị
 
+Mốc15/10/2026 đã có manifest/icon PNG192/512/maskable/Apple180, `/install` và worker static allowlist cho offline fallback. Worker không cache app HTML, Next chunks/RSC hoặc dữ liệu riêng; dev opt-in, production đăng ký trong secure context. Không tự reload khi có bản cập nhật. Đây là nền tảng local, chưa xác nhận cài qua domain HTTPS hoặc thiết bị thật. Xem [mốc PWA](implementation/2026-10-15-pwa-foundation.md).
+
 - Manifest, icon riêng và chế độ standalone; hướng dẫn cài theo khả năng trình duyệt. HTTPS khi triển khai. Service worker chỉ precache tài nguyên công khai của app shell/offline fallback; không cache API auth, metadata cá nhân, PDF, ghi chú hoặc URL có token.
 - Không thêm push notification, OCR, đọc PDF offline hoặc app native chỉ vì PWA hỗ trợ một số khả năng này.
 - Laptop: bảng quản trị đầy đủ và reader có vùng phụ. Tablet: hỗ trợ cảm ứng, xoay ngang/dọc, thu gọn sidebar. Điện thoại: một cột, điều khiển chạm, ghi chú theo ngữ cảnh trang. Responsive không phải thu nhỏ desktop.
@@ -106,7 +110,9 @@ design/         prototype và nguồn thiết kế đã có
 3. Làm một luồng xuyên suốt: tài khoản được cấp → upload → kiểm tra file → gửi/duyệt → tìm → đọc → ghi chú → mở lại trên thiết bị khác. Sau đó mới mở rộng CRUD và nghiệp vụ phụ.
 4. Kiểm thử người dùng không đọc được ghi chú của người khác, không duyệt file CHECKING/FAILED, không thay phiên bản đã khóa và không đọc tài liệu bị ẩn. Kiểm tra phục hồi job, lưu ghi chú lỗi, xung đột revision, Range/zoom trên mobile và cài PWA qua HTTPS.
 
-Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; Đã có gửi/rút và admin kiểm duyệt/bản hiện hành; Đã có kho học liệu, reader PDF.js và tải theo quyền; Đã có ghi chú riêng theo trang và lưu tiến độ với kiểm soát revision; Đã có phiên bản kế tiếp, bàn giao và ẩn/khôi phục; revision tăng xuyên phiên bản, giữ ghi chú gắn PDF cũ. highlight chưa mở. S3 thật và deploy còn ở các mốc tiếp theo. Xem [ghi chú và tiến độ](implementation/2026-10-12-reader-notes-progress.md).
+Chưa chọn gói cloud, domain, ngân sách hoặc tạo tài khoản/dịch vụ trả phí. Upload PDF đã chạy local với private filesystem và worker ClamAV/Poppler; Đã có gửi/rút và admin kiểm duyệt/bản hiện hành; Đã có kho học liệu, reader PDF.js và tải theo quyền; Đã có ghi chú riêng theo trang và lưu tiến độ với kiểm soát revision; Đã có phiên bản kế tiếp, bàn giao và ẩn/khôi phục; revision tăng xuyên phiên bản, giữ ghi chú gắn PDF cũ. Đã có vùng tô chữ riêng theo phiên bản/trang và ghi chú kèm; xem [mốc highlight](implementation/2026-10-17-pdf-text-highlights.md). S3 thật và deploy còn ở các mốc tiếp theo. Xem [ghi chú và tiến độ](implementation/2026-10-12-reader-notes-progress.md).
+
+Thư viện cá nhân đã dùng hai bảng hiện hữu `saved_documents` và `reading_progress`, không thêm migration. API lọc theo người dùng cho mọi vai trò và dùng chung điều kiện đọc với reader. Danh sách đã lưu trỏ document/bản hiện hành; đọc gần đây trỏ version/page. Mục không khả dụng không trả metadata học liệu. Không cache dữ liệu cá nhân. Xem [triển khai thư viện cá nhân](implementation/2026-10-12-personal-library.md).
 
 ## 9. Nguồn kỹ thuật chính thức đã đối chiếu
 

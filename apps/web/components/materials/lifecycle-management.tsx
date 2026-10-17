@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { lifecycleError, managedMaterials } from '../../lib/lifecycle';
-import { reviewStatuses } from '../../lib/materials';
+import { publicationLabel } from '../../lib/materials';
 import { LifecycleDetail } from './lifecycle-detail';
 export function LifecycleManagement() {
   const [search, setSearch] = useState(''),
@@ -122,8 +122,7 @@ export function LifecycleManagement() {
                       <td className="user-identity">
                         <strong>{item.latest.title}</strong>
                         <span>
-                          Phiên bản {item.latest.versionNo} ·{' '}
-                          {reviewStatuses[item.latest.reviewStatus as keyof typeof reviewStatuses]}
+                          Phiên bản {item.latest.versionNo} · {publicationLabel(item.latest)}
                         </span>
                         <span>
                           {item.kind === 'LECTURER_MATERIAL' ? 'Giảng viên' : 'Sinh viên bổ sung'}

@@ -1,0 +1,10 @@
+# Private PDF text highlights
+
+Approved scope: select text, choose yellow/green/blue, attach optional plain text, reopen/edit/delete; retain owner/version/page and correct placement on zoom/rotation. Extend existing annotations and reader; no migration or new dependency.
+
+1. API: add separate `/library/versions/:id/highlights` CRUD using ReadingService access/owner lock, request UUID and revision. Validate exact normalized PDF quad geometry, quote, palette, page and text-layer availability. Preserve `/notes` contracts. Bound payloads and allow a larger JSON body only on highlight routes.
+2. Geometry: convert selection rectangles through PDF.js viewport to normalized unrotated crop-box coordinates; reverse on render. Reject cross-page/outside/empty/oversized selections. Keep overlay from obstructing text selection; pointer activation plus accessible list controls.
+3. Reader: persist one draft in component memory through PDF retries/page changes. Explicit save; retain UUID on uncertain response and freeze the payload, keep content on conflict. Reuse leave guard. Fetch all cursor pages for overlays; cancel stale loads and remove overlays on access/load failure. No private storage/cache or PDF modification.
+4. Validate: first failing API and browser tests; API privacy, wrong-kind/version, invalid geometry, idempotency, CAS, hide/scan access and pagination. Browser create/edit/color/delete, retry, page/version persistence, selection, all rotations/zoom and mobile reflow. Run lint/typecheck/unit/integration/build and full browser regression. One code review and one batched UI inspection; record actual limits.
+
+Coordinates: `anchor.coordinateSpace = normalized-pdf-v1`, `quote` (1–2000 trimmed chars), `quads` (1–100 arrays of eight finite coordinates in 0..1, perimeter order, nonzero polygon area). PDF coordinates use crop-box origin and PDF's y axis; viewport conversion owns rotation. Anchor/page immutable after creation; update content/color only. Content 0–4000 chars. Colors #FFF59D, #A5D6A7, #90CAF9. New highlights require a PDF text layer; reading retained highlights still uses normal document access.
