@@ -87,6 +87,8 @@ try {
     ['highlights-student', 'STUDENT'],
     ['highlights-list-admin', 'ADMIN'],
     ['highlights-list-student', 'STUDENT'],
+    ['reader-v2-admin', 'ADMIN'],
+    ['reader-v2-student', 'STUDENT'],
     ['progress-admin', 'ADMIN'],
     ['progress-student', 'STUDENT'],
     ['versions-admin', 'ADMIN'],

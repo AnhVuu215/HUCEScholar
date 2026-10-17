@@ -1,6 +1,6 @@
 # HUCEScholar V2 — Reader và kho học liệu Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Mọi task bên dưới là kế hoạch, chưa triển khai.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. READ-02 đã triển khai local; các task còn lại vẫn là kế hoạch. Bằng chứng và thứ tự phát hành: [READ-02](../../implementation/2026-10-17-reader-highlight-palette.md).
 
 **Goal:** Chọn chữ để tô/ghi chú/trích dẫn ngay trong reader, tìm lại ghi chú mọi trang và giảm công cụ chiếm diện tích.
 
@@ -78,11 +78,11 @@ type AnnotationSearchResult = {
 
 ## Task READ-02 — Palette 8 màu tương thích
 
-- [ ] Giữ `#FFF59D` Vàng, `#A5D6A7` Xanh lá, `#90CAF9` Xanh dương; đề xuất thêm `#F8BBD0` Hồng, `#CE93D8` Tím, `#FFCC80` Cam, `#80CBC4` Xanh ngọc, `#B0BEC5` Xám. Xem contrast trên PDF chữ đen/trang màu trước khóa palette.
-- [ ] Cập nhật API whitelist, client decoder và color selector cùng một lát cắt; test mọi màu được tạo/sửa/reload, mã lạ bị400. Không chỉ mở CSS để API từ chối lưu.
-- [ ] Trước bật ghi màu mới, kiểm tab/client cũ và rollback: decoder đọc `color: string` kiểm hex6 và có tên dự phòng; input ghi dùng union `HighlightColor`8 màu. Editor gặp màu ngoài palette phải yêu cầu chọn màu trước PATCH, không tự đổi màu. Phát hành decoder tương thích trước rồi mở palette, yêu cầu tải lại tab cũ chưa tương thích; không rollback về decoder ba màu khi đã ghi màu mới.
-- [ ] Color swatch có tên, selected marker và focus; không dùng màu làm nhãn duy nhất. Giữ geometry/opacity bảo toàn chữ và màu hiển thị.
-- [ ] Unit test API validation + browser ba màu cũ và màu mới. Chạy `pnpm test`, `pnpm test:integration`, `pnpm test:e2e tests/reader-v2.spec.ts` khi fixture mới sẵn sàng.
+- [x] Giữ `#FFF59D` Vàng, `#A5D6A7` Xanh lá, `#90CAF9` Xanh dương; thêm `#F8BBD0` Hồng, `#CE93D8` Tím, `#FFCC80` Cam, `#80CBC4` Xanh ngọc, `#B0BEC5` Xám. Đã kiểm tra UI và tính contrast chữ đen/overlay trên nền trắng, xanh nhạt; giữ opacity hiện hữu.
+- [x] Cập nhật API whitelist, client decoder và color selector cùng một lát cắt; test mọi màu được tạo/sửa/reload, mã lạ bị400. Không chỉ mở CSS để API từ chối lưu.
+- [x] Chuẩn bị tương thích client/rollback: decoder đọc `color: string` kiểm hex6 và có tên dự phòng; input ghi dùng union `HighlightColor`8 màu. Editor gặp màu ngoài palette phải yêu cầu chọn màu trước PATCH, không tự đổi màu. Commit decoder tương thích trước commit mở palette; quy trình yêu cầu tải lại tab cũ và không rollback decoder ba màu đã được ghi rõ. Chưa phát hành production hoặc xác nhận tab cũ đã cập nhật.
+- [x] Color swatch có tên, selected marker và focus; không dùng màu làm nhãn duy nhất. Giữ geometry/opacity bảo toàn chữ và màu hiển thị.
+- [x] Unit test API validation + browser ba màu cũ và màu mới. Đã chạy `pnpm test`, `pnpm test:integration` và `tests/reader-v2.spec.ts` trong lượt browser regression23test.
 
 Nghiệm thu: dữ liệu cũ đọc/sửa được; màu mới đúng sau đăng nhập lại; không migration dữ liệu cũ.
 

@@ -3,6 +3,11 @@ export const highlightColors = {
   '#FFF59D': 'Vàng',
   '#A5D6A7': 'Xanh lá',
   '#90CAF9': 'Xanh dương',
+  '#F8BBD0': 'Hồng',
+  '#CE93D8': 'Tím',
+  '#FFCC80': 'Cam',
+  '#80CBC4': 'Xanh ngọc',
+  '#B0BEC5': 'Xám',
 } as const;
 export type HighlightColor = keyof typeof highlightColors;
 export function isHighlightColor(value: unknown): value is HighlightColor {

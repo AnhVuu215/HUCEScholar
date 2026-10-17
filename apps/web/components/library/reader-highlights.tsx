@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import { ApiError } from '../../lib/auth';
 import { personalError } from '../../lib/reading';
 import {
-  highlightColors,
   highlightColorLabel,
   isHighlightColor,
   readHighlights,
@@ -15,7 +14,7 @@ import {
 } from '../../lib/highlights';
 import { quadBounds, selectedAnchor, type HighlightSurface } from '../../lib/highlight-geometry';
 import { useNotesLeaveGuard } from './use-notes-leave-guard';
-import { SelectField } from '../ui/select-field';
+import { HighlightPalette } from './highlight-palette';
 
 type Draft = {
   page: number;
@@ -288,15 +287,7 @@ export function ReaderHighlights({
               {draft.original ? 'Sửa vùng tô' : 'Vùng tô đang soạn'} · Trang {draft.page}
             </h4>
             <blockquote className="highlight-quote">{draft.anchor.quote}</blockquote>
-            <SelectField
-              id="highlight-color"
-              label="Màu tô sáng"
-              size="default"
-              value={color}
-              disabled={locked}
-              onChange={setColor}
-              options={Object.entries(highlightColors).map(([value, label]) => ({ value, label }))}
-            />
+            <HighlightPalette value={color} disabled={locked} onChange={setColor} />
             {!isHighlightColor(color) && (
               <p role="alert" className="form-error">
                 {highlightColorLabel(color)}. Chọn một màu trong bảng trước khi lưu thay đổi.

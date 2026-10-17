@@ -1912,6 +1912,72 @@ describe('private material drafts', () => {
     quote: 'Original selected text',
     quads: [[0.1, 0.8, 0.6, 0.8, 0.6, 0.75, 0.1, 0.75]],
   });
+  it('persists all eight highlight colors through create, CAS edit and reload; rejects unknown writes', async () => {
+    const { path } = await readingFixture();
+    const colors = [
+      '#FFF59D',
+      '#A5D6A7',
+      '#90CAF9',
+      '#F8BBD0',
+      '#CE93D8',
+      '#FFCC80',
+      '#80CBC4',
+      '#B0BEC5',
+    ];
+    for (const [index, color] of colors.entries()) {
+      const data = {
+        pageNumber: 1,
+        content: `Màu ${index}`,
+        color,
+        anchor: highlightAnchor(),
+        requestId: randomUUID(),
+      };
+      const created = await readingWrite('student', `${path}/highlights`, data);
+      expect(created.status).toBe(201);
+      expect(created.body.item).toMatchObject({ color, revision: 1, anchor: data.anchor });
+      const target = `${path}/highlights/${created.body.item.id}`;
+      const updatedColor = colors[(index + 1) % colors.length];
+      const edited = await readingWrite(
+        'student',
+        target,
+        { color: updatedColor, content: data.content, revision: 1 },
+        'patch',
+      );
+      expect(edited.status).toBe(200);
+      expect(edited.body.item).toMatchObject({
+        color: updatedColor,
+        revision: 2,
+        anchor: data.anchor,
+      });
+      const unknown = await readingWrite(
+        'student',
+        target,
+        { color: '#123ABC', content: 'Invalid', revision: 2 },
+        'patch',
+      );
+      expect(unknown.status).toBe(400);
+      const reloaded = (await agents.student.get(`${path}/highlights?pageNumber=1`).expect(200))
+        .body.items;
+      expect(
+        reloaded.find((entry: { id: string }) => entry.id === created.body.item.id),
+      ).toMatchObject({ color: updatedColor, revision: 2, content: data.content });
+    }
+    expect(
+      (
+        await readingWrite('student', `${path}/highlights`, {
+          pageNumber: 1,
+          content: '',
+          color: '#123ABC',
+          anchor: highlightAnchor(),
+          requestId: randomUUID(),
+        })
+      ).status,
+    ).toBe(400);
+    for (const role of ['admin', 'other'])
+      expect(
+        (await agents[role].get(`${path}/highlights?pageNumber=1`).expect(200)).body.items,
+      ).toEqual([]);
+  });
   it('text highlights are private, version-bound, immutable anchors and idempotent with CAS edits', async () => {
     const { path, id } = await readingFixture();
     const data = {
