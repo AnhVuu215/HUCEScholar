@@ -37,7 +37,7 @@ Bản build cuối đã khởi động lại local 3000/3001: HTTP health, landi
 
 ## Giới hạn và tiếp nối
 
-**Back/Forward trong Next SPA chưa chặn rời trang.** Editor nhắc lưu trước khi dùng; bản soạn chỉ trong bộ nhớ của trang, không có lưu nháp offline. Guard link/logout/unload không được mô tả như bảo vệ mọi kiểu điều hướng. Đây là giới hạn được công bố, chưa phải lỗi đã sửa kỹ thuật.
+**Cập nhật17/10:** đã bổ sung guard Back/Forward trong lịch sử ứng dụng, thay thế giới hạn SPA của mốc12/10. Chọn ở lại giữ URL/bản soạn và không thêm entry giả; đang lưu chặn traversal. Bản soạn vẫn chỉ trong bộ nhớ trang, chưa có lưu nháp offline. Xem [phạm vi kiểm chứng và giới hạn](2026-10-17-web-reader-history.md).
 
 Tiến độ đang pending khi rời trang có thể chưa được ghi; chỉ thông báo “Đã lưu” sau response hợp lệ. Không có beacon/offline queue. Chưa có text highlight, OCR, export ghi chú hoặc đồng bộ anchor sang version mới. Chưa chứng minh cài PWA/Safari/iOS/Android trên thiết bị thật, PDF HUCE thật hoặc S3 production. Cảnh báo `pg client.query` deprecation có sẵn không được coi là ca kiểm thử thất bại.
 

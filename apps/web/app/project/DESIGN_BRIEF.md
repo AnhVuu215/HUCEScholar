@@ -9,6 +9,6 @@ This development entry point communicates the actual milestone state and links t
 - Connection has loading, healthy, failure and retry states. Text accompanies color. Retry is keyboard accessible; request is bounded to 8 seconds and cancelled on unmount.
 - Only the API process is checked. No claim of database, storage, mail, queue or whole-product readiness.
 - No animation is needed for a status/check page. No raster assets are shipped. The simple H mark is authored SVG/text, not the HUCE logo.
-- Root manifest is groundwork only. No service worker, offline cache or installability guarantee at this milestone.
+- PWA public assets/offline fallback and installation help are implemented at the 15/10 milestone. Authenticated pages, APIs and PDFs remain network-only; HTTPS/device installation is not yet verified.
 
 Verification and finish findings are recorded in `docs/implementation/2026-10-11-foundation.md` after the checks run.

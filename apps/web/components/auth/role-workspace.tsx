@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   ApiError,
@@ -22,7 +22,7 @@ const upcoming: Record<Role, string> = {
   ADMIN:
     'Bạn có thể quản lý tài khoản, danh mục, phân công và kiểm duyệt. Mở Quản lý học liệu để bàn giao giảng viên hoặc ẩn/khôi phục toàn tài liệu.',
   LECTURER:
-    'Bạn có thể xem phân công, chuẩn bị bản nháp, tải PDF, gửi/rút yêu cầu và xem quyết định. Sau duyệt hoặc từ chối, tạo phiên bản kế tiếp trong Học liệu của tôi. Mở Kho học liệu để đọc, ghi chú riêng và mở lại trang đã đọc.',
+    'Bạn có thể xem phân công, chuẩn bị bản nháp và tự công bố PDF sau khi file quét đạt, không cần admin duyệt. Cập nhật tài liệu bằng phiên bản kế tiếp trong Học liệu của tôi. Mở Kho học liệu để đọc, ghi chú riêng và mở lại trang đã đọc.',
   STUDENT:
     'Bạn có thể tìm và đọc trong Kho học liệu, ghi chú riêng theo trang, mở lại trang đã đọc, tải khi được phép, chuẩn bị tài liệu bổ sung và theo dõi kết quả duyệt.',
 };
@@ -39,12 +39,21 @@ export function RoleWorkspace({
   title?: string;
   description?: string;
   activeSection?:
-    'users' | 'catalog' | 'assignments' | 'materials' | 'moderation' | 'library' | 'lifecycle';
+    | 'users'
+    | 'catalog'
+    | 'assignments'
+    | 'materials'
+    | 'moderation'
+    | 'library'
+    | 'lifecycle'
+    | 'personal';
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -113,19 +122,56 @@ export function RoleWorkspace({
       <a href="#khong-gian" className="skip-link">
         Bỏ qua điều hướng
       </a>
-      <aside className="sidebar">
-        <Link href="/" className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            H
-          </span>
-          <span>HUCEScholar</span>
-        </Link>
+      <aside
+        className="workspace-sidebar"
+        data-menu-open={menuOpen}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && menuOpen) {
+            setMenuOpen(false);
+            menuButton.current?.focus();
+          }
+        }}
+      >
+        <div className="workspace-sidebar-heading">
+          <Link href="/" className="brand">
+            <span className="brand-mark" aria-hidden="true">
+              H
+            </span>
+            <span>HUCEScholar</span>
+          </Link>
+          <button
+            ref={menuButton}
+            type="button"
+            className="workspace-menu-toggle"
+            aria-expanded={menuOpen}
+            aria-controls="workspace-navigation"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d={menuOpen ? 'M6 6l12 12M6 18 18 6' : 'M4 6h16M4 12h16M4 18h16'}
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+              />
+            </svg>
+            Menu
+          </button>
+        </div>
         <p className="sidebar-description">
           Không gian học liệu
           <br />
           dành cho cộng đồng HUCE
         </p>
-        <nav aria-label="Điều hướng không gian">
+        <nav
+          id="workspace-navigation"
+          aria-label="Điều hướng không gian"
+          onClick={(event) => {
+            // Next Link prevents the default browser navigation before bubbling.
+            // A cancelled draft departure stops propagation at document capture.
+            if ((event.target as Element).closest('a')) setMenuOpen(false);
+          }}
+        >
           {state.kind === 'ready' && (
             <Link
               href={workspacePath(state.user.role)}
@@ -174,7 +220,6 @@ export function RoleWorkspace({
               Kiểm duyệt học liệu
             </Link>
           )}
-          <Link href="/project">Tiến độ dự án</Link>
           {state.kind === 'ready' && state.user.role === 'ADMIN' && (
             <Link
               href="/workspace/admin/materials"
@@ -191,6 +236,18 @@ export function RoleWorkspace({
               Kho học liệu
             </Link>
           )}
+          {state.kind === 'ready' && (
+            <Link
+              href="/workspace/personal-library"
+              aria-current={activeSection === 'personal' ? 'page' : undefined}
+            >
+              Thư viện của tôi
+            </Link>
+          )}
+          <Link href="/project" className="workspace-utility-link">
+            Tiến độ dự án
+          </Link>
+          <Link href="/install">Cài ứng dụng</Link>
         </nav>
         <p className="sidebar-note">
           Dự án độc lập đang phát triển. Chưa phải hệ thống chính thức của trường.

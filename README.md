@@ -1,8 +1,10 @@
 # HUCEScholar
 
+**Cập nhật14/10/2026:** giảng viên upload PDF từ nguồn tự chọn và tự công bố khi file quét đạt; nguồn tham khảo tùy chọn, không bắt buộc căn cứ quyền hoặc admin duyệt. Tài liệu sinh viên vẫn dùng quy trình kiểm duyệt.
+
 Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hướng web responsive + PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên. Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường.
 
-Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF private, gửi/rút và xem lịch sử. Admin xem PDF SAFE, yêu cầu sửa, từ chối hoặc duyệt bản hiện hành; chủ mở lại bản được yêu cầu sửa. Đã có kho học liệu, reader PDF.js, tải bản gốc theo quyền, ghi chú riêng theo trang và lưu tiến độ đọc. Giao diện responsive cho desktop, điện thoại và tablet. **Chưa có học liệu trường được cấp quyền thật, highlight, đọc offline hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
+Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF private, gửi/rút và xem lịch sử. Admin xem PDF SAFE, yêu cầu sửa, từ chối hoặc duyệt bản hiện hành; chủ mở lại bản được yêu cầu sửa. Đã có kho học liệu, reader PDF.js, tải bản gốc theo quyền, ghi chú riêng theo trang và lưu tiến độ đọc. Giao diện responsive cho desktop, điện thoại và tablet. **Chưa có học liệu trường được cấp quyền thật, đọc offline hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
 
 Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng dẫn theo vai trò. Trang tiến độ cùng kiểm tra kết nối API nằm ở `/project`. Bìa minh họa không phải học liệu đã được công bố. Chi tiết: [landing page](docs/implementation/2026-10-12-landing-page.md).
 
@@ -18,6 +20,11 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [Gửi/rút yêu cầu duyệt và lịch sử](docs/implementation/2026-10-12-publication-requests.md)
 - [Admin kiểm duyệt và bản hiện hành](docs/implementation/2026-10-12-admin-moderation.md)
 - [Kho học liệu, trình đọc và quyền tải](docs/implementation/2026-10-12-learning-library.md)
+- [Ghi chú riêng và tiến độ đọc](docs/implementation/2026-10-12-reader-notes-progress.md)
+- [Phiên bản, bàn giao và ẩn/khôi phục](docs/implementation/2026-10-12-material-lifecycle.md)
+- [Thư viện cá nhân](docs/implementation/2026-10-12-personal-library.md)
+- [Giảng viên upload và tự công bố](docs/implementation/2026-10-14-lecturer-self-publication.md)
+- [Tiến độ và phần còn lại ngày 14/10/2026](docs/implementation/2026-10-14-project-status.md)
 - [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)
 - [Prototype thiết kế](design/wireframe/README.md)
 - [Proposal, use case và tài liệu bàn giao](docs/deliverables/)
@@ -66,15 +73,15 @@ Tại `/workspace/admin/assignments`, chọn giảng viên hoạt động/đã x
 
 ## Bản nháp học liệu
 
-Giảng viên mở `/workspace/lecturer/materials`, sinh viên mở `/workspace/student/materials` hoặc chọn **Học liệu của tôi**. Tạo bản nháp, nhập tiêu đề/loại/nguồn/căn cứ quyền, thêm 1–20 môn rồi lưu. Tác giả/mô tả có thể để trống. Bản sinh viên mang loại riêng, không sửa giáo trình giảng viên; Admin không biên soạn ở luồng này.
+Giảng viên mở `/workspace/lecturer/materials`, sinh viên mở `/workspace/student/materials` hoặc chọn **Học liệu của tôi**. Tạo bản nháp, nhập tiêu đề/loại, thêm 1–20 môn rồi lưu. Tác giả/mô tả có thể để trống. **Giảng viên không cần tài liệu HUCE, nguồn tham khảo tùy chọn và không bắt buộc khai báo căn cứ quyền.** Sinh viên vẫn cần nguồn/căn cứ quyền cho tài liệu bổ sung và không sửa học liệu giảng viên; Admin không biên soạn ở luồng này.
 
-Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. Bản đã lưu có thể gắn/thay PDF tối đa 25 MiB, xem CHECKING/SAFE/FAILED bằng **Cập nhật trạng thái**. SAFE chỉ là kết quả kỹ thuật. Quyền tải bản gốc chỉ có hiệu lực khi phiên bản đủ điều kiện đọc sau khi duyệt.
+Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. Bản đã lưu có thể gắn/thay PDF tối đa25MiB, xem CHECKING/SAFE/FAILED bằng **Cập nhật trạng thái**. Khi SAFE, giảng viên chọn **Công bố** rồi xác nhận: tài liệu xuất hiện trong kho nếu đang hiển thị, không qua admin duyệt. Mất phản hồi dùng **Tải trạng thái công bố** trước retry. Lựa chọn tải PDF có hiệu lực sau công bố. Xem [giảng viên tự công bố](docs/implementation/2026-10-14-lecturer-self-publication.md).
 
-Khi PDF SAFE, chọn **Gửi duyệt** rồi xác nhận phiên bản/lần lưu. Bản SUBMITTED khóa metadata/PDF; nhập lý do rồi **Rút về nháp** để sửa. Giảng viên mất phân công vẫn rút được nhưng không sửa/gửi lại. Nếu lỗi hoặc chưa rõ kết quả, bấm **Tải trạng thái duyệt** trước retry. Chủ thấy quyết định/lý do trong lịch sử và lọc cả năm trạng thái; CHANGES_REQUIRED có **Mở lại để chỉnh sửa**. APPROVED/REJECTED giữ nguyên; chọn **Tạo phiên bản kế tiếp** và xác nhận để copy metadata/môn sang nháp mới. PDF, nguồn/quyền và quyền tải được xác nhận lại. Bản công bố và ghi chú cũ giữ nguyên; **Lịch sử phiên bản** cho xem các lần duyệt trước.
+Sinh viên chọn **Gửi duyệt** khi PDF SAFE rồi xác nhận phiên bản/lần lưu. Bản SUBMITTED khóa metadata/PDF; nhập lý do rồi **Rút về nháp** để sửa. Nếu lỗi hoặc chưa rõ kết quả, bấm **Tải trạng thái duyệt** trước retry. Yêu cầu giảng viên cũ vẫn được rút/mở lại; sau đó dùng Công bố. CHANGES_REQUIRED có **Mở lại để chỉnh sửa**. APPROVED/REJECTED giữ nguyên; **Tạo phiên bản kế tiếp** copy thông tin/môn sang nháp mới, cần PDF mới và chọn lại quyền tải. Giảng viên tự công bố lại, sinh viên gửi duyệt lại. Bản công bố và ghi chú cũ giữ nguyên; **Lịch sử phiên bản** giữ các yêu cầu/ quyết định trước đó.
 
 Admin mở **Kiểm duyệt học liệu** ở `/workspace/admin/moderation`, lọc yêu cầu và mở chi tiết. Chỉ PDF SAFE với snapshot còn khớp được mở ở tab mới. Chọn quyết định, nhập lý do, duyệt cần xác nhận đã kiểm tra nội dung/quyền; xác nhận inline để lưu. Duyệt đặt bản hiện hành, không tự mở tài liệu HIDDEN. Khi mất kết nối, **Tải trạng thái yêu cầu** trước retry.
 
-Ba vai trò mở **Kho học liệu** ở `/workspace/library`, tìm tiêu đề/tác giả, lọc môn/loại/nguồn và chọn **Đọc tài liệu**. Reader chuyển trang, zoom, xoay và chọn chữ nếu PDF có text layer. Nguồn/quyền nằm trong phần mở rộng inline; **Tải PDF gốc** chỉ xuất hiện khi được phép. Mỗi lượt metadata/file kiểm tra APPROVED + VISIBLE + SAFE + hạn quyền; admin không vượt điều kiện này. Ghi chú riêng gắn phiên bản/trang, có tạo/sửa/xóa; lỗi lưu giữ bản soạn, retry tạo giữ request ID để tránh nhân đôi. Lưu trước khi dùng Back/Forward của trình duyệt: cảnh báo rời trang hiện chỉ bao phủ link trong app, đăng xuất và đóng/tải lại trang. Tiến độ chỉ lưu trang render thành công, mở lại sau khi máy chủ xác nhận; xung đột tab yêu cầu tải lại. Khi lỗi tải tiến độ có thể đọc từ trang 1 mà không ghi. Chưa có highlight hoặc PDF offline. Chi tiết: [ghi chú và tiến độ](docs/implementation/2026-10-12-reader-notes-progress.md). `dev`/`build` chuẩn bị worker, CMaps, font và wasm PDF.js cùng version vào public; không dùng CDN.
+Ba vai trò mở **Kho học liệu** ở `/workspace/library`, tìm tiêu đề/tác giả, lọc môn/loại/nguồn và chọn **Đọc tài liệu**. Reader chuyển trang, zoom, xoay và chọn chữ nếu PDF có text layer. Nguồn/quyền nằm trong phần mở rộng inline; **Tải PDF gốc** chỉ xuất hiện khi được phép. Mỗi lượt metadata/file kiểm tra APPROVED + VISIBLE + SAFE + hạn quyền; admin không vượt điều kiện này. Ghi chú riêng gắn phiên bản/trang, có tạo/sửa/xóa; lỗi lưu giữ bản soạn, retry tạo giữ request ID để tránh nhân đôi. Guard Back/Forward trong lịch sử ứng dụng giữ bản soạn khi chọn ở lại và chặn khi đang lưu; link/logout/unload vẫn có guard. Phạm vi browser và giới hạn: [checkpoint web](docs/implementation/2026-10-17-web-reader-history.md). Tiến độ chỉ lưu trang render thành công, mở lại sau khi máy chủ xác nhận; xung đột tab yêu cầu tải lại. Khi lỗi tải tiến độ có thể đọc từ trang 1 mà không ghi. Đã có vùng tô chữ riêng với ba màu và ghi chú tùy chọn; chưa đọc PDF offline. Hướng dẫn và giới hạn: [vùng tô PDF](docs/implementation/2026-10-17-pdf-text-highlights.md). Chi tiết: [ghi chú và tiến độ](docs/implementation/2026-10-12-reader-notes-progress.md). `dev`/`build` chuẩn bị worker, CMaps, font và wasm PDF.js cùng version vào public; không dùng CDN.
 
 Để chạy kiểm tra file local, bật profile Docker riêng: `docker compose --env-file infra/.env -f infra/compose.yaml --profile files up -d --build clamav file-worker`. API và worker dùng chung `.local/files` ngoài webroot. Production yêu cầu S3 private; chưa tạo dịch vụ cloud. Hướng dẫn, giới hạn và bằng chứng quét thật ở tài liệu upload phía trên.
 
@@ -92,6 +99,8 @@ pnpm test:e2e
 `pnpm check` chạy lint, typecheck, unit Jest và build; không cần kết nối DB để chạy unit/build. Prisma client được sinh trước typecheck/build/dev và không commit. `test:setup` cần PostgreSQL/Redis đang chạy, tạo/migrate **hucescholar_test**, cập nhật các account tổng hợp `e2e-*@example.test` theo từng suite với mật khẩu ngẫu nhiên, ghi env bị Git bỏ qua vào `.local/test.env`. Không dùng credential thật trong kiểm thử.
 
 Integration và browser dùng riêng database `_test` + Redis **DB 15**, không chạy đồng thời vì suite reset vùng rate-limit test. Browser global setup flush DB 15 dành riêng cho dự án; không dùng DB 15 này cho việc khác. Test setup không drop database. Ca kiểm tra schema SQL dùng rollback; fixture API được dọn sau suite; dữ liệu synthetic do Playwright tạo chỉ tồn tại trong database test. Playwright tự chạy web/API ở 3100/3101 rồi dừng; giữ hai cổng trống. Trace tắt để tránh ghi lại mật khẩu/cookie.
+
+Chạy xong `check`/typecheck/build và Prisma generate **trước** browser; các lệnh này có thể sửa source sinh tự động, khiến API test chạy `--watch` khởi động lại giữa request PDF. Khi máy tải cao có thể dùng `pnpm test:e2e --workers=2`; không chạy codegen song song với bộ browser.
 
 Có thể dùng Chrome đã cài:
 
@@ -120,10 +129,23 @@ Admin mở **Quản lý học liệu** tại `/workspace/admin/materials` để 
 
 ## Lộ trình còn lại
 
-1. Thư viện cá nhân và nguồn sách được cấp quyền.
-2. PWA, kiểm thử trên thiết bị thật và triển khai HTTPS.
+1. Hoàn thiện tài khoản: tự đổi/buộc đổi mật khẩu khởi tạo; reset cần SMTP.
+2. Nguồn nội dung có quyền rõ ràng; môi trường pilot S3 private, HTTPS, backup/phục hồi.
+3. Cài PWA và kiểm thử thiết bị thật đang tạm hoãn theo yêu cầu người dùng. Xem [tiến độ17/10](docs/implementation/2026-10-17-web-reader-history.md).
 
 Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
+
+## PWA
+
+Mở `/install` từ trang chủ, đăng nhập hoặc menu không gian để xem hướng dẫn cài. Nút **Cài ứng dụng** chỉ xuất hiện khi trình duyệt cung cấp prompt; Safari/iOS dùng hướng dẫn menu. Chưa kiểm chứng cài trên thiết bị thật hoặc domain HTTPS.
+
+Production đăng ký worker khi trình duyệt hỗ trợ secure context. Dev mặc định không đăng ký; bật thử bằng PowerShell `$env:NEXT_PUBLIC_ENABLE_PWA = '1'` trước `pnpm --filter @hucescholar/web dev`. Bỏ biến chỉ ngừng đăng ký mới; worker đã cài vẫn tồn tại theo vòng đời browser, có thể gỡ trong DevTools → Application → Service Workers khi kết thúc thử nghiệm. Biến được Next đọc lúc build; không thay thế HTTPS khi triển khai.
+
+`scripts/pwa-assets.mjs` chạy trước dev/build, sinh icon PNG từ monogram H riêng và compile `scripts/pwa-worker.ts` thành `public/sw.js` (bị Git bỏ qua). Worker được typecheck với WebWorker lib; không thêm dependency. Khi sửa tài nguyên precache, tăng phiên bản cache trong worker. Bản cập nhật chờ đóng các tab cũ, không tự reload làm mất bản soạn.
+
+Worker chỉ giữ sáu asset public cố định: offline HTML tự chứa và icon. Không cache HTML/RSC/Next chunks, API, cookie phiên, PDF, ghi chú, URL có query/token hoặc nguồn ngoài. Khi hard navigation trong app thất bại do mạng, hiện trang mất kết nối chung; HTTP401/404/500 giữ nguyên. Mất mạng không thể đọc PDF hoặc lưu ghi chú, không có background sync. Chi tiết: [mốc PWA](docs/implementation/2026-10-15-pwa-foundation.md).
+
+Ba vai trò mở **Thư viện của tôi** ở `/workspace/personal-library`. Trong reader chọn **Lưu tài liệu**; **Đã lưu** mở bản công bố hiện hành, **Đọc gần đây** mở đúng phiên bản/trang đã lưu tiến độ. Bỏ lưu cần xác nhận và giữ ghi chú/tiến độ. Mục bị ẩn, hết hạn quyền hoặc PDF không SAFE chỉ hiện thông báo không khả dụng; vẫn bỏ được liên kết đã lưu. Khi mất phản hồi, **Tải trạng thái lưu** đối chiếu server trước thử lại. Xem [thư viện cá nhân](docs/implementation/2026-10-12-personal-library.md).
 
 ```text
 apps/web/       Next.js App Router, login, tài khoản, danh mục, phân công và bản nháp/PDF

@@ -170,8 +170,7 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
         Chỉ bạn xem được ghi chú. Gắn với phiên bản này; đổi bản PDF không tự chuyển ghi chú.
       </p>
       <p className="field-hint">
-        Bản soạn chỉ giữ khi trang đang mở. Hãy lưu trước khi dùng nút Quay lại/Tiến tới của trình
-        duyệt.
+        Hãy lưu để giữ ghi chú. Khi rời trang, bạn sẽ được hỏi trước khi bỏ bản soạn chưa lưu.
       </p>
       <form
         className="note-editor"

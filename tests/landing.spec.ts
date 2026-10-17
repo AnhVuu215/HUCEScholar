@@ -6,14 +6,14 @@ test('landing explains access and offers a real login destination', async ({ pag
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     'Học liệu đúng chỗ. Vững nền kiến thức.',
   );
-  await expect(page.getByText('Chưa có học liệu được công bố.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Các bìa sách chỉ là minh họa.', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Tải ứng dụng', exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: 'Đăng nhập HUCEScholar', exact: true }).click();
   await expect(page).toHaveURL('/login');
   await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
 });
 
-test('guide switches role by keyboard and explains unfinished reader honestly', async ({
+test('guide switches role by keyboard and explains the current reader honestly', async ({
   page,
 }) => {
   await page.goto('/#huong-dan');
@@ -26,12 +26,18 @@ test('guide switches role by keyboard and explains unfinished reader honestly', 
   );
   await page.getByRole('button', { name: 'Sinh viên', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Hướng dẫn Sinh viên' })).toContainText(
-    'tài liệu bổ sung',
+    'Kho học liệu',
   );
   await page.getByText('Đã đọc và ghi chú trên PDF được chưa?', { exact: true }).click();
   await expect(
     page.getByText('Đã có kho học liệu và trình đọc PDF cho tài khoản được cấp.', { exact: false }),
   ).toBeVisible();
+  await expect(
+    page.getByText('tô sáng đoạn chữ trên PDF có lớp văn bản', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Highlight và đọc offline chưa được hỗ trợ.', { exact: false }),
+  ).toHaveCount(0);
   await page.getByRole('link', { name: 'Tiến độ dự án', exact: true }).click();
   await expect(page).toHaveURL('/project');
   await expect(page.getByRole('heading', { name: 'Kết nối hệ thống' })).toBeVisible();

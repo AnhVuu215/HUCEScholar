@@ -4,7 +4,7 @@ import {
   draftList,
   materialError,
   materialTypes,
-  reviewStatuses,
+  publicationLabel,
   type DraftList,
 } from '../../lib/materials';
 import { MaterialEditor } from './material-editor';
@@ -60,8 +60,9 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
           {role === 'LECTURER'
             ? 'Bản nháp học liệu cho các môn bạn phụ trách.'
             : 'Tài liệu bổ sung của bạn, tách biệt với giáo trình giảng viên.'}{' '}
-          Lưu thông tin, mở lại bản nháp rồi đính kèm PDF. Khi PDF đã qua kiểm tra, bạn có thể gửi
-          yêu cầu duyệt hoặc rút về nháp để sửa.
+          {role === 'LECTURER'
+            ? 'Lưu thông tin, đính kèm PDF rồi công bố sau khi file quét đạt. Không cần tài liệu HUCE hoặc admin duyệt.'
+            : 'Lưu thông tin, mở lại bản nháp rồi đính kèm PDF. Khi PDF đã qua kiểm tra, bạn có thể gửi yêu cầu duyệt hoặc rút về nháp để sửa.'}
         </p>
         <button
           ref={create}
@@ -82,6 +83,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
       )}
       {editor && (
         <MaterialEditor
+          role={role}
           key={editor.id ?? 'new'}
           id={editor.id}
           close={close}
@@ -113,7 +115,9 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
             />
           </div>
           <div className="form-field">
-            <label htmlFor="material-status">Trạng thái duyệt</label>
+            <label htmlFor="material-status">
+              {role === 'LECTURER' ? 'Trạng thái công bố' : 'Trạng thái duyệt'}
+            </label>
             <select
               id="material-status"
               value={status}
@@ -123,7 +127,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
               <option value="DRAFT">Bản nháp</option>
               <option value="SUBMITTED">Chờ duyệt</option>
               <option value="CHANGES_REQUIRED">Yêu cầu sửa</option>
-              <option value="APPROVED">Đã duyệt</option>
+              <option value="APPROVED">{role === 'LECTURER' ? 'Đã công bố' : 'Đã duyệt'}</option>
               <option value="REJECTED">Từ chối</option>
             </select>
           </div>
@@ -201,8 +205,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
                       </td>
                       <td>
                         <span className="user-status user-status-pending">
-                          {reviewStatuses[item.reviewStatus as keyof typeof reviewStatuses] ??
-                            item.reviewStatus}
+                          {publicationLabel(item)}
                         </span>
                         <p className="field-hint">
                           {item.fileState === 'MISSING'

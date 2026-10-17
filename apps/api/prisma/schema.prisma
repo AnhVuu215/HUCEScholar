@@ -145,6 +145,7 @@ model document_versions {
   rights_valid_until                                           DateTime?             @db.Timestamptz(6)
   download_allowed                                             Boolean               @default(false)
   review_status                                                String                @default("DRAFT") @db.VarChar(20)
+  publication_method                                           String                @default("ADMIN_REVIEW") @db.VarChar(20)
   change_summary                                               String                @default("")
   search_text                                                  String                @default("")
   created_at                                                   DateTime              @default(now()) @db.Timestamptz(6)

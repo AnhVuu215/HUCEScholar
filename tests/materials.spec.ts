@@ -67,9 +67,10 @@ async function fill(page: Page, code: string) {
   await page
     .getByLabel('Nguồn tài liệu', { exact: true })
     .fill('Tài liệu tổng hợp tự biên soạn — dữ liệu kiểm thử');
-  await page
-    .getByLabel('Căn cứ quyền sử dụng', { exact: true })
-    .fill('Tác giả cho phép chia sẻ học tập — minh họa');
+  if (await page.getByLabel('Căn cứ quyền sử dụng', { exact: true }).count())
+    await page
+      .getByLabel('Căn cứ quyền sử dụng', { exact: true })
+      .fill('Tác giả cho phép chia sẻ học tập — minh họa');
   await page.getByLabel('Tìm môn học liên quan', { exact: true }).fill(code);
   await expect(
     page
@@ -92,7 +93,7 @@ async function markSyntheticSafe(id: string, pageCount = 1) {
   try {
     // Explicit synthetic scan fixture; does not claim real scanner evidence.
     const result = await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-highlights-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-personal-%@example.test' OR u.email LIKE 'e2e-selfpublish-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
       [id, pageCount],
     );
     expect(result.rowCount).toBe(1);
@@ -227,7 +228,9 @@ test('student searches the library and reads, selects text, changes pages, zooms
     }
   }
   await page.getByRole('link', { name: `Đọc Học liệu minh họa ${code}`, exact: true }).click();
-  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.locator('.textLayer')).toContainText('HUCEScholar reader fixture');
   expect(
     await page.locator('.reader-page canvas').evaluate((node: HTMLCanvasElement) => {
@@ -292,12 +295,16 @@ test('student searches the library and reads, selects text, changes pages, zooms
   const range = await page.request.get(pdfPath, { headers: { Range: 'bytes=0-4' } });
   expect(range.status()).toBe(206);
   expect((await range.body()).toString()).toBe('%PDF-');
+  // Reload/retry resumes acknowledged progress; do not race the debounced page-2 save.
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã lưu tiến độ · Trang 2' }),
+  ).toBeVisible();
   await page.route('**/api/v1/library/versions/*/pdf', (route) => route.abort());
   await page.reload();
   await expect(page.getByRole('button', { name: 'Thử mở lại PDF', exact: true })).toBeVisible();
   await page.unroute('**/api/v1/library/versions/*/pdf');
   await page.getByRole('button', { name: 'Thử mở lại PDF', exact: true }).click();
-  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+  await expect(page.getByText('Đã hiển thị trang 2 / 2', { exact: true })).toBeVisible();
 });
 async function openPersonalReader(page: Page, prefix: string) {
   const { code } = await submittedForReview(page, 'student', true, prefix);
@@ -323,11 +330,216 @@ async function openPersonalReader(page: Page, prefix: string) {
   await logoutForTest(page);
   await login(page, 'student', prefix);
   await page.goto(`/workspace/library/versions/${item.versionId}`);
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' }),
-  ).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' })).toBeVisible(
+    { timeout: 15_000 },
+  );
   return `/api/v1/library/versions/${item.versionId}`;
 }
+async function capturePersonal(page: Page, prefix: string) {
+  if (process.env.CAPTURE_PERSONAL_UI !== '1') return;
+  mkdirSync('.impeccable/review/personal', { recursive: true });
+  for (const [name, width, height] of [
+    ['desktop', 1440, 1000],
+    ['tablet', 768, 1024],
+    ['mobile', 360, 900],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    if (prefix === 'reader-') {
+      await expect
+        .poll(() =>
+          page.locator('.reader-stage').evaluate((stage) => {
+            const canvas = stage.querySelector('canvas');
+            return (
+              !!canvas &&
+              Math.abs(
+                canvas.getBoundingClientRect().width - Math.max(160, stage.clientWidth - 64),
+              ) < 3
+            );
+          }),
+        )
+        .toBe(true);
+    } else {
+      for (const link of await page.locator('.personal-library article > .primary-button').all()) {
+        const box = await link.boundingBox();
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: `.impeccable/review/personal/${prefix}${name}.png`,
+      fullPage: true,
+    });
+  }
+}
+test('lecturer self-publication needs no rights declaration or admin decision and recovers after response loss', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const code = await seed(page, 'lecturer', 'e2e-selfpublish');
+  await login(page, 'lecturer', 'e2e-selfpublish');
+  await page.getByRole('button', { name: 'Tạo bản nháp', exact: true }).click();
+  await page.getByLabel('Tiêu đề học liệu', { exact: true }).fill(`PDF tự công bố ${code}`);
+  await page.getByLabel('Tìm môn học liên quan', { exact: true }).fill(code);
+  await page
+    .getByLabel('Môn học liên quan', { exact: true })
+    .selectOption({ label: `${code} · Môn minh họa kiểm thử học liệu` });
+  await page.getByRole('button', { name: 'Thêm môn', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu bản nháp', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã lưu bản nháp' })).toBeVisible();
+  await page
+    .getByRole('button', { name: `Mở bản nháp PDF tự công bố ${code}`, exact: true })
+    .click();
+  await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toBeDisabled();
+  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
+    name: 'self-published.pdf',
+    mimeType: 'application/pdf',
+    buffer: readerPdf(),
+  });
+  await page.getByRole('button', { name: 'Tải PDF lên', exact: true }).click();
+  await expect(page.getByText('Lần lưu 2', { exact: false })).toBeVisible();
+  const item = (await (await page.request.get('/api/v1/material-drafts?search=' + code)).json())
+    .items[0];
+  await markSyntheticSafe(item.id, 2);
+  await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toBeEnabled();
+  await page.route('**/api/v1/material-drafts/*/publish', async (route) => {
+    await route.fetch();
+    await route.abort();
+  });
+  await page.getByRole('button', { name: 'Công bố', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận công bố', exact: true }).click();
+  await expect(page.locator('.publication-actions [role="alert"]')).toContainText(
+    'Tải trạng thái công bố',
+  );
+  await page.unroute('**/api/v1/material-drafts/*/publish');
+  await page.getByRole('button', { name: 'Tải trạng thái công bố', exact: true }).click();
+  await expect(page.locator('.publication-actions')).toContainText('Đã công bố');
+  await expect(
+    page
+      .getByRole('region', { name: 'Lịch sử phiên bản', exact: true })
+      .getByRole('listitem')
+      .first(),
+  ).toContainText('Phiên bản 1 · Đã công bố');
+  await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
+  if (process.env.CAPTURE_SELF_PUBLISH_UI === '1') {
+    mkdirSync('.impeccable/review/self-publication', { recursive: true });
+    for (const [name, width, height] of [
+      ['desktop', 1440, 1000],
+      ['tablet', 768, 1024],
+      ['mobile', 360, 900],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.screenshot({
+        path: `.impeccable/review/self-publication/${name}.png`,
+        fullPage: true,
+      });
+    }
+  }
+  const history = await (
+    await page.request.get(`/api/v1/material-drafts/${item.id}/requests`)
+  ).json();
+  expect(history.total).toBe(0);
+  const current = (await (await page.request.get(`/api/v1/material-drafts/${item.id}`)).json())
+    .item;
+  expect(current).toMatchObject({
+    publicationMethod: 'LECTURER_SELF',
+    sourceReference: '',
+    rightsBasis: '',
+  });
+  await page.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
+  await page.getByLabel('Tìm học liệu', { exact: false }).fill(code);
+  await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
+  await page.getByRole('link', { name: `Đọc PDF tự công bố ${code}`, exact: true }).click();
+  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+});
+test('personal library saves after response loss, shows recent page and removes only its saved link', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  // A failed initial read must not be mistaken for an unsaved document.
+  await page.route('**/api/v1/personal-library/saved/*', (route) =>
+    route.request().method() === 'GET' ? route.abort() : route.continue(),
+  );
+  const path = await openPersonalReader(page, 'e2e-personal');
+  await expect(page.getByRole('alert').filter({ hasText: 'Tải trạng thái lưu' })).toBeVisible();
+  await expect(page.locator('.saved-control > button').first()).toBeDisabled();
+  await page.getByRole('button', { name: 'Tải trạng thái lưu', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Tải trạng thái lưu', exact: true })).toBeEnabled();
+  await expect(page.locator('.saved-control > button').first()).toBeDisabled();
+  await page.unroute('**/api/v1/personal-library/saved/*');
+  await page.getByRole('button', { name: 'Tải trạng thái lưu', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lưu tài liệu', exact: true })).toBeEnabled();
+  const material = await (await page.request.get(path)).json();
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã lưu tiến độ · Trang 2' }),
+  ).toBeVisible();
+  await page.route('**/api/v1/personal-library/saved/*', async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    await route.fetch();
+    await route.abort();
+  });
+  await page.getByRole('button', { name: 'Lưu tài liệu', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Tải trạng thái lưu' })).toBeVisible();
+  await page.unroute('**/api/v1/personal-library/saved/*');
+  await page.getByRole('button', { name: 'Tải trạng thái lưu', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Bỏ lưu tài liệu', exact: true })).toBeEnabled();
+  await capturePersonal(page, 'reader-');
+  await page.getByRole('link', { name: 'Thư viện của tôi', exact: true }).click();
+  const row = page.getByRole('article', { name: material.item.title, exact: true });
+  await expect(row).toBeVisible();
+  await page.getByRole('button', { name: 'Đọc gần đây', exact: true }).click();
+  await expect(row.getByText('Đã đọc đến trang 2', { exact: true })).toBeVisible();
+  await capturePersonal(page, 'recent-');
+  await row.getByRole('link', { name: 'Đọc tiếp', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 2 / 2' }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Thư viện của tôi', exact: true }).click();
+  await expect(row).toBeVisible();
+  await capturePersonal(page, '');
+  const savedList = await (await page.request.get('/api/v1/personal-library/saved')).json();
+  await page.route('**/api/v1/personal-library/saved?*', (route) => {
+    const pageNumber = Number(new URL(route.request().url()).searchParams.get('page'));
+    return route.fulfill({ json: { ...savedList, total: 13, limit: 12, page: pageNumber } });
+  });
+  await page.getByRole('button', { name: 'Đã lưu', exact: true }).click();
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Trang 2/2' })).toBeFocused();
+  await page.getByRole('button', { name: 'Trang trước', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Trang 1/2' })).toBeFocused();
+  await page.unroute('**/api/v1/personal-library/saved?*');
+  await page.getByRole('button', { name: 'Đã lưu', exact: true }).click();
+  await row.getByRole('button', { name: 'Bỏ lưu tài liệu', exact: true }).click();
+  await page.route('**/api/v1/personal-library/saved/*', async (route) => {
+    if (route.request().method() !== 'DELETE') return route.continue();
+    await route.fetch();
+    await route.abort();
+  });
+  await row.getByRole('button', { name: 'Xác nhận bỏ lưu', exact: true }).click();
+  await expect(row.getByRole('alert')).toContainText('Tải trạng thái lưu');
+  await page.unroute('**/api/v1/personal-library/saved/*');
+  await row.getByRole('button', { name: 'Tải trạng thái lưu', exact: true }).click();
+  await expect(row).toHaveCount(0);
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Ghi chú và tiến độ được giữ nguyên.' }),
+  ).toBeFocused();
+  await page.getByRole('button', { name: 'Đọc gần đây', exact: true }).click();
+  await expect(row).toBeVisible();
+  await page.route('**/api/v1/personal-library/recent?*', (route) => route.abort());
+  await page.reload();
+  await page.getByRole('button', { name: 'Đọc gần đây', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Thử tải thư viện', exact: true })).toBeVisible();
+  await page.unroute('**/api/v1/personal-library/recent?*');
+  await page.getByRole('button', { name: 'Thử tải thư viện', exact: true }).click();
+  await expect(row).toBeVisible();
+});
 test('lifecycle owner creates one successor after a lost response and can inspect the original review history', async ({
   page,
 }) => {
@@ -486,6 +698,378 @@ test('lifecycle admin transfers published material and recovers a stale hide bef
       await page.screenshot({ path: `.impeccable/review/lifecycle/${name}.png`, fullPage: true });
     }
   }
+});
+
+test('private PDF text highlights survive retry, zoom, rotation, page changes and reload', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  const path = await openPersonalReader(page, 'e2e-highlights');
+  const text = page
+    .locator('.textLayer span')
+    .filter({ hasText: 'HUCEScholar reader fixture' })
+    .first();
+  const box = (await text.boundingBox())!;
+  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2, { steps: 15 });
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Tô sáng đoạn chọn', exact: true }).click();
+  const editor = page.getByLabel('Ghi chú cho đoạn tô', { exact: true });
+  await editor.fill('Điểm cần nhớ <b>riêng tư</b>');
+  const pageNote = page.getByLabel('Nội dung ghi chú', { exact: true });
+  await pageNote.fill('Bản soạn ghi chú theo trang');
+  let leavePrompts = 0;
+  const stay = async (dialog: import('@playwright/test').Dialog) => {
+    leavePrompts++;
+    await dialog.dismiss();
+  };
+  page.on('dialog', stay);
+  await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
+  expect(leavePrompts).toBe(1);
+  await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
+  await expect(pageNote).toHaveValue('Bản soạn ghi chú theo trang');
+  page.off('dialog', stay);
+  await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
+  await page.getByLabel('Màu tô sáng', { exact: true }).selectOption('#90CAF9');
+  await page.route('**/api/v1/library/versions/*/highlights', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    await route.fetch();
+    await route.abort();
+  });
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Chưa xác nhận được lần lưu' }),
+  ).toBeVisible();
+  await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
+  await page.unroute('**/api/v1/library/versions/*/highlights');
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+  );
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lưu vùng tô', exact: true })).toBeEnabled();
+  await expect(editor).toHaveAttribute('readonly', '');
+  await expect(page.getByLabel('Màu tô sáng', { exact: true })).toBeDisabled();
+  await page.unroute('**/api/v1/auth/csrf');
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  const list = (await (await page.request.get(`${path}/highlights?pageNumber=1`)).json()).items;
+  expect(list).toHaveLength(1);
+  const id = list[0].id;
+  const overlay = page.locator(`[data-highlight-id="${id}"]`).first();
+  await expect(overlay).toBeVisible();
+  for (const angle of [0, 90, 180, 270]) {
+    if (angle) await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
+    await page
+      .getByLabel('Mức phóng', { exact: true })
+      .selectOption(angle === 180 ? '0.75' : '1.25');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' }),
+    ).toBeVisible();
+    await expect
+      .poll(async () => {
+        const a = await overlay.boundingBox();
+        const b = await text.evaluate((node, quote: string) => {
+          const value = node.firstChild!;
+          const start = value.textContent!.indexOf(quote);
+          const range = document.createRange();
+          range.setStart(value, start);
+          range.setEnd(value, start + quote.length);
+          const rect = range.getBoundingClientRect();
+          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        }, list[0].anchor.quote);
+        return (
+          !!a &&
+          !!b &&
+          Math.abs(a.x - b.x) < 4 &&
+          Math.abs(a.y - b.y) < 4 &&
+          Math.abs(a.width - b.width) < 5 &&
+          Math.abs(a.height - b.height) < 5
+        );
+      })
+      .toBe(true);
+  }
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(overlay).toHaveCount(0);
+  await page.getByRole('button', { name: 'Trang trước', exact: true }).click();
+  await expect(overlay).toBeVisible();
+  await page.reload();
+  await expect(overlay).toBeVisible();
+  const row = page.getByRole('article', { name: `Vùng tô ${id}`, exact: true });
+  await expect(row.getByText('Điểm cần nhớ <b>riêng tư</b>', { exact: true })).toBeVisible();
+  expect(await row.locator('b').count()).toBe(0);
+  // Click through the overlay into the PDF text, then edit the existing selection.
+  const hit = (await overlay.boundingBox())!;
+  await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
+  await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
+  await editor.fill('Đã sửa vùng tô');
+  await page.getByLabel('Màu tô sáng', { exact: true }).selectOption('#A5D6A7');
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  await expect(row.getByText('Đã sửa vùng tô', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 360, height: 900 });
+  await row.getByRole('button', { name: 'Sửa vùng tô', exact: true }).click();
+  await editor.fill('Bản soạn khi mở menu điện thoại');
+  const menu = page.getByRole('button', { name: 'Menu', exact: true });
+  await menu.click();
+  page.on('dialog', stay);
+  await page
+    .getByRole('navigation', { name: 'Điều hướng không gian' })
+    .getByRole('link', { name: 'Kho học liệu', exact: true })
+    .click();
+  expect(leavePrompts).toBe(2);
+  await expect(menu).toHaveAttribute('aria-expanded', 'true');
+  await expect(editor).toHaveValue('Bản soạn khi mở menu điện thoại');
+  page.off('dialog', stay);
+  await menu.press('Escape');
+  await page.getByRole('button', { name: 'Hủy vùng tô', exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+  if (process.env.CAPTURE_HIGHLIGHTS_UI === '1') {
+    mkdirSync('.impeccable/review/highlights', { recursive: true });
+    await row.getByRole('button', { name: 'Sửa vùng tô', exact: true }).click();
+    for (const [name, width, height] of [
+      ['mobile', 360, 900],
+      ['tablet', 768, 1000],
+      ['desktop', 1440, 1100],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(overlay).toBeVisible();
+      expect(
+        await page.evaluate(() => {
+          const toolbar = document
+            .querySelector('.reader-highlight-tools')!
+            .getBoundingClientRect();
+          const region = document
+            .querySelector('.reader-highlight-region')!
+            .getBoundingClientRect();
+          return toolbar.bottom <= region.bottom + 2;
+        }),
+      ).toBe(true);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: `.impeccable/review/highlights/${name}.png`, fullPage: true });
+    }
+    await page.getByRole('button', { name: 'Hủy vùng tô', exact: true }).click();
+  }
+  await row.getByRole('button', { name: 'Xóa vùng tô', exact: true }).click();
+  await row.getByRole('button', { name: 'Xác nhận xóa', exact: true }).click();
+  await expect(overlay).toHaveCount(0);
+  expect((await (await page.request.get(`${path}/highlights?pageNumber=1`)).json()).items).toEqual(
+    [],
+  );
+});
+
+test('highlights load all cursor pages, retry failures and retain a stale draft on its original page', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const path = await openPersonalReader(page, 'e2e-highlights-list');
+  const token = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+  const headers = { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': token };
+  const anchor = {
+    coordinateSpace: 'normalized-pdf-v1',
+    quote: 'HUCEScholar reader fixture',
+    quads: [[0.1, 0.9, 0.5, 0.9, 0.5, 0.85, 0.1, 0.85]],
+  };
+  const results = await Promise.all(
+    Array.from({ length: 31 }, (_, i) =>
+      page.request.post(`${path}/highlights`, {
+        headers,
+        data: {
+          pageNumber: 1,
+          anchor,
+          content: `Ghi chú ${i}`,
+          color: '#FFF59D',
+          requestId: crypto.randomUUID(),
+        },
+      }),
+    ),
+  );
+  expect(results.every((r) => r.status() === 201)).toBe(true);
+  const target = (await results[0].json()).item;
+  await page.getByRole('button', { name: 'Tải lại vùng tô', exact: true }).click();
+  await expect(page.locator('[data-highlight-id]')).toHaveCount(31);
+  await page.route('**/api/v1/library/versions/*/highlights?**', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+  );
+  await page.getByRole('button', { name: 'Tải lại vùng tô', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Chưa tải được vùng tô' })).toBeVisible();
+  await expect(page.locator('[data-highlight-id]')).toHaveCount(0);
+  await page.unroute('**/api/v1/library/versions/*/highlights?**');
+  await page.getByRole('button', { name: 'Tải lại vùng tô', exact: true }).click();
+  await expect(page.locator('[data-highlight-id]')).toHaveCount(31);
+  const row = page.getByRole('article', { name: `Vùng tô ${target.id}`, exact: true });
+  await row.getByRole('button', { name: 'Sửa vùng tô', exact: true }).click();
+  const editor = page.getByLabel('Ghi chú cho đoạn tô', { exact: true });
+  await editor.fill('Bản soạn tab hiện tại');
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Sửa vùng tô · Trang 1', exact: true }),
+  ).toBeVisible();
+  await expect(editor).toHaveValue('Bản soạn tab hiện tại');
+  expect(
+    (
+      await page.request.patch(`${path}/highlights/${target.id}`, {
+        headers,
+        data: { revision: 1, content: 'Đã sửa ở tab khác', color: '#90CAF9' },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Vùng tô đã thay đổi' })).toBeVisible();
+  await expect(editor).toHaveValue('Bản soạn tab hiện tại');
+  await page.getByRole('button', { name: 'Trang trước', exact: true }).click();
+  await expect(row.getByText('Đã sửa ở tab khác', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Hủy vùng tô', exact: true }).click();
+  await row.getByRole('button', { name: 'Sửa vùng tô', exact: true }).click();
+  await expect(editor).toHaveValue('Đã sửa ở tab khác');
+  await page.getByRole('button', { name: 'Hủy vùng tô', exact: true }).click();
+});
+
+for (const historyMode of ['native', 'legacy'] as const) {
+  test(`reader draft survives cancelled browser back and forward without adding history entries (${historyMode})`, async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    if (historyMode === 'legacy') {
+      await page.addInitScript(() => {
+        Object.defineProperty(window, 'navigation', { value: undefined });
+      });
+    }
+    const path = await openPersonalReader(page, 'e2e-notes');
+    const readerUrl = path.replace('/api/v1', '/workspace');
+    // Real Next links create same-document history; page.goto would only test beforeunload.
+    await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
+    await page.locator(`a[href="${readerUrl}"]`).click();
+    const editor = page.getByLabel('Nội dung ghi chú', { exact: true });
+    await expect(editor).toBeVisible();
+    const historyLength = await page.evaluate(() => history.length);
+    await editor.fill('Bản soạn cần giữ khi quay lại');
+    expect(await page.evaluate(() => JSON.stringify(history.state))).not.toContain(
+      'Bản soạn cần giữ',
+    );
+    let prompts = 0;
+    const dismiss = async (dialog: import('@playwright/test').Dialog) => {
+      prompts++;
+      await dialog.dismiss();
+    };
+    page.on('dialog', dismiss);
+    // A pending framework write can arrive while popstate is returning to the reader.
+    // Keep its opaque state intact and ensure it cannot overwrite the traversed-to index.
+    await page.evaluate(() => {
+      const state = history.state;
+      const go = history.go;
+      history.go = function (delta) {
+        history.go = go;
+        history.replaceState(state, '');
+        go.call(history, delta);
+      };
+    });
+    await page.evaluate(() => history.back());
+    await expect.poll(() => prompts).toBe(1);
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toHaveValue('Bản soạn cần giữ khi quay lại');
+    expect(await page.evaluate(() => history.length)).toBe(historyLength);
+    await page.evaluate(() => history.back());
+    await expect.poll(() => prompts).toBe(2);
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toHaveValue('Bản soạn cần giữ khi quay lại');
+    await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
+    await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
+    await expect(page).toHaveURL('/workspace/library');
+    await page.goBack();
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toBeVisible();
+    await editor.fill('Bản soạn cần giữ khi tiến tới');
+    await page.evaluate(() => history.forward());
+    await expect.poll(() => prompts).toBe(3);
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toHaveValue('Bản soạn cần giữ khi tiến tới');
+    expect(await page.evaluate(() => history.length)).toBe(historyLength + 1);
+    page.off('dialog', dismiss);
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.goForward();
+    await expect(page).toHaveURL('/workspace/library');
+    await expect(editor).toHaveCount(0);
+  });
+}
+
+test('reader history guard handles fragments, multi-entry traversal and an in-flight save', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const path = await openPersonalReader(page, 'e2e-notes');
+  const readerUrl = path.replace('/api/v1', '/workspace');
+  await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
+  await expect(page).toHaveURL('/workspace/library');
+  await page.getByRole('link', { name: 'Thư viện của tôi', exact: true }).click();
+  await expect(page).toHaveURL('/workspace/personal-library');
+  await page.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
+  await page.locator(`a[href="${readerUrl}"]`).click();
+  await expect(page.getByLabel('Nội dung ghi chú', { exact: true })).toBeVisible();
+  // Reload must retain the indices of earlier Next entries, without persisting the draft.
+  await page.reload();
+  const editor = page.getByLabel('Nội dung ghi chú', { exact: true });
+  await editor.fill('Bản soạn khi chuyển nhiều bước');
+  let prompts = 0;
+  page.on('dialog', async (dialog) => {
+    prompts++;
+    await dialog.dismiss();
+  });
+  await page.evaluate(() => {
+    location.hash = 'khong-gian';
+  });
+  await expect(page).toHaveURL(`${readerUrl}#khong-gian`);
+  const length = await page.evaluate(() => history.length);
+  await page.evaluate(() => history.go(-3));
+  await expect.poll(() => prompts).toBe(1);
+  await expect(page).toHaveURL(`${readerUrl}#khong-gian`);
+  await expect(editor).toHaveValue('Bản soạn khi chuyển nhiều bước');
+  expect(await page.evaluate(() => history.length)).toBe(length);
+  // Hash-only traversal stays in the reader and does not ask to discard the draft.
+  await page.goBack();
+  await expect(page).toHaveURL(readerUrl);
+  expect(prompts).toBe(1);
+  await expect(editor).toHaveValue('Bản soạn khi chuyển nhiều bước');
+  await page.goForward();
+  await expect(page).toHaveURL(`${readerUrl}#khong-gian`);
+  await expect(editor).toHaveValue('Bản soạn khi chuyển nhiều bước');
+  await page.goBack();
+  await expect(page).toHaveURL(readerUrl);
+
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let saving = false;
+  await page.route('**/api/v1/library/versions/*/notes', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    saving = true;
+    await held;
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'Lưu ghi chú', exact: true }).click();
+  await expect.poll(() => saving).toBe(true);
+  let traversals = 0;
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) traversals++;
+  });
+  try {
+    await page.evaluate(() => history.go(-2));
+    await expect.poll(() => traversals).toBeGreaterThanOrEqual(2);
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toHaveValue('Bản soạn khi chuyển nhiều bước');
+    expect(prompts).toBe(1);
+  } finally {
+    release();
+  }
+  await expect(editor).toHaveValue('');
+  await expect(editor).toBeEditable();
+  await page.evaluate(() => history.go(-2));
+  await expect(page).toHaveURL('/workspace/personal-library');
+  expect(prompts).toBe(1);
+  const notes = (await (await page.request.get(`${path}/notes?pageNumber=1`)).json()).items;
+  expect(notes).toHaveLength(1);
+  expect(notes[0].content).toBe('Bản soạn khi chuyển nhiều bước');
 });
 
 test('private page notes preserve drafts, recover lost responses and reject stale edits', async ({
@@ -767,7 +1351,7 @@ test('admin approves with rights confirmation and recovers a committed decision 
     (await (await page.request.get(`/api/v1/material-drafts/${id}`)).json()).item.reviewStatus,
   ).toBe('APPROVED');
 });
-test('lecturer sees admin change request, reopens the draft and submits again', async ({
+test('lecturer reopens a legacy change request, self-publishes and retains older request history', async ({
   page,
 }) => {
   test.setTimeout(60000);
@@ -794,7 +1378,7 @@ test('lecturer sees admin change request, reopens the draft and submits again', 
   await expect(page.locator('.moderation-detail')).toContainText('Đã lưu quyết định');
   await logoutForTest(page);
   await login(page, 'lecturer');
-  await page.getByLabel('Trạng thái duyệt', { exact: true }).selectOption('CHANGES_REQUIRED');
+  await page.getByLabel('Trạng thái công bố', { exact: true }).selectOption('CHANGES_REQUIRED');
   await page.getByLabel('Tìm bản nháp', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await page
@@ -802,21 +1386,25 @@ test('lecturer sees admin change request, reopens the draft and submits again', 
     .click();
   await expect(
     page
-      .getByRole('region', { name: 'Yêu cầu duyệt', exact: true })
+      .getByRole('region', { name: 'Công bố tài liệu', exact: true })
       .locator('.publication-history'),
   ).toContainText('Bổ sung dẫn chứng quyền sử dụng');
   await page.getByRole('button', { name: 'Mở lại để chỉnh sửa', exact: true }).click();
   await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
-  await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
-  await expect(
-    page
-      .getByRole('region', { name: 'Yêu cầu duyệt', exact: true })
-      .locator('.publication-history'),
-  ).toContainText('Chờ duyệt');
+  await page.getByRole('button', { name: 'Công bố', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận công bố', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã công bố tài liệu' })).toBeVisible();
+  await page.getByRole('button', { name: 'Tạo phiên bản kế tiếp', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận tạo phiên bản', exact: true }).click();
+  await page.getByRole('button', { name: 'Xem lịch sử yêu cầu phiên bản 1', exact: true }).click();
+  await expect(page.getByText('Bổ sung dẫn chứng quyền sử dụng', { exact: true })).toBeVisible();
 });
 for (const role of ['student', 'lecturer'] as const)
-  test(`${role} can submit and withdraw with a retained reason and history`, async ({ page }) => {
+  test(`${role} can withdraw a pending review with a retained reason and history`, async ({
+    page,
+  }) => {
+    const actionLabel = role === 'lecturer' ? 'Công bố' : 'Gửi duyệt';
+    const refreshLabel = role === 'lecturer' ? 'Tải trạng thái công bố' : 'Tải trạng thái duyệt';
     const code = await seed(page, role);
     await login(page, role);
     await fill(page, code);
@@ -826,7 +1414,7 @@ for (const role of ['student', 'lecturer'] as const)
     await page
       .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
       .click();
-    await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: actionLabel, exact: true })).toBeDisabled();
     await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
       name: 'synthetic-publication.pdf',
       mimeType: 'application/pdf',
@@ -839,31 +1427,44 @@ for (const role of ['student', 'lecturer'] as const)
     await markSyntheticSafe(item.id);
     await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
     await page.getByLabel('Tác giả', { exact: false }).fill('Chưa lưu');
-    await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: actionLabel, exact: true })).toBeDisabled();
     await page.getByLabel('Tác giả', { exact: false }).fill('Tác giả kiểm thử');
-    if (role === 'lecturer')
-      await page.route('**/api/v1/material-drafts/*/submit', async (route) => {
-        await route.fetch();
-        await route.abort('failed');
-      });
-    await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
-    await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
     if (role === 'lecturer') {
-      await expect(page.locator('.publication-actions [role="alert"]')).toContainText(
-        'Tải trạng thái duyệt',
-      );
-      await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
-      await expect(page.getByLabel('Chọn PDF', { exact: true })).toBeDisabled();
-      await expect(
-        page.getByRole('button', { name: 'Tải trạng thái duyệt', exact: true }),
-      ).toBeEnabled();
-      await page.unroute('**/api/v1/material-drafts/*/submit');
-      await page.getByRole('button', { name: 'Tải trạng thái duyệt', exact: true }).click();
+      // Compatibility: a lecturer's pending request created before self-publication can still be withdrawn.
+      const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+      const legacy = await page.request.patch(`/api/v1/material-drafts/${item.id}`, {
+        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+        data: {
+          title: item.title,
+          authors: item.authors,
+          description: item.description,
+          materialType: item.materialType,
+          sourceReference: 'Synthetic legacy source',
+          rightsBasis: 'Synthetic legacy declaration',
+          downloadAllowed: item.downloadAllowed,
+          courseIds: item.courses.map((c: { id: string }) => c.id),
+          revision: item.revision,
+        },
+      });
+      expect(legacy.status()).toBe(200);
+      const legacyRevision = (await legacy.json()).item.revision;
+      expect(
+        (
+          await page.request.post(`/api/v1/material-drafts/${item.id}/submit`, {
+            headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
+            data: { revision: legacyRevision },
+          })
+        ).status(),
+      ).toBe(201);
+      await page.getByRole('button', { name: refreshLabel, exact: true }).click();
       await expect(page.getByRole('button', { name: 'Rút về nháp', exact: true })).toBeVisible();
-    } else
+    } else {
+      await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
+      await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
       await expect(
         page.getByRole('status').filter({ hasText: 'Đã gửi yêu cầu duyệt' }),
       ).toBeVisible();
+    }
     await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
     await expect(page.getByLabel('Chọn PDF', { exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Rút về nháp', exact: true })).toBeDisabled();
@@ -896,9 +1497,7 @@ for (const role of ['student', 'lecturer'] as const)
     await page.getByRole('button', { name: 'Tiếp tục sửa', exact: true }).click();
     await page.route('**/api/v1/material-drafts/*/withdraw', (route) => route.abort('failed'));
     await page.getByRole('button', { name: 'Rút về nháp', exact: true }).click();
-    await expect(page.locator('.publication-actions [role="alert"]')).toContainText(
-      'Tải trạng thái duyệt',
-    );
+    await expect(page.locator('.publication-actions [role="alert"]')).toContainText(refreshLabel);
     await expect(page.getByLabel('Lý do rút yêu cầu', { exact: true })).toHaveValue(
       'Bổ sung nguồn tài liệu trước khi duyệt',
     );
@@ -924,7 +1523,7 @@ for (const role of ['student', 'lecturer'] as const)
       }
     }
     await page.unroute('**/api/v1/material-drafts/*/withdraw');
-    await page.getByRole('button', { name: 'Tải trạng thái duyệt', exact: true }).click();
+    await page.getByRole('button', { name: refreshLabel, exact: true }).click();
     await expect(page.getByRole('button', { name: 'Rút về nháp', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Rút về nháp', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Đã rút về bản nháp' })).toBeVisible();
@@ -935,7 +1534,9 @@ for (const role of ['student', 'lecturer'] as const)
         .filter({ hasText: 'Lý do: Bổ sung nguồn tài liệu trước khi duyệt' }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Đóng bản nháp', exact: true }).click();
-    await page.getByLabel('Trạng thái duyệt', { exact: true }).selectOption('SUBMITTED');
+    await page
+      .getByLabel(role === 'lecturer' ? 'Trạng thái công bố' : 'Trạng thái duyệt', { exact: true })
+      .selectOption('SUBMITTED');
     await page.getByLabel('Tìm bản nháp', { exact: true }).fill(code);
     await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
     await expect(

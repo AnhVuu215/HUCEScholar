@@ -68,12 +68,55 @@
   min-height: 240px;
 }
 .reader-page {
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
   position: relative;
   margin: 0 auto;
   background: var(--paper);
 }
 .reader-page canvas {
   display: block;
+}
+.pdf-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pdf-highlight {
+  position: absolute;
+  opacity: 0.65;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.reader-highlight-tools {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--paper);
+}
+.highlight-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 0;
+}
+.highlight-quote {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--ground);
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reader-highlights select {
+  min-height: 44px;
+  padding: 8px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
 }
 .reader-source {
   margin: 24px 0;
@@ -212,6 +255,21 @@ button:disabled {
   width: 100%;
   max-width: 400px;
 }
+.install-box {
+  max-width: 480px;
+}
+.install-guide {
+  margin-top: 24px;
+}
+.install-guide h2 {
+  margin: 32px 0 12px;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.install-guide p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .auth-description {
   margin-top: 16px;
   color: var(--muted);
@@ -228,7 +286,9 @@ button:disabled {
   font-weight: 600;
 }
 .form-field input,
-.form-field textarea {
+.form-field textarea,
+.form-field select,
+.users-management select {
   min-height: 48px;
   width: 100%;
   border: 1px solid #b8c9de;
@@ -335,7 +395,7 @@ button:disabled {
 .account-heading .intro {
   overflow-wrap: anywhere;
 }
-.sidebar nav [aria-current='page'] {
+.workspace-sidebar nav [aria-current='page'] {
   color: var(--paper);
   background: var(--nav-active);
 }
@@ -383,7 +443,7 @@ h2 {
 .skip-link:focus {
   transform: translateY(0);
 }
-.sidebar {
+.workspace-sidebar {
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -411,28 +471,55 @@ h2 {
 .sidebar-description {
   font-size: 0.875rem;
 }
-.sidebar nav {
+.workspace-sidebar nav {
   display: grid;
   gap: 8px;
 }
-.sidebar nav a {
+.workspace-sidebar nav a {
   padding: 10px 12px;
   min-height: 44px;
   color: var(--nav-ink);
   border-radius: 6px;
   text-decoration: none;
 }
-.sidebar nav a:hover {
+.workspace-sidebar nav a:hover {
   color: var(--paper);
   background: var(--nav-active);
 }
-.sidebar a:focus-visible {
+.workspace-sidebar a:focus-visible,
+.workspace-sidebar button:focus-visible {
   outline-color: var(--nav-ink);
 }
 .sidebar-note {
   margin-top: auto;
   padding-top: 48px;
   font-size: 0.8125rem;
+}
+.workspace-sidebar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.workspace-menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--nav-ink);
+  border-radius: 6px;
+  color: var(--paper);
+  background: transparent;
+}
+.workspace-menu-toggle:hover {
+  background: var(--nav-active);
+}
+.workspace-sidebar nav .workspace-utility-link {
+  margin-top: 16px;
+  border-top: 1px solid var(--nav-active);
+  border-radius: 0;
 }
 .workspace {
   width: 100%;
@@ -614,15 +701,6 @@ h2 {
   padding: 0;
   margin: 0;
   border: 0;
-}
-.users-management select {
-  width: 100%;
-  min-height: 48px;
-  border: 1px solid #b8c9de;
-  border-radius: 6px;
-  padding: 10px 12px;
-  background: var(--paper);
-  color: var(--ink);
 }
 .eligibility-check {
   display: flex;
@@ -808,6 +886,36 @@ h2 {
 .lifecycle-history-pagination > * {
   white-space: nowrap;
 }
+.saved-control {
+  margin-block: 16px;
+}
+.saved-control > button {
+  margin: 0 8px 8px 0;
+}
+.personal-library > h2 {
+  margin-top: 28px;
+}
+.personal-library article {
+  width: 100%;
+  min-width: 0;
+}
+.personal-library article > .primary-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 12px;
+}
+.personal-pagination {
+  flex-wrap: wrap;
+}
+.personal-library > .user-form-actions {
+  align-items: center;
+  margin-top: 0;
+}
+.personal-library > .user-form-actions > button,
+.saved-control .user-form-actions > button {
+  margin-top: 0;
+}
 
 .catalog-tabs {
   display: flex;
@@ -956,17 +1064,40 @@ h2 {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
   }
-  .sidebar {
+  .workspace-sidebar {
     padding: 20px 24px;
     gap: 12px;
   }
-  .sidebar nav {
+  .workspace-sidebar nav {
     display: flex;
     flex-wrap: wrap;
     gap: 4px 12px;
   }
   .sidebar-description,
   .sidebar-note {
+    display: none;
+  }
+  .workspace-menu-toggle {
+    display: inline-flex;
+  }
+  .workspace-sidebar[data-menu-open] nav {
+    display: none;
+  }
+  .workspace-sidebar[data-menu-open='true'] nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--nav-active);
+  }
+  .workspace-sidebar[data-menu-open] nav a {
+    margin-top: 0;
+    border: 0;
+    border-radius: 6px;
+    overflow-wrap: anywhere;
+  }
+  .login-layout .auth-introduction,
+  .login-layout .auth-foot {
     display: none;
   }
   .workspace {
@@ -1034,14 +1165,14 @@ h2 {
   .account-details {
     padding: 20px;
   }
-  .sidebar {
+  .workspace-sidebar {
     padding-inline: 20px;
   }
-  .sidebar nav {
+  .workspace-sidebar nav {
     gap: 0 8px;
   }
-  .sidebar nav a {
-    padding-inline: 4px;
+  .workspace-sidebar nav a {
+    padding-inline: 10px;
     font-size: 0.875rem;
   }
   .workspace {
