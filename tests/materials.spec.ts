@@ -700,6 +700,153 @@ test('lifecycle admin transfers published material and recovers a stale hide bef
   }
 });
 
+for (const historyMode of ['native', 'legacy'] as const) {
+  test(`reader draft survives cancelled browser back and forward without adding history entries (${historyMode})`, async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    if (historyMode === 'legacy') {
+      await page.addInitScript(() => {
+        Object.defineProperty(window, 'navigation', { value: undefined });
+      });
+    }
+    const path = await openPersonalReader(page, 'e2e-notes');
+    const readerUrl = path.replace('/api/v1', '/workspace');
+    // Real Next links create same-document history; page.goto would only test beforeunload.
+    await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
+    await page.locator(`a[href="${readerUrl}"]`).click();
+    const editor = page.getByLabel('Nội dung ghi chú', { exact: true });
+    await expect(editor).toBeVisible();
+    const historyLength = await page.evaluate(() => history.length);
+    await editor.fill('Bản soạn cần giữ khi quay lại');
+    expect(await page.evaluate(() => JSON.stringify(history.state))).not.toContain(
+      'Bản soạn cần giữ',
+    );
+    let prompts = 0;
+    const dismiss = async (dialog: import('@playwright/test').Dialog) => {
+      prompts++;
+      await dialog.dismiss();
+    };
+    page.on('dialog', dismiss);
+    // A pending framework write can arrive while popstate is returning to the reader.
+    // Keep its opaque state intact and ensure it cannot overwrite the traversed-to index.
+    await page.evaluate(() => {
+      const state = history.state;
+      const go = history.go;
+      history.go = function (delta) {
+        history.go = go;
+        history.replaceState(state, '');
+        go.call(history, delta);
+      };
+    });
+    await page.evaluate(() => history.back());
+    await expect.poll(() => prompts).toBe(1);
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toHaveValue('Bản soạn cần giữ khi quay lại');
+    expect(await page.evaluate(() => history.length)).toBe(historyLength);
+    await page.evaluate(() => history.back());
+    await expect.poll(() => prompts).toBe(2);
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toHaveValue('Bản soạn cần giữ khi quay lại');
+    await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
+    await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
+    await expect(page).toHaveURL('/workspace/library');
+    await page.goBack();
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toBeVisible();
+    await editor.fill('Bản soạn cần giữ khi tiến tới');
+    await page.evaluate(() => history.forward());
+    await expect.poll(() => prompts).toBe(3);
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toHaveValue('Bản soạn cần giữ khi tiến tới');
+    expect(await page.evaluate(() => history.length)).toBe(historyLength + 1);
+    page.off('dialog', dismiss);
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.goForward();
+    await expect(page).toHaveURL('/workspace/library');
+    await expect(editor).toHaveCount(0);
+  });
+}
+
+test('reader history guard handles fragments, multi-entry traversal and an in-flight save', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const path = await openPersonalReader(page, 'e2e-notes');
+  const readerUrl = path.replace('/api/v1', '/workspace');
+  await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
+  await expect(page).toHaveURL('/workspace/library');
+  await page.getByRole('link', { name: 'Thư viện của tôi', exact: true }).click();
+  await expect(page).toHaveURL('/workspace/personal-library');
+  await page.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
+  await page.locator(`a[href="${readerUrl}"]`).click();
+  await expect(page.getByLabel('Nội dung ghi chú', { exact: true })).toBeVisible();
+  // Reload must retain the indices of earlier Next entries, without persisting the draft.
+  await page.reload();
+  const editor = page.getByLabel('Nội dung ghi chú', { exact: true });
+  await editor.fill('Bản soạn khi chuyển nhiều bước');
+  let prompts = 0;
+  page.on('dialog', async (dialog) => {
+    prompts++;
+    await dialog.dismiss();
+  });
+  await page.evaluate(() => {
+    location.hash = 'khong-gian';
+  });
+  await expect(page).toHaveURL(`${readerUrl}#khong-gian`);
+  const length = await page.evaluate(() => history.length);
+  await page.evaluate(() => history.go(-3));
+  await expect.poll(() => prompts).toBe(1);
+  await expect(page).toHaveURL(`${readerUrl}#khong-gian`);
+  await expect(editor).toHaveValue('Bản soạn khi chuyển nhiều bước');
+  expect(await page.evaluate(() => history.length)).toBe(length);
+  // Hash-only traversal stays in the reader and does not ask to discard the draft.
+  await page.goBack();
+  await expect(page).toHaveURL(readerUrl);
+  expect(prompts).toBe(1);
+  await expect(editor).toHaveValue('Bản soạn khi chuyển nhiều bước');
+  await page.goForward();
+  await expect(page).toHaveURL(`${readerUrl}#khong-gian`);
+  await expect(editor).toHaveValue('Bản soạn khi chuyển nhiều bước');
+  await page.goBack();
+  await expect(page).toHaveURL(readerUrl);
+
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let saving = false;
+  await page.route('**/api/v1/library/versions/*/notes', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    saving = true;
+    await held;
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'Lưu ghi chú', exact: true }).click();
+  await expect.poll(() => saving).toBe(true);
+  let traversals = 0;
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) traversals++;
+  });
+  try {
+    await page.evaluate(() => history.go(-2));
+    await expect.poll(() => traversals).toBeGreaterThanOrEqual(2);
+    await expect(page).toHaveURL(readerUrl);
+    await expect(editor).toHaveValue('Bản soạn khi chuyển nhiều bước');
+    expect(prompts).toBe(1);
+  } finally {
+    release();
+  }
+  await expect(editor).toHaveValue('');
+  await expect(editor).toBeEditable();
+  await page.evaluate(() => history.go(-2));
+  await expect(page).toHaveURL('/workspace/personal-library');
+  expect(prompts).toBe(1);
+  const notes = (await (await page.request.get(`${path}/notes?pageNumber=1`)).json()).items;
+  expect(notes).toHaveLength(1);
+  expect(notes[0].content).toBe('Bản soạn khi chuyển nhiều bước');
+});
+
 test('private page notes preserve drafts, recover lost responses and reject stale edits', async ({
   page,
 }) => {

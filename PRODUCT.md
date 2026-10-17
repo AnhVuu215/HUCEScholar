@@ -6,6 +6,8 @@
 
 web
 
+Ưu tiên hiện tại17/10/2026: hoàn thiện và kiểm chứng luồng web. Theo yêu cầu người dùng, tạm hoãn cài PWA và thử nghiệm cài trên thiết bị; nền tảng PWA hiện có được giữ nguyên.
+
 ## Stack
 
 Đã chốt công nghệ MVP ngày 11/10/2026: web responsive + PWA cho desktop, điện thoại và máy tính bảng; người dùng chọn chưa phát hành app native trong MVP. Next.js/React + TypeScript + Tailwind CSS; NestJS REST API; PostgreSQL + Prisma với migration SQL tùy chỉnh; PDF.js; Amazon S3 private; BullMQ/Redis và worker kiểm tra file ClamAV/Poppler; Docker Compose. Chi tiết, ranh giới và điều kiện kiểm chứng ở docs/HUCEScholar-tech-stack.md. Đã có workspace apps/web và apps/api, migration PostgreSQL 23 bảng, đăng nhập/đăng xuất bằng cookie phiên, phân quyền ba vai trò tại API, màn hình tài khoản responsive, UI Admin cấp/sửa/khóa/mở khóa tài khoản giảng viên/sinh viên và kiểm thử tự động. Đã có danh mục khoa/ngành/môn, liên kết ngành dùng chung và phân công/thu hồi có lịch sử; giảng viên xem phân công riêng. Chưa có học liệu được cấp quyền thật, dịch vụ mail. PWA đã có icon PNG, hướng dẫn cài và service worker chỉ lưu offline fallback/icon công khai; PDF và ghi chú vẫn cần mạng. HTML/CSS/JavaScript tĩnh trong design/ vẫn chỉ là prototype thiết kế.
@@ -28,6 +30,7 @@ Tập trung trải nghiệm tìm học liệu, đọc tài liệu điện tử v
 - Đọc/tải phụ thuộc quyền nguồn, file an toàn, phiên bản được duyệt và tài liệu không bị ẩn.
 - APPROVED là trạng thái nội bộ của bản đã duyệt hoặc tự công bố; publicationMethod phân biệt ADMIN_REVIEW và LECTURER_SELF. Giao diện không mô tả tự công bố là admin đã duyệt. Giữ PDF25MiB, môn/phân công, ownership và ghi chú theo phiên bản.
 - Ghi chú riêng gắn người, phiên bản, trang. Bản PDF mới không tự chuyển ghi chú cũ. Chưa xuất PDF kèm ghi chú hoặc offline.
+- Reader đã có guard Back/Forward trong lịch sử ứng dụng: chọn ở lại giữ bản soạn, đang lưu chặn rời trang; không lưu nội dung vào history hoặc bộ nhớ browser lâu dài. Phạm vi và giới hạn ở docs/implementation/2026-10-17-web-reader-history.md.
 - Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây cho cả ba vai trò. Đã lưu mở bản hiện hành; đọc gần đây giữ đúng phiên bản/trang. Bỏ lưu giữ ghi chú và tiến độ. Mục mất quyền chỉ hiện nhãn chung, không lộ metadata.
 - Thư viện mini là metadata và nguồn được phép; API trường và quyền lưu toàn văn chưa xác nhận.
 - Bàn giao chỉ giáo trình giảng viên; người nhận hoạt động và được phân công mọi môn liên quan. Bản đang gửi bị rút về nháp, lịch sử/tác giả/ghi chú được giữ.
