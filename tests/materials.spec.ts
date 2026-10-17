@@ -806,6 +806,21 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
   await expect(row.getByText('Đã sửa vùng tô', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 360, height: 900 });
+  await row.getByRole('button', { name: 'Sửa vùng tô', exact: true }).click();
+  await editor.fill('Bản soạn khi mở menu điện thoại');
+  const menu = page.getByRole('button', { name: 'Menu', exact: true });
+  await menu.click();
+  page.on('dialog', stay);
+  await page
+    .getByRole('navigation', { name: 'Điều hướng không gian' })
+    .getByRole('link', { name: 'Kho học liệu', exact: true })
+    .click();
+  expect(leavePrompts).toBe(2);
+  await expect(menu).toHaveAttribute('aria-expanded', 'true');
+  await expect(editor).toHaveValue('Bản soạn khi mở menu điện thoại');
+  page.off('dialog', stay);
+  await menu.press('Escape');
+  await page.getByRole('button', { name: 'Hủy vùng tô', exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);

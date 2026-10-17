@@ -9,7 +9,7 @@ THESIS: A learning shelf with the clarity of a civil-engineering publication. Us
 
 OWN-WORLD: Existing HUCE-inspired navy #001e42, action blue #0056a6, pale blue and white grounds. Self-host Be Vietnam Pro for this public page only; preserve working screens. Flat geometric book jackets, precise linework, modest control corners, generous reading space. No official HUCE logo or borrowed NEU assets.
 
-STORY: Understand the platform, see illustrative subjects, discover what works today, choose a role guide, sign in. Examples are labeled; unfinished reading/notes and publication remain explicit.
+STORY: Understand the platform, see illustrative subjects, discover what works today, choose a role guide, sign in. Examples are labeled. Student guide starts with finding/reading and private notes; lecturer guide explains self-publication after a safe scan. Highlight is available for text PDFs; scanned PDFs retain page notes and reading still requires a network connection.
 
 FIRST VIEWPORT: Horizontal header, navigation and login. Left: large learning promise, short explanation, login CTA. Right: three authored typographic book jackets at varied heights. Mobile keeps headline/CTA first then compact shelf. No invented metrics.
 
