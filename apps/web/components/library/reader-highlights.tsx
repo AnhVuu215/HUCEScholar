@@ -5,11 +5,12 @@ import { ApiError } from '../../lib/auth';
 import { personalError } from '../../lib/reading';
 import {
   highlightColors,
+  highlightColorLabel,
+  isHighlightColor,
   readHighlights,
   removeHighlight,
   writeHighlight,
   type HighlightAnchor,
-  type HighlightColor,
   type TextHighlight,
 } from '../../lib/highlights';
 import { quadBounds, selectedAnchor, type HighlightSurface } from '../../lib/highlight-geometry';
@@ -44,7 +45,7 @@ export function ReaderHighlights({
   } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null),
     [content, setContent] = useState('');
-  const [color, setColor] = useState<HighlightColor>('#FFF59D');
+  const [color, setColor] = useState('#FFF59D');
   const [deleting, setDeleting] = useState<TextHighlight | null>(null);
   const [busy, setBusy] = useState(false),
     [uncertain, setUncertain] = useState(false);
@@ -156,7 +157,7 @@ export function ReaderHighlights({
     setNotice('');
   }
   async function save() {
-    if (!draft || busy) return;
+    if (!draft || busy || !isHighlightColor(color)) return;
     setBusy(true);
     setError('');
     setNotice('');
@@ -293,9 +294,14 @@ export function ReaderHighlights({
               size="default"
               value={color}
               disabled={locked}
-              onChange={(value) => setColor(value as HighlightColor)}
+              onChange={setColor}
               options={Object.entries(highlightColors).map(([value, label]) => ({ value, label }))}
             />
+            {!isHighlightColor(color) && (
+              <p role="alert" className="form-error">
+                {highlightColorLabel(color)}. Chọn một màu trong bảng trước khi lưu thay đổi.
+              </p>
+            )}
             <label htmlFor="highlight-content">Ghi chú cho đoạn tô</label>
             <textarea
               ref={input}
@@ -314,7 +320,7 @@ export function ReaderHighlights({
               <p className="field-hint">Giữ nguyên bản soạn để thử lại đúng lần lưu.</p>
             )}
             <div className="note-actions">
-              <button className="primary-button" disabled={busy}>
+              <button className="primary-button" disabled={busy || !isHighlightColor(color)}>
                 {busy ? 'Đang lưu vùng tô…' : 'Lưu vùng tô'}
               </button>
               <button type="button" className="secondary-button" disabled={busy} onClick={discard}>
@@ -338,7 +344,7 @@ export function ReaderHighlights({
               <blockquote className="highlight-quote">{item.anchor.quote}</blockquote>
               <p className="note-content">{item.content || 'Chưa thêm ghi chú.'}</p>
               <p className="field-hint">
-                {highlightColors[item.color]} · Trang {item.pageNumber}
+                {highlightColorLabel(item.color)} · Trang {item.pageNumber}
               </p>
               <div className="note-actions">
                 <button
