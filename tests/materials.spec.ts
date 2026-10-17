@@ -93,7 +93,7 @@ async function markSyntheticSafe(id: string, pageCount = 1) {
   try {
     // Explicit synthetic scan fixture; does not claim real scanner evidence.
     const result = await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-personal-%@example.test' OR u.email LIKE 'e2e-selfpublish-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-highlights-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-personal-%@example.test' OR u.email LIKE 'e2e-selfpublish-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
       [id, pageCount],
     );
     expect(result.rowCount).toBe(1);
@@ -698,6 +698,216 @@ test('lifecycle admin transfers published material and recovers a stale hide bef
       await page.screenshot({ path: `.impeccable/review/lifecycle/${name}.png`, fullPage: true });
     }
   }
+});
+
+test('private PDF text highlights survive retry, zoom, rotation, page changes and reload', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  const path = await openPersonalReader(page, 'e2e-highlights');
+  const text = page
+    .locator('.textLayer span')
+    .filter({ hasText: 'HUCEScholar reader fixture' })
+    .first();
+  const box = (await text.boundingBox())!;
+  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2, { steps: 15 });
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Tô sáng đoạn chọn', exact: true }).click();
+  const editor = page.getByLabel('Ghi chú cho đoạn tô', { exact: true });
+  await editor.fill('Điểm cần nhớ <b>riêng tư</b>');
+  const pageNote = page.getByLabel('Nội dung ghi chú', { exact: true });
+  await pageNote.fill('Bản soạn ghi chú theo trang');
+  let leavePrompts = 0;
+  const stay = async (dialog: import('@playwright/test').Dialog) => {
+    leavePrompts++;
+    await dialog.dismiss();
+  };
+  page.on('dialog', stay);
+  await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
+  expect(leavePrompts).toBe(1);
+  await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
+  await expect(pageNote).toHaveValue('Bản soạn ghi chú theo trang');
+  page.off('dialog', stay);
+  await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
+  await page.getByLabel('Màu tô sáng', { exact: true }).selectOption('#90CAF9');
+  await page.route('**/api/v1/library/versions/*/highlights', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    await route.fetch();
+    await route.abort();
+  });
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Chưa xác nhận được lần lưu' }),
+  ).toBeVisible();
+  await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
+  await page.unroute('**/api/v1/library/versions/*/highlights');
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+  );
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lưu vùng tô', exact: true })).toBeEnabled();
+  await expect(editor).toHaveAttribute('readonly', '');
+  await expect(page.getByLabel('Màu tô sáng', { exact: true })).toBeDisabled();
+  await page.unroute('**/api/v1/auth/csrf');
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  const list = (await (await page.request.get(`${path}/highlights?pageNumber=1`)).json()).items;
+  expect(list).toHaveLength(1);
+  const id = list[0].id;
+  const overlay = page.locator(`[data-highlight-id="${id}"]`).first();
+  await expect(overlay).toBeVisible();
+  for (const angle of [0, 90, 180, 270]) {
+    if (angle) await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
+    await page
+      .getByLabel('Mức phóng', { exact: true })
+      .selectOption(angle === 180 ? '0.75' : '1.25');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' }),
+    ).toBeVisible();
+    await expect
+      .poll(async () => {
+        const a = await overlay.boundingBox();
+        const b = await text.evaluate((node, quote: string) => {
+          const value = node.firstChild!;
+          const start = value.textContent!.indexOf(quote);
+          const range = document.createRange();
+          range.setStart(value, start);
+          range.setEnd(value, start + quote.length);
+          const rect = range.getBoundingClientRect();
+          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        }, list[0].anchor.quote);
+        return (
+          !!a &&
+          !!b &&
+          Math.abs(a.x - b.x) < 4 &&
+          Math.abs(a.y - b.y) < 4 &&
+          Math.abs(a.width - b.width) < 5 &&
+          Math.abs(a.height - b.height) < 5
+        );
+      })
+      .toBe(true);
+  }
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(overlay).toHaveCount(0);
+  await page.getByRole('button', { name: 'Trang trước', exact: true }).click();
+  await expect(overlay).toBeVisible();
+  await page.reload();
+  await expect(overlay).toBeVisible();
+  const row = page.getByRole('article', { name: `Vùng tô ${id}`, exact: true });
+  await expect(row.getByText('Điểm cần nhớ <b>riêng tư</b>', { exact: true })).toBeVisible();
+  expect(await row.locator('b').count()).toBe(0);
+  // Click through the overlay into the PDF text, then edit the existing selection.
+  const hit = (await overlay.boundingBox())!;
+  await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
+  await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
+  await editor.fill('Đã sửa vùng tô');
+  await page.getByLabel('Màu tô sáng', { exact: true }).selectOption('#A5D6A7');
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  await expect(row.getByText('Đã sửa vùng tô', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 360, height: 900 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+  if (process.env.CAPTURE_HIGHLIGHTS_UI === '1') {
+    mkdirSync('.impeccable/review/highlights', { recursive: true });
+    await row.getByRole('button', { name: 'Sửa vùng tô', exact: true }).click();
+    for (const [name, width, height] of [
+      ['mobile', 360, 900],
+      ['tablet', 768, 1000],
+      ['desktop', 1440, 1100],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(overlay).toBeVisible();
+      expect(
+        await page.evaluate(() => {
+          const toolbar = document
+            .querySelector('.reader-highlight-tools')!
+            .getBoundingClientRect();
+          const region = document
+            .querySelector('.reader-highlight-region')!
+            .getBoundingClientRect();
+          return toolbar.bottom <= region.bottom + 2;
+        }),
+      ).toBe(true);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: `.impeccable/review/highlights/${name}.png`, fullPage: true });
+    }
+    await page.getByRole('button', { name: 'Hủy vùng tô', exact: true }).click();
+  }
+  await row.getByRole('button', { name: 'Xóa vùng tô', exact: true }).click();
+  await row.getByRole('button', { name: 'Xác nhận xóa', exact: true }).click();
+  await expect(overlay).toHaveCount(0);
+  expect((await (await page.request.get(`${path}/highlights?pageNumber=1`)).json()).items).toEqual(
+    [],
+  );
+});
+
+test('highlights load all cursor pages, retry failures and retain a stale draft on its original page', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const path = await openPersonalReader(page, 'e2e-highlights-list');
+  const token = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
+  const headers = { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': token };
+  const anchor = {
+    coordinateSpace: 'normalized-pdf-v1',
+    quote: 'HUCEScholar reader fixture',
+    quads: [[0.1, 0.9, 0.5, 0.9, 0.5, 0.85, 0.1, 0.85]],
+  };
+  const results = await Promise.all(
+    Array.from({ length: 31 }, (_, i) =>
+      page.request.post(`${path}/highlights`, {
+        headers,
+        data: {
+          pageNumber: 1,
+          anchor,
+          content: `Ghi chú ${i}`,
+          color: '#FFF59D',
+          requestId: crypto.randomUUID(),
+        },
+      }),
+    ),
+  );
+  expect(results.every((r) => r.status() === 201)).toBe(true);
+  const target = (await results[0].json()).item;
+  await page.getByRole('button', { name: 'Tải lại vùng tô', exact: true }).click();
+  await expect(page.locator('[data-highlight-id]')).toHaveCount(31);
+  await page.route('**/api/v1/library/versions/*/highlights?**', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+  );
+  await page.getByRole('button', { name: 'Tải lại vùng tô', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Chưa tải được vùng tô' })).toBeVisible();
+  await expect(page.locator('[data-highlight-id]')).toHaveCount(0);
+  await page.unroute('**/api/v1/library/versions/*/highlights?**');
+  await page.getByRole('button', { name: 'Tải lại vùng tô', exact: true }).click();
+  await expect(page.locator('[data-highlight-id]')).toHaveCount(31);
+  const row = page.getByRole('article', { name: `Vùng tô ${target.id}`, exact: true });
+  await row.getByRole('button', { name: 'Sửa vùng tô', exact: true }).click();
+  const editor = page.getByLabel('Ghi chú cho đoạn tô', { exact: true });
+  await editor.fill('Bản soạn tab hiện tại');
+  await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Sửa vùng tô · Trang 1', exact: true }),
+  ).toBeVisible();
+  await expect(editor).toHaveValue('Bản soạn tab hiện tại');
+  expect(
+    (
+      await page.request.patch(`${path}/highlights/${target.id}`, {
+        headers,
+        data: { revision: 1, content: 'Đã sửa ở tab khác', color: '#90CAF9' },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Vùng tô đã thay đổi' })).toBeVisible();
+  await expect(editor).toHaveValue('Bản soạn tab hiện tại');
+  await page.getByRole('button', { name: 'Trang trước', exact: true }).click();
+  await expect(row.getByText('Đã sửa ở tab khác', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Hủy vùng tô', exact: true }).click();
+  await row.getByRole('button', { name: 'Sửa vùng tô', exact: true }).click();
+  await expect(editor).toHaveValue('Đã sửa ở tab khác');
+  await page.getByRole('button', { name: 'Hủy vùng tô', exact: true }).click();
 });
 
 for (const historyMode of ['native', 'legacy'] as const) {

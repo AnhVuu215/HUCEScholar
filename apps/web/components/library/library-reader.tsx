@@ -12,8 +12,12 @@ import { libraryVersion, libraryError, type LibraryItem } from '../../lib/librar
 import { ReaderNotes } from './reader-notes';
 import { useReadingProgress } from './use-reading-progress';
 import { SaveMaterial } from './save-material';
+import { ReaderHighlights } from './reader-highlights';
+import type { HighlightSurface } from '../../lib/highlight-geometry';
 
 export function LibraryReader({ id }: { id: string }) {
+  const [surface, setSurface] = useState<HighlightSurface | null>(null);
+  const [highlightTools, setHighlightTools] = useState<HTMLDivElement | null>(null);
   const [item, setItem] = useState<LibraryItem | null>(null),
     [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState(''),
@@ -99,7 +103,8 @@ export function LibraryReader({ id }: { id: string }) {
           Math.sqrt(8_000_000 / (viewport.width * viewport.height)),
         );
         const canvas = document.createElement('canvas'),
-          layer = document.createElement('div');
+          layer = document.createElement('div'),
+          overlay = document.createElement('div');
         canvas.width = Math.max(1, Math.floor(viewport.width * ratio));
         canvas.height = Math.max(1, Math.floor(viewport.height * ratio));
         canvas.style.width = `${viewport.width}px`;
@@ -107,10 +112,11 @@ export function LibraryReader({ id }: { id: string }) {
         canvas.setAttribute('aria-label', `Trang PDF ${page}`);
         canvas.setAttribute('role', 'img');
         layer.className = 'textLayer';
+        overlay.className = 'pdf-highlight-layer';
         pageNode.style.width = `${viewport.width}px`;
         pageNode.style.height = `${viewport.height}px`;
-        pageNode.style.setProperty('--total-scale-factor', String(scale));
-        pageNode.append(canvas, layer);
+        pageNode.style.setProperty('--total-scale-factor', String(scale * pdfPage.userUnit));
+        pageNode.append(canvas, overlay, layer);
         render = pdfPage.render({
           canvas,
           viewport,
@@ -126,6 +132,14 @@ export function LibraryReader({ id }: { id: string }) {
         });
         await text.render();
         if (!controller.signal.aborted) {
+          setSurface({
+            key: `${page}:${zoom}:${rotation}:${width}`,
+            page,
+            element: pageNode,
+            layer,
+            overlay,
+            viewport,
+          });
           setRendered(`${page}:${zoom}:${rotation}:${width}`);
           reportRendered(page);
         }
@@ -293,13 +307,16 @@ export function LibraryReader({ id }: { id: string }) {
                   Tài liệu scan có thể không chọn được chữ. OCR chưa được hỗ trợ.
                 </p>
               )}
-              <div
-                className="reader-stage"
-                ref={stage}
-                tabIndex={0}
-                aria-label="Trang tài liệu; cuộn ngang khi phóng lớn"
-              >
-                <div ref={paper} />
+              <div className="reader-highlight-region">
+                <div ref={setHighlightTools} className="reader-highlight-tools" />
+                <div
+                  className="reader-stage"
+                  ref={stage}
+                  tabIndex={0}
+                  aria-label="Trang tài liệu; cuộn ngang khi phóng lớn"
+                >
+                  <div ref={paper} />
+                </div>
               </div>
               <details className="reader-source">
                 <summary>
@@ -341,11 +358,20 @@ export function LibraryReader({ id }: { id: string }) {
                 <p>{item.description}</p>
               </details>
               <p className="field-hint">
-                Chưa hỗ trợ highlight hoặc đọc offline. Chỉ đọc không phải cơ chế chống sao chép.
+                Vùng tô và ghi chú cần mạng để lưu. Chưa đọc offline hoặc xuất PDF kèm ghi chú.
               </p>
             </>
           )}
         </>
+      )}
+      {item && (
+        <ReaderHighlights
+          versionId={id}
+          page={page}
+          surface={!error && rendered === renderKey && surface?.key === renderKey ? surface : null}
+          tools={highlightTools}
+          available={!error}
+        />
       )}
       {item && <ReaderNotes versionId={id} page={page} />}
     </section>

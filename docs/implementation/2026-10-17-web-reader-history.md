@@ -1,5 +1,7 @@
 # Tiếp tục bản web — 17/10/2026
 
+Cập nhật tiếp: đã triển khai vùng tô chữ và ghi chú theo đoạn PDF. Xem [mốc highlight](2026-10-17-pdf-text-highlights.md); mục highlight trong thứ tự tiếp theo bên dưới là kế hoạch ở checkpoint trước thay đổi này.
+
 Nhánh `codex/reader-history-guard`, tiếp nối `7e9ec26`. Ưu tiên web; người dùng đã yêu cầu tạm hoãn cài PWA. Không thêm dependency, API, migration hay thay đổi quyền đọc/ghi chú.
 
 ## Trạng thái sản phẩm

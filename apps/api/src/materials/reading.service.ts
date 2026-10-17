@@ -9,6 +9,8 @@ import { Prisma, type annotations, type reading_progress } from '../generated/pr
 import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { LibraryService } from './library.service';
+import { isDeepStrictEqual } from 'node:util';
+import { CreateHighlightDto, UpdateHighlightDto } from './highlight.dto';
 import {
   CreateNoteDto,
   NotesQueryDto,
@@ -24,6 +26,7 @@ const noteItem = (n: annotations) => ({
   content: n.content,
   revision: n.revision,
   updatedAt: n.updated_at.toISOString(),
+  ...(n.kind === 'TEXT_HIGHLIGHT' ? { anchor: n.anchor, color: n.color } : {}),
 });
 const progressItem = (p: reading_progress | null) =>
   p
@@ -57,6 +60,7 @@ export class ReadingService {
       owner: bigint,
       version: bigint,
       pages: number | null,
+      textLayer: boolean | null,
     ) => Promise<T>,
   ) {
     const owner = academicId(actor.id),
@@ -67,10 +71,16 @@ export class ReadingService {
       if (writing)
         await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:reading:${owner}`}, 0))`;
       const row = await this.library.access(tx, actor, version);
-      return action(tx, owner, version, row.files!.page_count);
+      return action(tx, owner, version, row.files!.page_count, row.files!.has_text_layer);
     });
   }
   notes(actor: Profile, id: string, query: NotesQueryDto) {
+    return this.list(actor, id, query, 'PAGE_NOTE');
+  }
+  highlights(actor: Profile, id: string, query: NotesQueryDto) {
+    return this.list(actor, id, query, 'TEXT_HIGHLIGHT');
+  }
+  private list(actor: Profile, id: string, query: NotesQueryDto, kind: string) {
     const cursor = query.cursor ? academicId(query.cursor) : undefined;
     return this.run(actor, id, false, async (tx, user_id, version_id, pages) => {
       pageWithin(query.pageNumber, pages);
@@ -79,7 +89,7 @@ export class ReadingService {
           user_id,
           version_id,
           page_number: query.pageNumber,
-          kind: 'PAGE_NOTE',
+          kind,
           ...(cursor ? { id: { lt: cursor } } : {}),
         },
         orderBy: { id: 'desc' },
@@ -92,7 +102,16 @@ export class ReadingService {
     });
   }
   create(actor: Profile, id: string, dto: CreateNoteDto) {
-    return this.run(actor, id, true, async (tx, user_id, version_id, pages) => {
+    return this.createAnnotation(actor, id, dto);
+  }
+  createHighlight(actor: Profile, id: string, dto: CreateHighlightDto) {
+    return this.createAnnotation(actor, id, dto);
+  }
+  private createAnnotation(actor: Profile, id: string, dto: CreateNoteDto | CreateHighlightDto) {
+    const highlight = 'anchor' in dto;
+    const kind = highlight ? 'TEXT_HIGHLIGHT' : 'PAGE_NOTE';
+    const anchor = highlight ? { ...dto.anchor, quote: dto.anchor.quote.trim() } : null;
+    return this.run(actor, id, true, async (tx, user_id, version_id, pages, textLayer) => {
       pageWithin(dto.pageNumber, pages);
       const existing = await tx.annotations.findUnique({
         where: { user_id_request_id: { user_id, request_id: dto.requestId } },
@@ -101,8 +120,10 @@ export class ReadingService {
         if (
           existing.version_id !== version_id ||
           existing.page_number !== dto.pageNumber ||
-          existing.kind !== 'PAGE_NOTE' ||
-          existing.content !== dto.content
+          existing.kind !== kind ||
+          existing.content !== dto.content ||
+          (highlight &&
+            (existing.color !== dto.color || !isDeepStrictEqual(existing.anchor, anchor)))
         )
           throw new ConflictException({
             code: 'NOTE_REQUEST_REUSED',
@@ -110,14 +131,19 @@ export class ReadingService {
           });
         return { item: noteItem(existing) };
       }
+      if (highlight && !textLayer)
+        throw new BadRequestException(
+          'Trang scan chưa hỗ trợ tô chữ. Hãy dùng ghi chú theo trang.',
+        );
       const item = await tx.annotations.create({
         data: {
           user_id,
           version_id,
           request_id: dto.requestId,
           page_number: dto.pageNumber,
-          kind: 'PAGE_NOTE',
+          kind,
           content: dto.content,
+          ...(highlight ? { anchor: anchor as Prisma.InputJsonValue, color: dto.color } : {}),
         },
       });
       return { item: noteItem(item) };
@@ -129,9 +155,10 @@ export class ReadingService {
     version: bigint,
     id: bigint,
     revision: number,
+    kind = 'PAGE_NOTE',
   ) {
     const note = await tx.annotations.findFirst({
-      where: { id, user_id: owner, version_id: version, kind: 'PAGE_NOTE' },
+      where: { id, user_id: owner, version_id: version, kind },
     });
     if (!note) throw new NotFoundException('Không tìm thấy ghi chú.');
     if (note.revision !== revision) throw stale();
@@ -151,10 +178,29 @@ export class ReadingService {
       };
     });
   }
-  remove(actor: Profile, id: string, noteId: string, dto: ReadingRevisionDto) {
+  updateHighlight(actor: Profile, id: string, noteId: string, dto: UpdateHighlightDto) {
     const target = academicId(noteId);
     return this.run(actor, id, true, async (tx, owner, version) => {
-      await this.owned(tx, owner, version, target, dto.revision);
+      await this.owned(tx, owner, version, target, dto.revision, 'TEXT_HIGHLIGHT');
+      return {
+        item: noteItem(
+          await tx.annotations.update({
+            where: { id: target },
+            data: {
+              content: dto.content,
+              color: dto.color,
+              revision: { increment: 1 },
+              updated_at: new Date(),
+            },
+          }),
+        ),
+      };
+    });
+  }
+  remove(actor: Profile, id: string, noteId: string, dto: ReadingRevisionDto, kind = 'PAGE_NOTE') {
+    const target = academicId(noteId);
+    return this.run(actor, id, true, async (tx, owner, version) => {
+      await this.owned(tx, owner, version, target, dto.revision, kind);
       await tx.annotations.delete({ where: { id: target } });
     });
   }
