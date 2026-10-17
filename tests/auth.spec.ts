@@ -25,6 +25,7 @@ for (const [role, label] of [
     await expect(
       page.getByText(`e2e-${role.toLowerCase()}@example.test`, { exact: true }),
     ).toBeVisible();
+    await page.getByRole('button', { name: 'Menu tài khoản', exact: true }).click();
     await page.getByRole('button', { name: 'Đăng xuất' }).click();
     await expect(page).toHaveURL('/login');
     await page.goBack();

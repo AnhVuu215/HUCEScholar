@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { WorkspaceNavigation } from './workspace-navigation';
+import { WorkspaceHeader } from './workspace-header';
+import type { WorkspaceSection } from '../../lib/workspace-navigation';
 import {
   ApiError,
   apiRequest,
@@ -38,15 +41,7 @@ export function RoleWorkspace({
   children?: ReactNode;
   title?: string;
   description?: string;
-  activeSection?:
-    | 'users'
-    | 'catalog'
-    | 'assignments'
-    | 'materials'
-    | 'moderation'
-    | 'library'
-    | 'lifecycle'
-    | 'personal';
+  activeSection?: WorkspaceSection;
 }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -54,6 +49,7 @@ export function RoleWorkspace({
   const [logoutError, setLogoutError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
+  const navigationRole = state.kind === 'ready' || state.kind === 'denied' ? state.user.role : role;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -163,92 +159,11 @@ export function RoleWorkspace({
           <br />
           dành cho cộng đồng HUCE
         </p>
-        <nav
-          id="workspace-navigation"
-          aria-label="Điều hướng không gian"
-          onClick={(event) => {
-            // Next Link prevents the default browser navigation before bubbling.
-            // A cancelled draft departure stops propagation at document capture.
-            if ((event.target as Element).closest('a')) setMenuOpen(false);
-          }}
-        >
-          {state.kind === 'ready' && (
-            <Link
-              href={workspacePath(state.user.role)}
-              aria-current={activeSection ? undefined : 'page'}
-            >
-              Tài khoản của tôi
-            </Link>
-          )}
-          {state.kind === 'ready' && state.user.role === 'ADMIN' && (
-            <Link
-              href="/workspace/admin/users"
-              aria-current={activeSection === 'users' ? 'page' : undefined}
-            >
-              Quản lý tài khoản
-            </Link>
-          )}
-          {state.kind === 'ready' && state.user.role === 'ADMIN' && (
-            <Link
-              href="/workspace/admin/catalog/faculties"
-              aria-current={activeSection === 'catalog' ? 'page' : undefined}
-            >
-              Danh mục đào tạo
-            </Link>
-          )}
-          {state.kind === 'ready' && state.user.role !== 'STUDENT' && (
-            <Link
-              href={`/workspace/${state.user.role.toLowerCase()}/assignments`}
-              aria-current={activeSection === 'assignments' ? 'page' : undefined}
-            >
-              {state.user.role === 'ADMIN' ? 'Phân công giảng viên' : 'Phân công của tôi'}
-            </Link>
-          )}
-          {state.kind === 'ready' && state.user.role !== 'ADMIN' && (
-            <Link
-              href={`/workspace/${state.user.role.toLowerCase()}/materials`}
-              aria-current={activeSection === 'materials' ? 'page' : undefined}
-            >
-              Học liệu của tôi
-            </Link>
-          )}
-          {state.kind === 'ready' && state.user.role === 'ADMIN' && (
-            <Link
-              href="/workspace/admin/moderation"
-              aria-current={activeSection === 'moderation' ? 'page' : undefined}
-            >
-              Kiểm duyệt học liệu
-            </Link>
-          )}
-          {state.kind === 'ready' && state.user.role === 'ADMIN' && (
-            <Link
-              href="/workspace/admin/materials"
-              aria-current={activeSection === 'lifecycle' ? 'page' : undefined}
-            >
-              Quản lý học liệu
-            </Link>
-          )}
-          {state.kind === 'ready' && (
-            <Link
-              href="/workspace/library"
-              aria-current={activeSection === 'library' ? 'page' : undefined}
-            >
-              Kho học liệu
-            </Link>
-          )}
-          {state.kind === 'ready' && (
-            <Link
-              href="/workspace/personal-library"
-              aria-current={activeSection === 'personal' ? 'page' : undefined}
-            >
-              Thư viện của tôi
-            </Link>
-          )}
-          <Link href="/project" className="workspace-utility-link">
-            Tiến độ dự án
-          </Link>
-          <Link href="/install">Cài ứng dụng</Link>
-        </nav>
+        <WorkspaceNavigation
+          role={navigationRole}
+          activeSection={activeSection}
+          onNavigate={() => setMenuOpen(false)}
+        />
         <p className="sidebar-note">
           Dự án độc lập đang phát triển. Chưa phải hệ thống chính thức của trường.
         </p>
@@ -287,26 +202,19 @@ export function RoleWorkspace({
         )}
         {state.kind === 'ready' && (
           <>
-            <header className="account-heading">
+            <WorkspaceHeader
+              user={state.user}
+              title={title ?? 'Tài khoản của tôi'}
+              logoutPending={logoutPending}
+              logoutError={logoutError}
+              onLogout={() => void logout()}
+            />
+            <div className="account-heading">
               <div>
                 <h1>{title ?? `Không gian ${roleLabels[state.user.role].toLowerCase()}`}</h1>
                 <p className="intro">{description ?? `Chào ${state.user.displayName}.`}</p>
               </div>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={logoutPending}
-                data-workspace-logout
-                onClick={() => void logout()}
-              >
-                {logoutPending ? 'Đang đăng xuất…' : 'Đăng xuất'}
-              </button>
-            </header>
-            {logoutError && (
-              <p role="alert" className="form-error">
-                {logoutError}
-              </p>
-            )}
+            </div>
             {children ?? (
               <>
                 <section className="account-details" aria-labelledby="account-title">
@@ -337,7 +245,10 @@ export function RoleWorkspace({
                 </section>
               </>
             )}
-            <footer className="page-footer">HUCEScholar · Đang phát triển</footer>
+            <footer className="page-footer workspace-footer">
+              <span>HUCEScholar · Đang phát triển</span>
+              <Link href="/project">Tiến độ dự án</Link>
+            </footer>
           </>
         )}
       </main>

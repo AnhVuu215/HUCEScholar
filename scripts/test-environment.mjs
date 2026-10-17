@@ -70,6 +70,9 @@ try {
   // Keep independent browser suites below the real per-account login limit.
   const accounts = [
     ['admin', 'ADMIN'],
+    ['workspace-ui-admin', 'ADMIN'],
+    ['workspace-ui-lecturer', 'LECTURER'],
+    ['workspace-ui-student', 'STUDENT'],
     ['users-admin', 'ADMIN'],
     ['catalog-admin', 'ADMIN'],
     ['assignments-admin', 'ADMIN'],

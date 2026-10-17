@@ -6,6 +6,15 @@ import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
 import { readerPdf } from './helpers/reader-pdf';
 
+async function readerChoice(page: Page, label: string, option: string) {
+  await page.getByRole('combobox', { name: label, exact: true }).click();
+  await page.getByRole('option', { name: option, exact: true }).click();
+}
+async function openAccount(page: Page) {
+  const button = page.getByRole('button', { name: 'Menu tài khoản', exact: true });
+  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+}
+
 async function login(page: Page, role: 'lecturer' | 'student', accountPrefix = 'e2e-drafts') {
   await page.goto('/login');
   await page.getByLabel('Email', { exact: true }).fill(`${accountPrefix}-${role}@example.test`);
@@ -250,11 +259,11 @@ test('student searches the library and reads, selects text, changes pages, zooms
   await page.getByRole('button', { name: 'Trang sau', exact: true }).click();
   await expect(page.getByText('Đã hiển thị trang 2 / 2', { exact: true })).toBeVisible();
   await expect(page.locator('.textLayer')).toContainText('Second page');
-  await page.getByLabel('Mức phóng', { exact: true }).selectOption('1.25');
+  await readerChoice(page, 'Mức phóng', '125%');
   await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
   await expect(page.getByText('Đã hiển thị trang 2 / 2', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
-  await page.getByLabel('Mức phóng', { exact: true }).selectOption('fit');
+  await readerChoice(page, 'Mức phóng', 'Vừa chiều rộng');
   await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
   await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
   if (process.env.CAPTURE_LIBRARY_UI === '1')
@@ -731,7 +740,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await expect(pageNote).toHaveValue('Bản soạn ghi chú theo trang');
   page.off('dialog', stay);
   await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
-  await page.getByLabel('Màu tô sáng', { exact: true }).selectOption('#90CAF9');
+  await readerChoice(page, 'Màu tô sáng', 'Xanh dương');
   await page.route('**/api/v1/library/versions/*/highlights', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     await route.fetch();
@@ -759,9 +768,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await expect(overlay).toBeVisible();
   for (const angle of [0, 90, 180, 270]) {
     if (angle) await page.getByRole('button', { name: 'Xoay trang', exact: true }).click();
-    await page
-      .getByLabel('Mức phóng', { exact: true })
-      .selectOption(angle === 180 ? '0.75' : '1.25');
+    await readerChoice(page, 'Mức phóng', angle === 180 ? '75%' : '125%');
     await expect(
       page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' }),
     ).toBeVisible();
@@ -802,7 +809,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
   await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
   await editor.fill('Đã sửa vùng tô');
-  await page.getByLabel('Màu tô sáng', { exact: true }).selectOption('#A5D6A7');
+  await readerChoice(page, 'Màu tô sáng', 'Xanh lá');
   await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
   await expect(row.getByText('Đã sửa vùng tô', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 360, height: 900 });
@@ -1729,6 +1736,7 @@ test('student keeps entered draft after stale conflict and explicitly discards c
   await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toHaveValue(
     'Bản sửa chưa lưu',
   );
+  await openAccount(page);
   await page.getByRole('link', { name: 'Tài khoản của tôi', exact: true }).click();
   await expect(page.getByText('Bỏ thay đổi chưa lưu?', { exact: true })).toBeVisible();
   await expect(page).toHaveURL('/workspace/student/materials');
@@ -1748,6 +1756,7 @@ test('student keeps entered draft after stale conflict and explicitly discards c
   await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Tạo bản nháp', exact: true }).click();
   await page.getByLabel('Tiêu đề học liệu', { exact: true }).fill('Không lưu bản này');
+  await openAccount(page);
   await page.getByRole('link', { name: 'Tài khoản của tôi', exact: true }).click();
   await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
   await expect(page).toHaveURL('/workspace/student');
@@ -1766,6 +1775,7 @@ test('dirty logout confirms before revoking the session', async ({ page }) => {
   await login(page, 'student');
   await page.getByRole('button', { name: 'Tạo bản nháp', exact: true }).click();
   await page.getByLabel('Tiêu đề học liệu', { exact: true }).fill('Bản nháp trước đăng xuất');
+  await openAccount(page);
   await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
   await expect(page.getByText('Bỏ thay đổi chưa lưu?', { exact: true })).toBeVisible();
   expect((await page.request.get('/api/v1/auth/me')).status()).toBe(200);
@@ -1773,6 +1783,7 @@ test('dirty logout confirms before revoking the session', async ({ page }) => {
   await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toHaveValue(
     'Bản nháp trước đăng xuất',
   );
+  await openAccount(page);
   await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
   await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
   await expect(page).toHaveURL('/login');

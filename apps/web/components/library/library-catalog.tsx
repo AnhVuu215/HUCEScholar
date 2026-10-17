@@ -3,6 +3,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { libraryError, libraryList, libraryCourses, type LibraryList } from '../../lib/library';
 import { materialTypes } from '../../lib/materials';
+import { Button } from '../ui/button';
+import { SelectField } from '../ui/select-field';
 export function LibraryCatalog() {
   const [query, setQuery] = useState({
     search: '',
@@ -90,25 +92,33 @@ export function LibraryCatalog() {
           </select>
         </div>
         <div className="form-field">
-          <label htmlFor="library-kind">Nguồn học liệu</label>
-          <select id="library-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="">Tất cả nguồn</option>
-            <option value="LECTURER_MATERIAL">Học liệu giảng viên</option>
-            <option value="STUDENT_SUPPLEMENT">Tài liệu sinh viên bổ sung</option>
-          </select>
+          <SelectField
+            id="library-kind"
+            label="Nguồn học liệu"
+            value={kind}
+            onChange={setKind}
+            options={[
+              { value: '', label: 'Tất cả nguồn' },
+              { value: 'LECTURER_MATERIAL', label: 'Học liệu giảng viên' },
+              { value: 'STUDENT_SUPPLEMENT', label: 'Tài liệu sinh viên bổ sung' },
+            ]}
+          />
         </div>
         <div className="form-field">
-          <label htmlFor="library-type">Loại học liệu</label>
-          <select id="library-type" value={materialType} onChange={(e) => setType(e.target.value)}>
-            <option value="">Tất cả loại</option>
-            {Object.entries(materialTypes).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
+          <SelectField
+            id="library-type"
+            label="Loại học liệu"
+            value={materialType}
+            onChange={setType}
+            options={[
+              { value: '', label: 'Tất cả loại' },
+              ...Object.entries(materialTypes).map(([value, label]) => ({ value, label })),
+            ]}
+          />
         </div>
-        <button className="primary-button">Tìm kiếm</button>
+        <Button type="submit" variant="primary" size="form">
+          Tìm kiếm
+        </Button>
       </form>
       {courseError && (
         <p role="alert">

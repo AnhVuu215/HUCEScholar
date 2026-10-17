@@ -12,9 +12,10 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 
 ## Tài liệu
 
-- [Ưu tiên mới: thiết kế upload PDF/DOCX cho giảng viên](docs/superpowers/specs/2026-10-17-lecturer-pdf-docx-upload.md) và [plan triển khai](docs/superpowers/plans/2026-10-17-lecturer-pdf-docx-upload.md) — DOCX chưa triển khai
+- [Kế hoạch V2: UI, sidebar/header, reader thông minh, hồ sơ/cài đặt và 36 ý tưởng để chọn](docs/superpowers/specs/2026-10-17-workspace-v2-design.md) — đề xuất, kèm ba plan kỹ thuật theo đợt
+- [Upload PDF/DOCX cho giảng viên: kết quả triển khai và giới hạn local](docs/implementation/2026-10-17-lecturer-pdf-docx-upload.md), [thiết kế](docs/superpowers/specs/2026-10-17-lecturer-pdf-docx-upload.md) và [plan gốc](docs/superpowers/plans/2026-10-17-lecturer-pdf-docx-upload.md) — đã triển khai trên nhánh tính năng
 - [Kế hoạch cải thiện web, backlog ưu tiên và ý tưởng sản phẩm —17/10/2026](docs/roadmap/2026-10-17-web-improvement-roadmap.md)
-- [Task đề xuất tiếp theo: thiết kế tự đổi mật khẩu](docs/superpowers/specs/2026-10-17-self-service-password-change.md) và [kế hoạch triển khai](docs/superpowers/plans/2026-10-17-self-service-password-change.md) — chưa triển khai
+- [Kế hoạch bảo mật dùng lại trong V2: tự đổi mật khẩu](docs/superpowers/specs/2026-10-17-self-service-password-change.md) và [plan triển khai](docs/superpowers/plans/2026-10-17-self-service-password-change.md) — chưa triển khai
 - [Tech stack và kiến trúc MVP](docs/HUCEScholar-tech-stack.md)
 - [Mô hình dữ liệu và SQL tham chiếu](docs/database/README.md)
 - [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)

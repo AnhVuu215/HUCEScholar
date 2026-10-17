@@ -53,7 +53,7 @@ for (const [device, width, height] of [
       await menu.click();
       // Link may preventDefault even when it points to the current route.
       // A destination remount must not be what makes the menu close.
-      await navigation.getByRole('link', { name: 'Tài khoản của tôi', exact: true }).click();
+      await navigation.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
       await expect(menu).toHaveAttribute('aria-expanded', 'false');
       await expect(navigation).toBeHidden();
       await menu.click();
