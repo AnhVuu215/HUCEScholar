@@ -1,6 +1,6 @@
 # HUCEScholar V2 — Reader và kho học liệu Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. READ-02 đã triển khai local; các task còn lại vẫn là kế hoạch. Bằng chứng và thứ tự phát hành: [READ-02](../../implementation/2026-10-17-reader-highlight-palette.md).
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. READ-02 và READ-03 đã triển khai local; các task còn lại vẫn là kế hoạch. Bằng chứng và thứ tự phát hành: [READ-02](../../implementation/2026-10-17-reader-highlight-palette.md), [READ-03](../../implementation/2026-10-17-reader-direct-annotations.md).
 
 **Goal:** Chọn chữ để tô/ghi chú/trích dẫn ngay trong reader, tìm lại ghi chú mọi trang và giảm công cụ chiếm diện tích.
 
@@ -88,13 +88,13 @@ Nghiệm thu: dữ liệu cũ đọc/sửa được; màu mới đúng sau đăn
 
 ## Task READ-03 — Thao tác trực tiếp và panel gọn
 
-- [ ] Chốt contract selection UI: `{versionId,pageNumber,anchor,viewportRect}` snapshot từ text layer hiện hữu; rect phục vụ hiển thị, không lưu làm anchor. Toolbar chỉ hiện khi chọn chữ hợp lệ của đúng page/version.
-- [ ] Thêm Tô sáng/Ghi chú/Trích dẫn gần đoạn chọn. Snapshot selection trước focus/click; toolbar nằm trong viewport khi scroll hoặc chọn sát mép, có fallback nút trong thanh đọc cho keyboard. Selection nhiều trang/2001 ký tự báo lý do, không tự cắt mất phần cuối.
-- [ ] Chọn highlight đã lưu → mở editor/palette tại panel, có nhãn trang và quote; list keyboard là đường tương đương khi overlay không có focus. Nhiều highlight chồng nhau cho chọn trong list, không tự chọn sai bản ghi.
-- [ ] Tạo note gắn đoạn dùng TEXT_HIGHLIGHT và content tùy chọn; note cả trang vẫn PAGE_NOTE. Đổi màu/nội dung dùng PATCH hiện hữu; không sửa quote/quads bằng PATCH cũ.
-- [ ] Panel desktop bên phải khi đủ chỗ; một cột màn hẹp. Mỗi thời điểm chỉ một editor đang hoạt động; chuyển note/highlight hỏi giữ/bỏ khi dirty; đừng tạo hai guard độc lập tranh nhau. Giữ feedback lưu chưa xong/lỗi/409 và retry có requestId.
-- [ ] Dùng `tests/helpers/reader-pdf.ts`: tạo multi-page selectable text và scan; test chọn bằng mouse/keyboard, sửa highlight cũ, lỗi timeout sau commit/retry chỉ có một item, xung đột tab giữ nội dung. Test rotation 0/90/180/270 và zoom/fit không đổi trang đích.
-- [ ] Regression `tests/materials.spec.ts`, `tests/highlight-geometry.spec.ts` và `tests/lecturer-document-upload.spec.ts` để PDF rendition DOCX vẫn note/highlight bình thường. Chạy `pnpm check`, integration và targeted browser.
+- [x] Chốt contract selection UI: `{versionId,pageNumber,anchor,viewportRect}` snapshot từ text layer hiện hữu; rect phục vụ hiển thị, không lưu làm anchor. Toolbar chỉ hiện khi chọn chữ hợp lệ của đúng page/version.
+- [x] Thêm Tô sáng/Ghi chú gần đoạn chọn; Trích dẫn chuyển sang CITE-01 cùng provenance/deep-link/clipboard để không có nút chưa hoạt động. Snapshot selection trước focus/click; toolbar nằm trong viewport khi scroll hoặc chọn sát mép, có fallback nút trong thanh đọc cho keyboard. Selection nhiều trang/2001 ký tự báo lý do, không tự cắt mất phần cuối.
+- [x] Chọn highlight đã lưu → mở editor/palette tại panel, có nhãn trang và quote; list keyboard là đường tương đương khi overlay không có focus. Nhiều highlight chồng nhau cho chọn trong list, không tự chọn sai bản ghi.
+- [x] Tạo note gắn đoạn dùng TEXT_HIGHLIGHT và content tùy chọn; note cả trang vẫn PAGE_NOTE. Đổi màu/nội dung dùng PATCH hiện hữu; không sửa quote/quads bằng PATCH cũ.
+- [x] Panel desktop bên phải khi đủ chỗ; một cột màn hẹp. Mỗi thời điểm chỉ một editor đang hoạt động; chuyển note/highlight hỏi giữ/bỏ khi dirty; đừng tạo hai guard độc lập tranh nhau. Giữ feedback lưu chưa xong/lỗi/409 và retry có requestId.
+- [x] Dùng `tests/helpers/reader-pdf.ts`: tạo multi-page selectable text và fixture scan hai trang trống không có text layer; test chọn bằng mouse/keyboard, sửa highlight cũ, lỗi timeout sau commit/retry chỉ có một item, xung đột tab giữ nội dung. Geometry rotation0/90/180/270, zoom/fit và trang đích đạt trong bộ28test, gồm DOCX chuyển thật.
+- [x] Regression `tests/materials.spec.ts`, `tests/highlight-geometry.spec.ts` và `tests/lecturer-document-upload.spec.ts` để PDF rendition DOCX vẫn note/highlight bình thường. `pnpm check` đạt82unit tests +lint/typecheck/build; integration155đạt/1conditional skip; targeted browser28/28 gồm DOCX thật.
 
 Nghiệm thu: đọc → chọn → tô/note → sửa/xóa từ trang hoặc danh sách; bản lưu không đổi file gốc, đang soạn không bị mất bởi điều hướng/menu mới.
 

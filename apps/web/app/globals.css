@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'pdfjs-dist/web/pdf_viewer.css';
 @import './workspace-ui.css';
+@import './reader-annotations.css';
 
 .library-list {
   list-style: none;

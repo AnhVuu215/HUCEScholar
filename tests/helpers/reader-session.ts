@@ -14,10 +14,10 @@ export async function readerHeaders(page: Page) {
   };
 }
 
-export async function readerLogin(page: Page, role: 'admin' | 'student') {
+export async function readerLogin(page: Page, role: 'admin' | 'student', account = 'reader-v2') {
   const response = await page.request.post('/api/v1/auth/login', {
     headers: await readerHeaders(page),
-    data: { email: `e2e-reader-v2-${role}@example.test`, password: process.env.E2E_PASSWORD! },
+    data: { email: `e2e-${account}-${role}@example.test`, password: process.env.E2E_PASSWORD! },
   });
   expect(response.status()).toBe(200);
 }
@@ -31,9 +31,13 @@ export async function readerLogout(page: Page) {
 }
 
 /** Real publication workflow with an original PDF and explicitly synthetic scan result in the test DB. */
-export async function openReaderFixture(page: Page) {
+export async function openReaderFixture(
+  page: Page,
+  account = 'reader-v2',
+  options: { scan?: boolean; longText?: boolean } = {},
+) {
   const code = `READV2-${randomBytes(5).toString('hex').toUpperCase()}`;
-  await readerLogin(page, 'admin');
+  await readerLogin(page, 'admin', account);
   let headers = await readerHeaders(page);
   const faculty = await page.request.post('/api/v1/admin/catalog/faculties', {
     headers,
@@ -47,7 +51,7 @@ export async function openReaderFixture(page: Page) {
   expect(course.status()).toBe(201);
   const courseId = (await course.json()).item.id;
   await readerLogout(page);
-  await readerLogin(page, 'student');
+  await readerLogin(page, 'student', account);
   headers = await readerHeaders(page);
   const draft = await page.request.post('/api/v1/material-drafts', {
     headers,
@@ -71,7 +75,7 @@ export async function openReaderFixture(page: Page) {
       'X-File-Name': 'reader-v2.pdf',
       'If-Match': '"1"',
     },
-    data: readerPdf(),
+    data: readerPdf(options),
   });
   expect(upload.status()).toBe(201);
   const environment = parseEnv(readFileSync('.local/test.env', 'utf8'));
@@ -82,8 +86,8 @@ export async function openReaderFixture(page: Page) {
   await db.connect();
   try {
     const result = await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND u.email='e2e-reader-v2-student@example.test')",
-      [item.id],
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=2,has_text_layer=$3 WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND u.email=$2)",
+      [item.id, `e2e-${account}-student@example.test`, !options.scan],
     );
     expect(result.rowCount).toBe(1);
   } finally {
@@ -98,7 +102,7 @@ export async function openReaderFixture(page: Page) {
     ).status(),
   ).toBe(201);
   await readerLogout(page);
-  await readerLogin(page, 'admin');
+  await readerLogin(page, 'admin', account);
   const publication = (
     await (await page.request.get(`/api/v1/admin/publication-requests?search=${code}`)).json()
   ).items[0];
@@ -117,7 +121,7 @@ export async function openReaderFixture(page: Page) {
   );
   expect(decision.status()).toBe(201);
   await readerLogout(page);
-  await readerLogin(page, 'student');
+  await readerLogin(page, 'student', account);
   const versionId = publication.versionId as string;
   const route = `/workspace/library/versions/${versionId}`;
   await page.goto(route);

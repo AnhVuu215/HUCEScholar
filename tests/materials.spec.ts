@@ -349,6 +349,8 @@ async function openPersonalReader(page: Page, prefix: string) {
   await expect(page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' })).toBeVisible(
     { timeout: 15_000 },
   );
+  if (prefix.includes('highlights'))
+    await page.getByRole('tab', { name: 'Đoạn tô', exact: true }).click();
   return `/api/v1/library/versions/${item.versionId}`;
 }
 async function capturePersonal(page: Page, prefix: string) {
@@ -734,8 +736,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await page.getByRole('button', { name: 'Tô sáng đoạn chọn', exact: true }).click();
   const editor = page.getByLabel('Ghi chú cho đoạn tô', { exact: true });
   await editor.fill('Điểm cần nhớ <b>riêng tư</b>');
-  const pageNote = page.getByLabel('Nội dung ghi chú', { exact: true });
-  await pageNote.fill('Bản soạn ghi chú theo trang');
+  await expect(page.getByLabel('Nội dung ghi chú', { exact: true })).toBeHidden();
   let leavePrompts = 0;
   const stay = async (dialog: import('@playwright/test').Dialog) => {
     leavePrompts++;
@@ -745,9 +746,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
   expect(leavePrompts).toBe(1);
   await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
-  await expect(pageNote).toHaveValue('Bản soạn ghi chú theo trang');
   page.off('dialog', stay);
-  await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
   await readerChoice(page, 'Màu tô sáng', 'Xanh dương');
   await page.route('**/api/v1/library/versions/*/highlights', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
@@ -811,6 +810,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await expect(overlay).toBeVisible();
   await page.reload();
   await expect(overlay).toBeVisible();
+  await page.getByRole('tab', { name: 'Đoạn tô', exact: true }).click();
   const row = page.getByRole('article', { name: `Vùng tô ${id}`, exact: true });
   await expect(row.getByText('Điểm cần nhớ <b>riêng tư</b>', { exact: true })).toBeVisible();
   expect(await row.locator('b').count()).toBe(0);
