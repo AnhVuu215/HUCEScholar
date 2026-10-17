@@ -69,6 +69,7 @@ test('eight named colors create, edit and survive a new login without changing a
   await readerLogout(page);
   await readerLogin(page, 'student');
   await page.goto(route);
+  await page.getByRole('tab', { name: 'Đoạn tô', exact: true }).click();
   await expect(page.getByRole('article', { name: /^Vùng tô / })).toHaveCount(8);
   const items = (await (await page.request.get(`${path}/highlights?pageNumber=1`)).json()).items;
   expect(items).toHaveLength(8);
@@ -107,6 +108,7 @@ test('a future saved color remains visible and requires an explicit choice befor
   page,
 }) => {
   const { path } = await openReaderFixture(page);
+  await page.getByRole('tab', { name: 'Đoạn tô', exact: true }).click();
   const created = await page.request.post(`${path}/highlights`, {
     headers: await readerHeaders(page),
     data: {

@@ -12,9 +12,12 @@ import {
   type HighlightAnchor,
   type TextHighlight,
 } from '../../lib/highlights';
-import { quadBounds, selectedAnchor, type HighlightSurface } from '../../lib/highlight-geometry';
+import { quadBounds, type HighlightSurface } from '../../lib/highlight-geometry';
+import { captureReaderSelection, type ReaderSelection } from '../../lib/reader-selection';
 import { useNotesLeaveGuard } from './use-notes-leave-guard';
 import { HighlightPalette } from './highlight-palette';
+import { ReaderSelectionToolbar } from './reader-selection-toolbar';
+import { useAnnotationEditor, useAnnotationPanel } from './reader-annotation-panel';
 
 type Draft = {
   page: number;
@@ -35,13 +38,13 @@ export function ReaderHighlights({
   tools: HTMLDivElement | null;
   available: boolean;
 }) {
+  const panel = useAnnotationPanel();
   const [data, setData] = useState<{ page: number; items: TextHighlight[] } | null>(null);
   const [loading, setLoading] = useState(true),
     [listError, setListError] = useState('');
-  const [selection, setSelection] = useState<{
-    element: HTMLDivElement;
-    anchor: HighlightAnchor;
-  } | null>(null);
+  const [selection, setSelection] = useState<ReaderSelection | null>(null);
+  const [selectionError, setSelectionError] = useState('');
+  const [overlaps, setOverlaps] = useState<TextHighlight[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null),
     [content, setContent] = useState('');
   const [color, setColor] = useState('#FFF59D');
@@ -60,6 +63,7 @@ export function ReaderHighlights({
   const items = !listError && data?.page === page && available ? data.items : [];
   const fetching = loading || data?.page !== page;
   useNotesLeaveGuard(dirty || uncertain, busy);
+  useAnnotationEditor('highlight', { dirty, busy, uncertain }, discard);
   const load = useCallback(() => {
     request.current?.abort();
     const controller = new AbortController();
@@ -104,36 +108,46 @@ export function ReaderHighlights({
     if (draft) input.current?.focus();
   }, [draft]);
   function open(note: TextHighlight) {
-    if (dirty || locked || deleting) return;
-    setDraft({
-      page: note.pageNumber,
-      anchor: note.anchor,
-      original: note,
-      requestId: crypto.randomUUID(),
+    if (locked) return;
+    panel.begin('highlight', () => {
+      setDraft({
+        page: note.pageNumber,
+        anchor: note.anchor,
+        original: note,
+        requestId: crypto.randomUUID(),
+      });
+      setContent(note.content);
+      setColor(note.color);
+      setError('');
+      setNotice('');
+      input.current?.focus();
     });
-    setContent(note.content);
-    setColor(note.color);
-    setError('');
-    setNotice('');
-    input.current?.focus();
   }
   const capture = useEffectEvent(() => {
-    if (!surface || locked || dirty) return;
-    const anchor = selectedAnchor(surface);
-    setSelection(anchor ? { element: surface.element, anchor } : null);
+    if (!surface || locked) return;
+    const focused = document.activeElement;
+    if (
+      focused instanceof Element &&
+      (focused.closest('[data-reader-selection-toolbar]') || tools?.contains(focused))
+    )
+      return;
+    const result = captureReaderSelection(versionId, surface);
+    setSelection(result.selection);
+    setSelectionError(result.reason);
   });
   const hit = useEffectEvent((event: MouseEvent) => {
-    if (!surface || dirty || locked || deleting || !window.getSelection()?.isCollapsed) return;
+    if (!surface || locked || !window.getSelection()?.isCollapsed) return;
     const rect = surface.element.getBoundingClientRect();
     const x = ((event.clientX - rect.left) * surface.viewport.width) / rect.width;
     const y = ((event.clientY - rect.top) * surface.viewport.height) / rect.height;
-    const item = items.find((item) =>
+    const matches = items.filter((item) =>
       item.anchor.quads.some((q) => {
         const b = quadBounds(q, surface.viewport);
         return x >= b.left && x <= b.left + b.width && y >= b.top && y <= b.top + b.height;
       }),
     );
-    if (item) open(item);
+    if (matches.length === 1) open(matches[0]);
+    else if (matches.length > 1) panel.begin('highlight', () => setOverlaps(matches));
   });
   useEffect(() => {
     if (!surface) return;
@@ -154,6 +168,8 @@ export function ReaderHighlights({
     setUncertain(false);
     setError('');
     setNotice('');
+    setDeleting(null);
+    setOverlaps([]);
   }
   async function save() {
     if (!draft || busy || !isHighlightColor(color)) return;
@@ -207,36 +223,87 @@ export function ReaderHighlights({
       if (alive.current) setBusy(false);
     }
   }
-  const candidate = surface && selection?.element === surface.element ? selection.anchor : null;
+  const candidate =
+    surface &&
+    selection?.surface.element === surface.element &&
+    selection.versionId === versionId &&
+    selection.pageNumber === surface.page
+      ? selection
+      : null;
+  function startDraft() {
+    if (!candidate || locked || !available) return;
+    const snapshot = candidate;
+    panel.begin('highlight', () => {
+      setDraft({
+        page: snapshot.pageNumber,
+        anchor: snapshot.anchor,
+        original: null,
+        requestId: crypto.randomUUID(),
+      });
+      setContent('');
+      setColor('#FFF59D');
+      setError('');
+      setNotice('');
+      setSelection(null);
+      setSelectionError('');
+      window.getSelection()?.removeAllRanges();
+    });
+  }
   return (
     <>
+      {candidate && available && (
+        <ReaderSelectionToolbar
+          selection={candidate}
+          disabled={locked}
+          onHighlight={startDraft}
+          onNote={startDraft}
+          onDismiss={() => {
+            setSelection(null);
+            window.getSelection()?.removeAllRanges();
+          }}
+        />
+      )}
       {tools &&
         createPortal(
           <div className="highlight-toolbar">
             <button
               className="secondary-button"
-              disabled={!candidate || dirty || locked || !!deleting || !available}
-              onClick={() => {
-                if (!candidate) return;
-                setDraft({
-                  page,
-                  anchor: candidate,
-                  original: null,
-                  requestId: crypto.randomUUID(),
-                });
-                setContent('');
-                setColor('#FFF59D');
-                setError('');
-                setNotice('');
-                setSelection(null);
-                window.getSelection()?.removeAllRanges();
-              }}
+              disabled={!candidate || locked || !available}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={startDraft}
             >
               Tô sáng đoạn chọn
             </button>
+            <button
+              className="secondary-button"
+              disabled={!candidate || locked || !available}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={startDraft}
+            >
+              Ghi chú đoạn chọn
+            </button>
+            {!panel.open && (
+              <button
+                className="secondary-button"
+                data-reader-reopen
+                onClick={() => {
+                  if (panel.activate(panel.active))
+                    requestAnimationFrame(() => {
+                      document.getElementById(`annotation-tab-${panel.active}`)?.focus();
+                    });
+                }}
+              >
+                Hiện ghi chú
+              </button>
+            )}
             <span className="field-hint">
               Chọn tối đa 2000 ký tự trong một trang PDF để tô sáng.
             </span>
+            {selectionError && (
+              <span role="status" className="field-hint">
+                {selectionError}
+              </span>
+            )}
           </div>,
           tools,
         )}
@@ -275,6 +342,16 @@ export function ReaderHighlights({
         <p className="field-hint">
           Chỉ bạn xem được vùng tô và ghi chú kèm theo. Giữ đúng phiên bản PDF gốc.
         </p>
+        {overlaps.length > 1 && (
+          <div role="group" aria-label="Vùng tô chồng nhau" className="annotation-overlaps">
+            <p>Có {overlaps.length} vùng tô chồng nhau. Chọn vùng cần sửa:</p>
+            {overlaps.map((note) => (
+              <button key={note.id} className="secondary-button" onClick={() => open(note)}>
+                {highlightColorLabel(note.color)} · {note.content || note.anchor.quote}
+              </button>
+            ))}
+          </div>
+        )}
         {draft && (
           <form
             className="note-editor"
@@ -338,11 +415,7 @@ export function ReaderHighlights({
                 {highlightColorLabel(item.color)} · Trang {item.pageNumber}
               </p>
               <div className="note-actions">
-                <button
-                  className="secondary-button"
-                  disabled={dirty || locked || !!deleting}
-                  onClick={() => open(item)}
-                >
+                <button className="secondary-button" disabled={locked} onClick={() => open(item)}>
                   Sửa vùng tô
                 </button>
                 <button

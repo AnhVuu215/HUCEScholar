@@ -1,0 +1,102 @@
+.reader-layout,
+.reader-document {
+  min-width: 0;
+}
+.reader-annotation-panel {
+  --highlight-color-width: 112px;
+  min-width: 0;
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--popup-radius);
+  background: var(--paper);
+}
+.reader-annotation-panel[hidden],
+.reader-annotation-panel [role='tabpanel'][hidden] {
+  display: none;
+}
+.annotation-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.annotation-panel-heading h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.annotation-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.annotation-tabs button {
+  min-height: var(--control-height);
+  padding: 8px 10px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.annotation-tabs [aria-selected='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.reader-annotation-panel .reader-notes {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+.reader-annotation-panel .notes-heading h3 {
+  font-size: 16px;
+}
+.reader-annotation-panel .notes-heading {
+  gap: 8px;
+}
+.reader-annotation-panel .note-editor {
+  margin-block: 16px;
+}
+.reader-annotation-panel .note-editor h4 {
+  font-size: 15px;
+}
+.annotation-overlaps {
+  display: grid;
+  gap: 8px;
+  margin-block: 16px;
+}
+.annotation-overlaps button {
+  justify-content: flex-start;
+  text-align: left;
+}
+.reader-selection-toolbar {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--popup-radius);
+  background: var(--paper);
+  box-shadow: 0 8px 24px rgb(17 24 39 / 16%);
+}
+.reader-selection-toolbar button {
+  padding-inline: 10px;
+}
+@media (min-width: 1280px) {
+  .reader-layout[data-panel-open='true'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(296px, 340px);
+    align-items: start;
+    gap: 24px;
+  }
+  .reader-annotation-panel {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100dvh - 32px);
+    overflow: auto;
+    margin-top: 0;
+  }
+}

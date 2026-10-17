@@ -10,7 +10,9 @@ import {
   type PageNote,
 } from '../../lib/reading';
 import { useNotesLeaveGuard } from './use-notes-leave-guard';
+import { useAnnotationEditor, useAnnotationPanel } from './reader-annotation-panel';
 export function ReaderNotes({ versionId, page }: { versionId: string; page: number }) {
+  const panel = useAnnotationPanel();
   const [items, setItems] = useState<PageNote[]>([]),
     [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true),
@@ -32,6 +34,7 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
   const effectiveDraftPage = content || editing || busy ? draftPage : page;
   const fetching = loading || loadedPage !== page;
   useNotesLeaveGuard(dirty || uncertain, busy);
+  useAnnotationEditor('page', { dirty, busy, uncertain }, () => discard(false));
   const load = useCallback(
     (after: string | null = null) => {
       request.current?.abort();
@@ -74,7 +77,7 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
       request.current?.abort();
     };
   }, []);
-  function discard() {
+  function discard(focus = true) {
     setContent('');
     setEditing(null);
     setDraftPage(page);
@@ -82,17 +85,20 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
     setError('');
     setNotice('');
     setUncertain(false);
-    textarea.current?.focus();
+    setDeleting(null);
+    if (focus) textarea.current?.focus();
   }
   function edit(note: PageNote) {
-    setContent(note.content);
-    setEditing(note);
-    setDraftPage(note.pageNumber);
-    requestId.current = null;
-    setError('');
-    setNotice('');
-    setUncertain(false);
-    textarea.current?.focus();
+    panel.begin('page', () => {
+      setContent(note.content);
+      setEditing(note);
+      setDraftPage(note.pageNumber);
+      requestId.current = null;
+      setError('');
+      setNotice('');
+      setUncertain(false);
+      textarea.current?.focus();
+    });
   }
   async function save() {
     if (busy || !content.trim()) return;
@@ -117,7 +123,7 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
       await latestLoad.current();
     } catch (e) {
       if (!alive.current) return;
-      setUncertain(!(e instanceof ApiError));
+      setUncertain((previous) => previous || !(e instanceof ApiError));
       setError(
         e instanceof ApiError && e.status === 409
           ? 'Ghi chú đã thay đổi hoặc yêu cầu đã được dùng. Bản soạn vẫn được giữ; tải lại danh sách, rồi bỏ thay đổi và mở bản mới để sửa.'
@@ -208,7 +214,12 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
             {busy ? 'Đang lưu…' : 'Lưu ghi chú'}
           </button>
           {(content || editing) && (
-            <button type="button" className="secondary-button" disabled={busy} onClick={discard}>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={busy}
+              onClick={() => discard()}
+            >
               Bỏ thay đổi
             </button>
           )}
@@ -231,7 +242,7 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
             <div className="note-actions">
               <button
                 className="secondary-button"
-                disabled={busy || dirty || uncertain || !!editing}
+                disabled={busy || uncertain}
                 onClick={() => edit(note)}
               >
                 Sửa

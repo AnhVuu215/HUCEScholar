@@ -15,8 +15,21 @@ import { SaveMaterial } from './save-material';
 import { ReaderHighlights } from './reader-highlights';
 import type { HighlightSurface } from '../../lib/highlight-geometry';
 import { SelectField } from '../ui/select-field';
+import {
+  ReaderAnnotationPanel,
+  ReaderAnnotationProvider,
+  useAnnotationPanel,
+} from './reader-annotation-panel';
 
 export function LibraryReader({ id }: { id: string }) {
+  return (
+    <ReaderAnnotationProvider key={id}>
+      <LibraryReaderContent id={id} />
+    </ReaderAnnotationProvider>
+  );
+}
+function LibraryReaderContent({ id }: { id: string }) {
+  const panel = useAnnotationPanel();
   const [surface, setSurface] = useState<HighlightSurface | null>(null);
   const [highlightTools, setHighlightTools] = useState<HTMLDivElement | null>(null);
   const [item, setItem] = useState<LibraryItem | null>(null),
@@ -207,189 +220,203 @@ export function LibraryReader({ id }: { id: string }) {
           )}
         </div>
       </div>
-      {error ? (
-        <div role="alert">
-          <p>{error}</p>
-          <button className="primary-button" onClick={retry}>
-            Thử mở lại PDF
-          </button>
-        </div>
-      ) : (
-        <>
-          {!item ? (
-            <p role="status">Đang tải thông tin học liệu…</p>
+      <div className="reader-layout" data-panel-open={panel.open}>
+        <div className="reader-document">
+          {error ? (
+            <div role="alert">
+              <p>{error}</p>
+              <button className="primary-button" onClick={retry}>
+                Thử mở lại PDF
+              </button>
+            </div>
           ) : (
             <>
-              <h2>{item.title}</h2>
-              <p>
-                {item.authors || 'Chưa ghi tác giả'} · Phiên bản {item.versionNo}
-                {!item.current ? ' · Bản công bố trước' : ''}
-              </p>
-              <SaveMaterial key={item.documentId} documentId={item.documentId} />
-              <div className="reader-toolbar" aria-label="Điều khiển đọc PDF">
-                <button
-                  className="secondary-button"
-                  disabled={!pdf || page === 1}
-                  onClick={() => changePage(page - 1)}
-                >
-                  Trang trước
-                </button>
-                <label>
-                  Trang{' '}
-                  <input
-                    aria-label="Số trang"
-                    type="number"
-                    min={1}
-                    max={pdf?.numPages ?? item.pageCount}
-                    value={page}
-                    disabled={!pdf}
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      if (Number.isInteger(value) && value >= 1 && value <= (pdf?.numPages ?? 1))
-                        changePage(value);
-                    }}
-                  />
-                </label>
-                <span>/ {pdf?.numPages ?? item.pageCount}</span>
-                <button
-                  className="secondary-button"
-                  disabled={!pdf || page === pdf.numPages}
-                  onClick={() => changePage(page + 1)}
-                >
-                  Trang sau
-                </button>
-                <SelectField
-                  id="reader-zoom"
-                  label="Mức phóng"
-                  size="default"
-                  value={zoom}
-                  disabled={!pdf}
-                  onChange={(value) => {
-                    setRendered('');
-                    setZoom(value);
-                  }}
-                  options={[
-                    { value: 'fit', label: 'Vừa chiều rộng' },
-                    ...[0.75, 1, 1.25, 1.5, 2].map((value) => ({
-                      value: String(value),
-                      label: `${value * 100}%`,
-                    })),
-                  ]}
-                />
-                <button
-                  className="secondary-button"
-                  disabled={!pdf}
-                  onClick={() => {
-                    setRendered('');
-                    setRotation((r) => (r + 90) % 360);
-                  }}
-                >
-                  Xoay trang
-                </button>
-                {item.downloadAllowed ? (
-                  <>
-                    <a
+              {!item ? (
+                <p role="status">Đang tải thông tin học liệu…</p>
+              ) : (
+                <>
+                  <h2>{item.title}</h2>
+                  <p>
+                    {item.authors || 'Chưa ghi tác giả'} · Phiên bản {item.versionNo}
+                    {!item.current ? ' · Bản công bố trước' : ''}
+                  </p>
+                  <SaveMaterial key={item.documentId} documentId={item.documentId} />
+                  <div className="reader-toolbar" aria-label="Điều khiển đọc PDF">
+                    <button
                       className="secondary-button"
-                      href={`/api/v1/library/versions/${item.versionId}/download`}
+                      disabled={!pdf || page === 1}
+                      onClick={() => changePage(page - 1)}
                     >
-                      {item.sourceFile ? 'Tải bản PDF' : 'Tải PDF gốc'}
-                    </a>
-                    {item.sourceFile && (
-                      <a
-                        className="secondary-button"
-                        href={`/api/v1/library/versions/${item.versionId}/source-download`}
-                      >
-                        Tải Word gốc
-                      </a>
+                      Trang trước
+                    </button>
+                    <label>
+                      Trang{' '}
+                      <input
+                        aria-label="Số trang"
+                        type="number"
+                        min={1}
+                        max={pdf?.numPages ?? item.pageCount}
+                        value={page}
+                        disabled={!pdf}
+                        onChange={(e) => {
+                          const value = Number(e.target.value);
+                          if (
+                            Number.isInteger(value) &&
+                            value >= 1 &&
+                            value <= (pdf?.numPages ?? 1)
+                          )
+                            changePage(value);
+                        }}
+                      />
+                    </label>
+                    <span>/ {pdf?.numPages ?? item.pageCount}</span>
+                    <button
+                      className="secondary-button"
+                      disabled={!pdf || page === pdf.numPages}
+                      onClick={() => changePage(page + 1)}
+                    >
+                      Trang sau
+                    </button>
+                    <SelectField
+                      id="reader-zoom"
+                      label="Mức phóng"
+                      size="default"
+                      value={zoom}
+                      disabled={!pdf}
+                      onChange={(value) => {
+                        setRendered('');
+                        setZoom(value);
+                      }}
+                      options={[
+                        { value: 'fit', label: 'Vừa chiều rộng' },
+                        ...[0.75, 1, 1.25, 1.5, 2].map((value) => ({
+                          value: String(value),
+                          label: `${value * 100}%`,
+                        })),
+                      ]}
+                    />
+                    <button
+                      className="secondary-button"
+                      disabled={!pdf}
+                      onClick={() => {
+                        setRendered('');
+                        setRotation((r) => (r + 90) % 360);
+                      }}
+                    >
+                      Xoay trang
+                    </button>
+                    {item.downloadAllowed ? (
+                      <>
+                        <a
+                          className="secondary-button"
+                          href={`/api/v1/library/versions/${item.versionId}/download`}
+                        >
+                          {item.sourceFile ? 'Tải bản PDF' : 'Tải PDF gốc'}
+                        </a>
+                        {item.sourceFile && (
+                          <a
+                            className="secondary-button"
+                            href={`/api/v1/library/versions/${item.versionId}/source-download`}
+                          >
+                            Tải Word gốc
+                          </a>
+                        )}
+                      </>
+                    ) : (
+                      <span className="field-hint">Chỉ đọc trong hệ thống</span>
                     )}
-                  </>
-                ) : (
-                  <span className="field-hint">Chỉ đọc trong hệ thống</span>
-                )}
-              </div>
-              {item.sourceFile && (
-                <p className="field-hint">
-                  Bản đọc được chuyển từ Word. Ghi chú và vùng tô sáng được lưu riêng trên phiên bản
-                  PDF này.
-                </p>
-              )}
-              <p role="status">
-                {rendered === renderKey
-                  ? `Đã hiển thị trang ${page} / ${pdf?.numPages}`
-                  : 'Đang mở trang PDF…'}
-              </p>
-              {!item.hasTextLayer && (
-                <p className="field-hint">
-                  Tài liệu scan có thể không chọn được chữ. OCR chưa được hỗ trợ.
-                </p>
-              )}
-              <div className="reader-highlight-region">
-                <div ref={setHighlightTools} className="reader-highlight-tools" />
-                <div
-                  className="reader-stage"
-                  ref={stage}
-                  tabIndex={0}
-                  aria-label="Trang tài liệu; cuộn ngang khi phóng lớn"
-                >
-                  <div ref={paper} />
-                </div>
-              </div>
-              <details className="reader-source">
-                <summary>
-                  {item.publicationMethod === 'LECTURER_SELF'
-                    ? 'Thông tin tài liệu'
-                    : 'Nguồn và quyền sử dụng'}
-                </summary>
-                <dl className="scope-list">
-                  <div>
-                    <dt>Nguồn</dt>
-                    <dd>{item.sourceReference || 'Giảng viên chưa ghi nguồn tham khảo.'}</dd>
                   </div>
-                  {item.publicationMethod === 'LECTURER_SELF' ? (
-                    <div>
-                      <dt>Công bố</dt>
-                      <dd>Giảng viên tự công bố.</dd>
-                    </div>
-                  ) : (
-                    <div>
-                      <dt>Căn cứ quyền</dt>
-                      <dd>{item.rightsBasis || 'Không có thông tin khai báo.'}</dd>
-                    </div>
+                  {item.sourceFile && (
+                    <p className="field-hint">
+                      Bản đọc được chuyển từ Word. Ghi chú và vùng tô sáng được lưu riêng trên phiên
+                      bản PDF này.
+                    </p>
                   )}
-                  {(item.publicationMethod !== 'LECTURER_SELF' || item.rightsValidUntil) && (
-                    <div>
-                      <dt>Hạn quyền</dt>
-                      <dd>
-                        {item.rightsValidUntil
-                          ? new Date(item.rightsValidUntil).toLocaleDateString('vi-VN')
-                          : 'Chưa đặt thời hạn'}
-                      </dd>
-                    </div>
+                  <p role="status">
+                    {rendered === renderKey
+                      ? `Đã hiển thị trang ${page} / ${pdf?.numPages}`
+                      : 'Đang mở trang PDF…'}
+                  </p>
+                  {!item.hasTextLayer && (
+                    <p className="field-hint">
+                      Tài liệu scan có thể không chọn được chữ. OCR chưa được hỗ trợ.
+                    </p>
                   )}
-                  <div>
-                    <dt>Môn học</dt>
-                    <dd>{item.courses.map((c) => `${c.code} · ${c.name}`).join('; ')}</dd>
+                  <div className="reader-highlight-region">
+                    <div ref={setHighlightTools} className="reader-highlight-tools" />
+                    <div
+                      className="reader-stage"
+                      ref={stage}
+                      tabIndex={0}
+                      aria-label="Trang tài liệu; cuộn ngang khi phóng lớn"
+                    >
+                      <div ref={paper} />
+                    </div>
                   </div>
-                </dl>
-                <p>{item.description}</p>
-              </details>
-              <p className="field-hint">
-                Vùng tô và ghi chú cần mạng để lưu. Chưa đọc offline hoặc xuất PDF kèm ghi chú.
-              </p>
+                  <details className="reader-source">
+                    <summary>
+                      {item.publicationMethod === 'LECTURER_SELF'
+                        ? 'Thông tin tài liệu'
+                        : 'Nguồn và quyền sử dụng'}
+                    </summary>
+                    <dl className="scope-list">
+                      <div>
+                        <dt>Nguồn</dt>
+                        <dd>{item.sourceReference || 'Giảng viên chưa ghi nguồn tham khảo.'}</dd>
+                      </div>
+                      {item.publicationMethod === 'LECTURER_SELF' ? (
+                        <div>
+                          <dt>Công bố</dt>
+                          <dd>Giảng viên tự công bố.</dd>
+                        </div>
+                      ) : (
+                        <div>
+                          <dt>Căn cứ quyền</dt>
+                          <dd>{item.rightsBasis || 'Không có thông tin khai báo.'}</dd>
+                        </div>
+                      )}
+                      {(item.publicationMethod !== 'LECTURER_SELF' || item.rightsValidUntil) && (
+                        <div>
+                          <dt>Hạn quyền</dt>
+                          <dd>
+                            {item.rightsValidUntil
+                              ? new Date(item.rightsValidUntil).toLocaleDateString('vi-VN')
+                              : 'Chưa đặt thời hạn'}
+                          </dd>
+                        </div>
+                      )}
+                      <div>
+                        <dt>Môn học</dt>
+                        <dd>{item.courses.map((c) => `${c.code} · ${c.name}`).join('; ')}</dd>
+                      </div>
+                    </dl>
+                    <p>{item.description}</p>
+                  </details>
+                  <p className="field-hint">
+                    Vùng tô và ghi chú cần mạng để lưu. Chưa đọc offline hoặc xuất PDF kèm ghi chú.
+                  </p>
+                </>
+              )}
             </>
           )}
-        </>
-      )}
-      {item && (
-        <ReaderHighlights
-          versionId={id}
-          page={page}
-          surface={!error && rendered === renderKey && surface?.key === renderKey ? surface : null}
-          tools={highlightTools}
-          available={!error}
-        />
-      )}
-      {item && <ReaderNotes versionId={id} page={page} />}
+        </div>
+        {item && (
+          <ReaderAnnotationPanel
+            highlights={
+              <ReaderHighlights
+                versionId={id}
+                page={page}
+                surface={
+                  !error && rendered === renderKey && surface?.key === renderKey ? surface : null
+                }
+                tools={highlightTools}
+                available={!error}
+              />
+            }
+            notes={<ReaderNotes versionId={id} page={page} />}
+          />
+        )}
+      </div>
     </section>
   );
 }
