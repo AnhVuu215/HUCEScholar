@@ -10,12 +10,14 @@ export function ReaderSelectionToolbar({
   disabled,
   onHighlight,
   onNote,
+  onCite,
   onDismiss,
 }: {
   selection: ReaderSelection;
   disabled: boolean;
   onHighlight: () => void;
   onNote: () => void;
+  onCite: () => void;
   onDismiss: () => void;
 }) {
   const toolbar = useRef<HTMLDivElement>(null);
@@ -104,6 +106,9 @@ export function ReaderSelectionToolbar({
       </button>
       <button className="secondary-button" disabled={disabled} onClick={onNote}>
         Ghi chú đoạn chọn
+      </button>
+      <button className="secondary-button" onClick={onCite}>
+        Trích dẫn
       </button>
     </div>,
     document.body,

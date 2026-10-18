@@ -1,6 +1,6 @@
 # HUCEScholar V2 — Reader và kho học liệu Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. READ-02 và READ-03 đã triển khai local; các task còn lại vẫn là kế hoạch. Bằng chứng và thứ tự phát hành: [READ-02](../../implementation/2026-10-17-reader-highlight-palette.md), [READ-03](../../implementation/2026-10-17-reader-direct-annotations.md).
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. READ-02, READ-03, CITE-01, LEARN-01 và READ-01 đã triển khai local; các task còn lại vẫn là kế hoạch. Bằng chứng và thứ tự phát hành: [READ-02](../../implementation/2026-10-17-reader-highlight-palette.md), [READ-03](../../implementation/2026-10-17-reader-direct-annotations.md), [CITE-01](../../implementation/2026-10-18-reader-citations.md), [LEARN-01](../../implementation/2026-10-18-reader-notebook.md), [READ-01](../../implementation/2026-10-18-reader-find-focus.md).
 
 **Goal:** Chọn chữ để tô/ghi chú/trích dẫn ngay trong reader, tìm lại ghi chú mọi trang và giảm công cụ chiếm diện tích.
 
@@ -100,46 +100,48 @@ Nghiệm thu: đọc → chọn → tô/note → sửa/xóa từ trang hoặc da
 
 ## Task CITE-01 — Trích dẫn có nguồn và mở lại đúng chỗ
 
-- [ ] Formatter nhận `{quote,title,authors?,versionNo,versionId,pageNumber,origin}`; quote là plain text từ vùng chọn thật. Output đề xuất: `“{quote}” — {title}; {authors nếu có}; phiên bản {n}; trang PDF {p}. {link}`. Không gọi đây là chuẩn APA/IEEE; thiếu tác giả thì bỏ, không điền giả.
-- [ ] Link dùng `/workspace/library/versions/{id}?page={p}` cùng origin được cấu hình/xác minh, không signed URL hoặc quote/note. Reader validate page là integer1..pageCount sau tải PDF; link sai trang báo rõ và không lưu progress trang không render.
-- [ ] Ưu tiên explicit page trong link khi mở; nếu có progress cũ khác, hiển thị “Đang mở trang được dẫn” và nút quay tiến độ trước. Chỉ ghi progress khi trang link render thành công; guard nếu điều hướng từ bản soạn đang mở.
-- [ ] Clipboard chỉ ghi khi người dùng bấm; đợi Promise thành công mới thông báo. Nếu quyền clipboard không có/HTTP không hỗ trợ, hiện ô plain text read-only và nút chọn để copy thủ công; không tự gửi quote ra bên ngoài.
-- [ ] Copy đoạn chưa highlight không tạo annotation âm thầm. Nút “Lưu đoạn vào ghi chú” là thao tác riêng, tạo highlight qua flow READ-03 với requestId, quote và anchor không đổi.
-- [ ] Test tiêu đề/quote có HTML, xuống dòng, tiếng Việt, thiếu authors; xác nhận output plain text/không script. Test link người khác không có quyền không đọc được, mở bản mới không đổi version cũ, clipboard deny không báo đã sao chép.
-- [ ] Chạy `pnpm test:e2e tests/citations.spec.ts tests/reader-v2.spec.ts` và `pnpm typecheck`. Formatter test import hàm thuần như `tests/highlight-geometry.spec.ts`, không cần page/browser globals; không đổi Jest root để test helper frontend.
+- [x] Formatter nhận `{quote,title,authors?,versionNo,versionId,pageNumber,origin}`; quote là plain text từ vùng chọn thật. Output đề xuất: `“{quote}” — {title}; {authors nếu có}; phiên bản {n}; trang PDF {p}. {link}`. Không gọi đây là chuẩn APA/IEEE; thiếu tác giả thì bỏ, không điền giả.
+- [x] Link dùng `/workspace/library/versions/{id}?page={p}` cùng origin được cấu hình/xác minh, không signed URL hoặc quote/note. Reader validate page là integer1..pageCount sau tải PDF; link sai trang báo rõ và không lưu progress trang không render.
+- [x] Ưu tiên explicit page trong link khi mở; nếu có progress cũ khác, hiển thị “Đang mở trang được dẫn” và nút quay tiến độ trước. Chỉ ghi progress khi trang link render thành công; guard nếu điều hướng từ bản soạn đang mở.
+- [x] Clipboard chỉ ghi khi người dùng bấm; đợi Promise thành công mới thông báo. Nếu quyền clipboard không có/HTTP không hỗ trợ, hiện ô plain text read-only và nút chọn để copy thủ công; không tự gửi quote ra bên ngoài.
+- [x] Copy đoạn chưa highlight không tạo annotation âm thầm. Nút “Lưu đoạn vào ghi chú” là thao tác riêng, tạo highlight qua flow READ-03 với requestId, quote và anchor không đổi.
+- [x] Test tiêu đề/quote có HTML, xuống dòng, tiếng Việt, thiếu authors; xác nhận output plain text/không script. Test link người khác không có quyền không đọc được, mở bản mới không đổi version cũ, clipboard deny không báo đã sao chép.
+- [x] Chạy `pnpm test:e2e tests/citations.spec.ts tests/reader-v2.spec.ts` và `pnpm typecheck`. Formatter test import hàm thuần như `tests/highlight-geometry.spec.ts`, không cần page/browser globals; không đổi Jest root để test helper frontend.
 
 Nghiệm thu: đoạn trích có nguồn/version/trang, liên kết mở đúng trang khi có quyền; copy không đồng nghĩa chia sẻ quyền tài liệu hoặc tải file.
 
 ## Task LEARN-01 — Ghi chú toàn phiên bản
 
-- [ ] Viết integration theo contract: hai chủ cùng version; PAGE_NOTE và TEXT_HIGHLIGHT nhiều trang; hơn20 items, cùng page nhiều ID; query/kind/color/limit/cursor invalid; admin không đọc người khác; ẩn tài liệu/khóa account chặn request.
-- [ ] Implement DTO/controller/query bằng owner/session và library access hiện hữu; keyset page/id, limit+1; không query toàn thư viện hoặc tải tất cả trang về browser.
-- [ ] Panel có tab Trang này/Toàn tài liệu, filter chữ/loại/màu, load-more/retry. Search submit hoặc debounce có hủy request cũ; version/filter đổi reset list/cursor, vẫn giữ editor có dirty state.
-- [ ] Chọn item điều hướng tới đúng page/annotation ID; kiểm bản soạn trước chuyển, scroll/focus sau PDF render, không đưa nội dung note vào URL. Không gọi đó là sổ tay toàn kho; vẫn scope một version.
-- [ ] Test API timeout, đổi query nhanh, xóa mục cuối và list rỗng, item bị sửa tab khác, chuyển version, thu hồi quyền trong lúc đang mở. Không có duplicate ID khi pagination.
-- [ ] Chạy `pnpm test:integration`, `pnpm test:e2e tests/reader-v2.spec.ts`, `pnpm check`. Ghi baseline query trên fixture nhiều annotations trước tối ưu index.
+- [x] Viết integration theo contract: hai chủ cùng version; PAGE_NOTE và TEXT_HIGHLIGHT nhiều trang; hơn20 items, cùng page nhiều ID; query/kind/color/limit/cursor invalid; admin không đọc người khác; ẩn tài liệu/khóa account chặn request.
+- [x] Implement DTO/controller/query bằng owner/session và library access hiện hữu; keyset page/id, limit+1; không query toàn thư viện hoặc tải tất cả trang về browser.
+- [x] Panel có tab Trang này/Toàn tài liệu, filter chữ/loại/màu, load-more/retry. Search submit hoặc debounce có hủy request cũ; version/filter đổi reset list/cursor, vẫn giữ editor có dirty state.
+- [x] Chọn item điều hướng tới đúng page/annotation ID; kiểm bản soạn trước chuyển, scroll/focus sau PDF render, không đưa nội dung note vào URL. Không gọi đó là sổ tay toàn kho; vẫn scope một version.
+- [x] Test API timeout, đổi query nhanh, xóa mục cuối và list rỗng, item bị sửa tab khác, chuyển version, thu hồi quyền trong lúc đang mở. Không có duplicate ID khi pagination.
+- [x] Chạy `pnpm test:integration`, `pnpm test:e2e tests/reader-v2.spec.ts`, `pnpm check`. Ghi baseline query trên fixture nhiều annotations trước tối ưu index.
 
 Nghiệm thu: không cần nhớ số trang để tìm lại; dữ liệu riêng tư và version không bị trộn; pagination/response muộn không làm hiện kết quả cũ.
 
 ## Task READ-01 — Find, outline và focus mode
 
-- [ ] Dùng text content/outline PDF.js hiện hữu; find tăng dần theo lô, dừng/hủy khi đổi document hoặc đóng reader. Không giữ text của toàn kho ở browser.
-- [ ] Next/previous match kèm trang/số kết quả đang tìm; marker tìm kiếm tách lớp khỏi highlight đã lưu, không gọi write annotation. Query dài giới hạn100 ký tự; khi scan không có text báo đúng, vẫn cho note trang.
-- [ ] Outline hiển thị chỉ khi có bookmark; resolve destination đúng trang, không mở javascript/URL ngoài từ PDF âm thầm. Đi qua guard khi nhảy trang trong lúc đang soạn.
-- [ ] Focus mode thu chrome/sidebar/panel theo lựa chọn, giữ controls thiết yếu/trạng thái lưu và nút thoát. Escape đóng popup đang mở trước, không thoát hàng loạt mọi lớp.
-- [ ] Browser tests scan/text/outline không có hoặc lỗi, tìm tiếng Việt/nhiều match, cancel, zoom/rotate sau jump, keyboard, viewport320/390/768/1440. Không claim tìm không dấu/OCR.
-- [ ] Chạy targeted reader/guard tests và `pnpm check`; trước tích hợp reader đợt B chạy full browser một lượt.
+- [x] Dùng text content/outline PDF.js hiện hữu; find tăng dần theo lô, dừng/hủy khi đổi document hoặc đóng reader. Không giữ text của toàn kho ở browser.
+- [x] Next/previous match kèm trang/số kết quả đang tìm; marker tìm kiếm tách lớp khỏi highlight đã lưu, không gọi write annotation. Query dài giới hạn100 ký tự; khi scan không có text báo đúng, vẫn cho note trang.
+- [x] Outline hiển thị chỉ khi có bookmark; resolve destination đúng trang, không mở javascript/URL ngoài từ PDF âm thầm. Đi qua guard khi nhảy trang trong lúc đang soạn.
+- [x] Focus mode thu chrome/sidebar/panel theo lựa chọn, giữ controls thiết yếu/trạng thái lưu và nút thoát. Escape đóng popup đang mở trước, không thoát hàng loạt mọi lớp.
+- [x] Browser tests scan/text/outline không có hoặc lỗi, tìm tiếng Việt/nhiều match, cancel, zoom/rotate sau jump, keyboard, viewport320/390/768/1440. Không claim tìm không dấu/OCR.
+- [x] Chạy targeted reader/guard tests và `pnpm check`; trước tích hợp reader đợt B chạy full browser một lượt.
 
 ## Task SEARCH-02 — Kho học liệu gọn và dễ quay lại
 
-- [ ] Hàng chính gồm tìm tiêu đề/tác giả, môn và nút lọc; filter ít dùng đưa vùng thu gọn có nhãn/số filter đang bật. Giữ kết quả/empty/error và pagination thấy được, không mở drawer chỉ để đổi một giá trị.
-- [ ] Giữ public filters trong URL, validate enum/page, Back/Forward khôi phục; chọn filter mới về trang1; request muộn không ghi đè query mới. Không đưa ghi chú riêng hoặc search trong sổ tay lên URL.
-- [ ] Dòng tài liệu có title/authors nếu có/loại/version/nguồn và mở đọc; action phụ trong vùng rõ ràng. Không thêm bìa giả/statistic giả; giữ tải theo quyền và lưu tài liệu hiện hữu.
-- [ ] Test nhiều filter rồi back, clear filter, không kết quả, timeout/retry, tiêu đề dài, mobile. Không mở rộng SQL tìm không dấu ở task layout; việc đó thuộc IDEA-14/SEARCH-01.
-- [ ] Chạy `pnpm test:e2e tests/reader-v2.spec.ts tests/ui-refinements.spec.ts tests/materials.spec.ts` và `pnpm check`.
+- [x] Hàng chính gồm tìm tiêu đề/tác giả, môn và nút lọc; filter ít dùng đưa vùng thu gọn có nhãn/số filter đang bật. Giữ kết quả/empty/error và pagination thấy được, không mở drawer chỉ để đổi một giá trị.
+- [x] Giữ public filters trong URL, validate enum/page, Back/Forward khôi phục; chọn filter mới về trang1; request muộn không ghi đè query mới. Không đưa ghi chú riêng hoặc search trong sổ tay lên URL.
+- [x] Dòng tài liệu có title/authors nếu có/loại/version/nguồn và mở đọc; action phụ trong vùng rõ ràng. Không thêm bìa giả/statistic giả; giữ tải theo quyền và lưu tài liệu hiện hữu.
+- [x] Test nhiều filter rồi back, clear filter, không kết quả, timeout/retry, tiêu đề dài, mobile. Không mở rộng SQL tìm không dấu ở task layout; việc đó thuộc IDEA-14/SEARCH-01.
+- [x] Chạy `pnpm test:e2e tests/reader-v2.spec.ts tests/ui-refinements.spec.ts tests/materials.spec.ts` và `pnpm check`.
 
 ## Đóng đợt B
 
-- [ ] Ghi implementation log cho READ/CITE/LEARN, cập nhật brief và PRODUCT chỉ khi đã chạy thật. Không đánh dấu tính năng hoàn thành từ plan.
-- [ ] Kiểm regression note cũ, PDF cũ, DOCX rendition, personal library/resume, ba role, lost access và Back/Forward; không lặp toàn suite sau mỗi sửa CSS nếu targeted đã đủ, nhưng full suite trước tích hợp.
-- [ ] Bàn giao cho PREF-01 đúng enum8 màu và options zoom đã thực sự hỗ trợ; mặc định mới không sửa các highlight đã lưu.
+- [x] Ghi implementation log cho READ/CITE/LEARN, cập nhật brief và PRODUCT chỉ khi đã chạy thật. Không đánh dấu tính năng hoàn thành từ plan.
+- [x] Kiểm regression note cũ, PDF cũ, DOCX rendition, personal library/resume, ba role, lost access và Back/Forward; không lặp toàn suite sau mỗi sửa CSS nếu targeted đã đủ, nhưng full suite trước tích hợp.
+- [x] Bàn giao cho PREF-01 đúng enum8 màu và options zoom đã thực sự hỗ trợ; mặc định mới không sửa các highlight đã lưu.
+
+Nghiệm thu local18/10: `pnpm check`82unit,156integration và134/135Playwright qua; worker/converter thật vẫn là2test opt-in chưa chạy (1 mỗi suite). Chi tiết, giới hạn và contract bàn giao trong `docs/implementation/2026-10-18-library-catalog.md`. SEARCH-02 giữ lưu/tải trong reader hiện hữu, không thêm actions giả trên dòng kho. Đợt B hoàn tất; ACCOUNT-01/AUTH-01/PREF-01 thuộc kế hoạch đợt C, chưa được đánh dấu triển khai ở đây.

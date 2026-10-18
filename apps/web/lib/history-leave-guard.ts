@@ -31,7 +31,7 @@ export function initializeHistoryLeaveGuard(): Controller {
   };
   current = { ...current, index: nativeIndex() ?? current.index };
   let currentState: unknown = history.state;
-  let pathname = location.pathname;
+  let route = location.pathname + location.search;
   let restoring: Entry | undefined;
   let pendingWrites: Array<() => void> = [];
   const push = history.pushState;
@@ -51,7 +51,7 @@ export function initializeHistoryLeaveGuard(): Controller {
     push.call(this, withEntry(state, next), unused, url);
     current = { ...next, index: nativeIndex() ?? next.index };
     currentState = history.state;
-    pathname = location.pathname;
+    route = location.pathname + location.search;
   };
   history.replaceState = function (state, unused, url) {
     if (restoring) {
@@ -60,24 +60,25 @@ export function initializeHistoryLeaveGuard(): Controller {
     }
     replace.call(this, withEntry(state, current), unused, url);
     currentState = history.state;
-    pathname = location.pathname;
+    route = location.pathname + location.search;
   };
 
   window.addEventListener(
     'popstate',
     (event: PopStateEvent) => {
+      const targetRoute = location.pathname + location.search;
       let target = readEntry(event.state);
       const index = nativeIndex();
       if (index !== undefined) target = { group: current.group, index };
       // Native fragment entries can have null state. Preserve the previous same-route
       // framework state, and use the browser's actual position rather than guessing direction.
-      if (!target && location.pathname === pathname) {
+      if (!target && targetRoute === route) {
         // Older browsers cannot locate untracked entries. Start a fresh tracked range;
         // never invent a restoration offset that could send the user to the wrong page.
         current = { group: crypto.randomUUID(), index: 0 };
         target = current;
       }
-      if (target && !readEntry(event.state) && location.pathname === pathname) {
+      if (target && !readEntry(event.state) && targetRoute === route) {
         replace.call(history, withEntry(currentState, target), '');
       }
       if (!target || target.group !== current.group) return;
@@ -98,7 +99,7 @@ export function initializeHistoryLeaveGuard(): Controller {
       const delta = current.index - target.index;
       if (
         delta &&
-        location.pathname !== pathname &&
+        targetRoute !== route &&
         [...controller.guards].some((canLeave) => !canLeave())
       ) {
         // popstate cannot be cancelled. Keep Next's router on the reader while returning to
@@ -110,7 +111,7 @@ export function initializeHistoryLeaveGuard(): Controller {
       }
       current = target;
       currentState = history.state;
-      pathname = location.pathname;
+      route = targetRoute;
     },
     { capture: true },
   );

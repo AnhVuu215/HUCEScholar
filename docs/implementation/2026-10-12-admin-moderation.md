@@ -1,5 +1,7 @@
 # Kiểm duyệt học liệu và bản hiện hành
 
+Cập nhật 18/10/2026: đã sửa đường điều hướng sớm sau đăng nhập làm Back/Forward tải document mới và mất bản soạn. Menu chờ xác thực client hoàn tất trước khi hiện link theo role. [Nguyên nhân và kiểm chứng hồi quy](2026-10-18-moderation-draft-history-fix.md).
+
 ## Phạm vi
 
 Admin xem hàng chờ, metadata/nguồn/quyền, PDF SAFE, yêu cầu sửa, từ chối hoặc duyệt phiên bản làm bản hiện hành. Chủ nhận CHANGES_REQUIRED mở lại DRAFT, sửa rồi gửi lại; giữ các quyết định cũ. Chưa có tạo phiên bản kế tiếp, bàn giao, ẩn/khôi phục, kho tìm kiếm, reader, ghi chú hoặc tải file cho người học.

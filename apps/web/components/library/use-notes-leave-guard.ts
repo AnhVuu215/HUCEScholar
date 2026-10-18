@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useEffectEvent } from 'react';
 import { registerHistoryLeaveGuard } from '../../lib/history-leave-guard';
-type DraftState = { dirty: boolean; busy: boolean };
+type DraftState = { dirty: boolean; busy: boolean; message?: string };
 const drafts = new Set<() => DraftState>();
 function guarded() {
   return [...drafts].map((read) => read());
@@ -11,7 +11,10 @@ function canLeave() {
   if (states.some((state) => state.busy)) return false;
   return (
     !states.some((state) => state.dirty) ||
-    window.confirm('Bạn có ghi chú chưa lưu. Rời trang và bỏ thay đổi?')
+    window.confirm(
+      states.find((state) => state.dirty)?.message ??
+        'Bạn có ghi chú chưa lưu. Rời trang và bỏ thay đổi?',
+    )
   );
 }
 let detach: (() => void) | undefined;
@@ -41,7 +44,7 @@ function attach() {
         link.target !== '_blank' &&
         !link.hasAttribute('download') &&
         link.origin === location.origin &&
-        link.pathname !== location.pathname &&
+        (link.pathname !== location.pathname || link.search !== location.search) &&
         !link.pathname.endsWith('/download'));
     if (leaving && !canLeave()) {
       event.preventDefault();
@@ -56,8 +59,8 @@ function attach() {
     document.removeEventListener('click', navigate, true);
   };
 }
-export function useNotesLeaveGuard(dirty: boolean, busy: boolean) {
-  const state = useEffectEvent(() => ({ dirty, busy }));
+export function useNotesLeaveGuard(dirty: boolean, busy: boolean, message?: string) {
+  const state = useEffectEvent(() => ({ dirty, busy, message }));
   useEffect(() => {
     if (!dirty && !busy) return;
     const read = () => state();

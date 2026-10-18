@@ -8,15 +8,17 @@ export function HighlightPalette({
   value,
   disabled,
   onChange,
+  label = 'Màu tô sáng',
 }: {
   value: string;
   disabled: boolean;
   onChange: (color: HighlightColor) => void;
+  label?: string;
 }) {
   const name = useId();
   return (
     <fieldset className={styles.palette} disabled={disabled}>
-      <legend>Màu tô sáng</legend>
+      <legend>{label}</legend>
       <div className={styles.choices}>
         {Object.entries(highlightColors).map(([color, label]) => (
           <label className={styles.option} key={color}>

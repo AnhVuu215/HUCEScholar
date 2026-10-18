@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { CsrfGuard } from './csrf.guard';
 import { AuthenticatedRequest } from './auth.types';
 import { SessionGuard } from './session.guard';
+import { ChangePasswordDto } from './change-password.dto';
 
 class LoginDto {
   @Transform(({ value }: { value: unknown }) =>
@@ -44,5 +45,21 @@ export class AuthController {
   @HttpCode(204)
   async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     await this.auth.logout(request, response);
+  }
+  @Post('change-password')
+  @HttpCode(204)
+  @UseGuards(SessionGuard)
+  async changePassword(
+    @Body() body: ChangePasswordDto,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    await this.auth.changePassword(
+      request.user.id,
+      body.currentPassword,
+      body.newPassword,
+      request,
+      response,
+    );
   }
 }
