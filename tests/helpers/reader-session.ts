@@ -29,12 +29,33 @@ export async function readerLogout(page: Page) {
     ).status(),
   ).toBe(204);
 }
+/** Legacy annotation scenarios explicitly opt into an open panel; production defaults stay closed. */
+export async function configureReaderPanel(page: Page) {
+  const result = await page.request.get('/api/v1/account/preferences');
+  expect(result.status()).toBe(200);
+  const { preferences, revision } = await result.json();
+  if (preferences.annotationPanelOpen) return;
+  expect(
+    (
+      await page.request.put('/api/v1/account/preferences', {
+        headers: await readerHeaders(page),
+        data: { preferences: { ...preferences, annotationPanelOpen: true }, revision },
+      })
+    ).status(),
+  ).toBe(200);
+}
 
 /** Real publication workflow with an original PDF and explicitly synthetic scan result in the test DB. */
 export async function openReaderFixture(
   page: Page,
   account = 'reader-v2',
-  options: { scan?: boolean; longText?: boolean } = {},
+  options: {
+    scan?: boolean;
+    longText?: boolean;
+    outline?: boolean;
+    splitText?: boolean;
+    panelOpen?: boolean;
+  } = {},
 ) {
   const code = `READV2-${randomBytes(5).toString('hex').toUpperCase()}`;
   await readerLogin(page, 'admin', account);
@@ -123,6 +144,7 @@ export async function openReaderFixture(
   await readerLogout(page);
   await readerLogin(page, 'student', account);
   const versionId = publication.versionId as string;
+  if (options.panelOpen !== false) await configureReaderPanel(page);
   const route = `/workspace/library/versions/${versionId}`;
   await page.goto(route);
   await expect(page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' })).toBeVisible(

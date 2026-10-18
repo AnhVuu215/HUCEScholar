@@ -1912,6 +1912,140 @@ describe('private material drafts', () => {
     quote: 'Original selected text',
     quads: [[0.1, 0.8, 0.6, 0.8, 0.6, 0.75, 0.1, 0.75]],
   });
+  it('annotation notebook searches only owner/version with literal filters and bounded keyset cursors', async () => {
+    const { path, id, versionId } = await readingFixture();
+    const endpoint = `${path}/annotations/search`;
+    for (let i = 0; i < 24; i++) {
+      expect(
+        (
+          await readingWrite('student', `${path}/notes`, {
+            pageNumber: (i % 3) + 1,
+            content: `Ôn tập ${i}`,
+            requestId: randomUUID(),
+          })
+        ).status,
+      ).toBe(201);
+    }
+    const highlighted = await readingWrite('student', `${path}/highlights`, {
+      pageNumber: 2,
+      content: 'Nội dung kèm',
+      color: '#F8BBD0',
+      requestId: randomUUID(),
+      anchor: { ...highlightAnchor(), quote: 'Trích dẫn 50%_\\ tiếng Việt' },
+    });
+    expect(highlighted.status).toBe(201);
+    expect(
+      (
+        await readingWrite('other', `${path}/notes`, {
+          pageNumber: 1,
+          content: 'Bí mật chủ khác',
+          requestId: randomUUID(),
+        })
+      ).status,
+    ).toBe(201);
+    const first = await readingWrite('student', endpoint, {});
+    expect(first.status).toBe(201);
+    expect(first.headers['cache-control']).toContain('no-store');
+    expect(first.body.items).toHaveLength(20);
+    expect(first.body.nextCursor).toEqual(expect.any(String));
+    const second = await readingWrite('student', endpoint, { cursor: first.body.nextCursor });
+    expect(second.body.items).toHaveLength(5);
+    expect(second.body.nextCursor).toBeNull();
+    const all = [...first.body.items, ...second.body.items];
+    expect(new Set(all.map((n) => n.id)).size).toBe(25);
+    expect(
+      all.every(
+        (n, i) =>
+          !i ||
+          n.pageNumber > all[i - 1].pageNumber ||
+          (n.pageNumber === all[i - 1].pageNumber && BigInt(n.id) > BigInt(all[i - 1].id)),
+      ),
+    ).toBe(true);
+    expect((await readingWrite('admin', endpoint, {})).body.items).toEqual([]);
+    expect((await readingWrite('other', endpoint, {})).body.items).toHaveLength(1);
+    expect((await readingWrite('other', endpoint, { cursor: first.body.nextCursor })).status).toBe(
+      400,
+    );
+    const matches = await readingWrite('student', endpoint, {
+      query: '50%_\\ TIẾNG',
+      color: '#F8BBD0',
+    });
+    expect(matches.body.items.map((n: { id: string }) => n.id)).toEqual([highlighted.body.item.id]);
+    expect(
+      (await readingWrite('student', endpoint, { kind: 'PAGE_NOTE', query: 'ÔN TẬP', limit: 50 }))
+        .body.items,
+    ).toHaveLength(24);
+    expect(
+      (await readingWrite('student', endpoint, { kind: 'TEXT_HIGHLIGHT', query: 'nội dung' })).body
+        .items,
+    ).toHaveLength(1);
+    for (const body of [
+      { userId: users.other },
+      { kind: 'UNKNOWN' },
+      { kind: 'PAGE_NOTE', color: '#FFF59D' },
+      { color: '#123456' },
+      { query: 'x'.repeat(101) },
+      { query: null },
+      { limit: 0 },
+      { limit: 51 },
+      { limit: '20' },
+      { cursor: 'not-a-cursor' },
+      { cursor: 'a'.repeat(257) },
+      { cursor: first.body.nextCursor, query: 'khác' },
+    ]) {
+      expect((await readingWrite('student', endpoint, body)).status).toBe(400);
+    }
+    const otherVersion = await readingFixture();
+    expect(
+      (
+        await readingWrite('student', `${otherVersion.path}/annotations/search`, {
+          cursor: first.body.nextCursor,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (await readingWrite('student', `${otherVersion.path}/annotations/search`, {})).body.items,
+    ).toEqual([]);
+    expect((await agents.student.post(endpoint).set('Origin', origin).send({})).status).toBe(403);
+    const anonymous = request.agent(app.getHttpServer());
+    const anonymousCsrf = (await anonymous.get('/api/v1/auth/csrf')).body.csrfToken;
+    expect(
+      (
+        await anonymous
+          .post(endpoint)
+          .set('Origin', origin)
+          .set('X-CSRF-Token', anonymousCsrf)
+          .send({})
+      ).status,
+    ).toBe(401);
+    // Record a local query baseline before deciding whether a new index is justified.
+    const plan = await db.query(
+      'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id,page_number FROM hucescholar.annotations WHERE user_id=$1 AND version_id=$2 ORDER BY page_number,id LIMIT 21',
+      [users.student, versionId],
+    );
+    expect(Number(plan.rows[0]['QUERY PLAN'][0]['Execution Time'])).toBeGreaterThanOrEqual(0);
+    console.info(
+      'Annotation notebook local query ms:',
+      plan.rows[0]['QUERY PLAN'][0]['Execution Time'],
+    );
+    await db.query("UPDATE hucescholar.users SET status='LOCKED' WHERE id=$1", [users.other]);
+    try {
+      expect((await readingWrite('other', endpoint, {})).status).toBe(401);
+    } finally {
+      await db.query("UPDATE hucescholar.users SET status='ACTIVE' WHERE id=$1", [users.other]);
+      // Account locking revokes sessions through the database trigger; restore the shared fixture too.
+      const csrf = (await agents.other.get('/api/v1/auth/csrf')).body.csrfToken;
+      await agents.other
+        .post('/api/v1/auth/login')
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send({ email: `${prefix}-other@example.test`, password })
+        .expect(200);
+    }
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [id]);
+    expect((await readingWrite('student', endpoint, {})).status).toBe(404);
+    expect((await readingWrite('admin', endpoint, {})).status).toBe(404);
+  });
   it('persists all eight highlight colors through create, CAS edit and reload; rejects unknown writes', async () => {
     const { path } = await readingFixture();
     const colors = [

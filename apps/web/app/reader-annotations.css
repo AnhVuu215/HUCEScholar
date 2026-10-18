@@ -85,6 +85,118 @@
 .reader-selection-toolbar button {
   padding-inline: 10px;
 }
+.reader-citation {
+  flex-basis: 100%;
+  min-width: 0;
+  margin-top: 8px;
+}
+.reader-citation textarea {
+  width: 100%;
+  resize: vertical;
+  overflow-wrap: anywhere;
+}
+.reader-link-notice {
+  margin-block: 16px;
+}
+.reader-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 12px;
+}
+.reader-tool-panel,
+.reader-outline {
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--paper);
+}
+.reader-find form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.reader-find input {
+  flex: 1 1 160px;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+}
+.reader-outline ul {
+  max-height: 320px;
+  overflow: auto;
+  padding: 0;
+  list-style: none;
+}
+.reader-outline li {
+  overflow-wrap: anywhere;
+}
+.reader-outline button {
+  white-space: normal;
+  text-align: left;
+}
+.pdf-find-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pdf-find-mark {
+  position: absolute;
+  background: rgb(255 185 66 / 45%);
+  pointer-events: none;
+}
+.pdf-find-mark[data-current='true'] {
+  outline: 2px solid #9a5100;
+  background: rgb(255 185 66 / 65%);
+}
+.app-shell:has(.library-reader[data-focus-mode='true']) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-shell:has(.library-reader[data-focus-mode='true']) > .workspace-sidebar,
+.account-workspace:has(.library-reader[data-focus-mode='true']) > .workspace-header,
+.account-workspace:has(.library-reader[data-focus-mode='true']) > .account-heading,
+.account-workspace:has(.library-reader[data-focus-mode='true']) > .workspace-footer,
+.library-reader[data-focus-mode='true'] .reader-annotation-panel,
+.library-reader[data-focus-mode='true'] .reader-source {
+  display: none;
+}
+.library-reader[data-focus-mode='true'] .reader-layout {
+  display: block;
+}
+.library-reader[data-focus-mode='true'] .reader-stage {
+  max-height: 70dvh;
+}
+.reader-notebook {
+  min-width: 0;
+}
+.notebook-filters,
+.notebook-results {
+  display: grid;
+  gap: 12px;
+  margin-block: 16px;
+}
+.notebook-filters input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-height);
+}
+.notebook-results article {
+  min-width: 0;
+  padding-block: 12px;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.notebook-results blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--line);
+  white-space: pre-wrap;
+}
 @media (min-width: 1280px) {
   .reader-layout[data-panel-open='true'] {
     display: grid;

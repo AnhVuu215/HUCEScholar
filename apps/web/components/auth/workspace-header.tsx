@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { roleLabels, workspacePath, type Profile } from '../../lib/auth';
+import { roleLabels, type Profile } from '../../lib/auth';
 import { Button } from '../ui/button';
 
 export function WorkspaceHeader({
@@ -85,8 +85,11 @@ export function WorkspaceHeader({
               {logoutError}
             </p>
           )}
-          <Link href={workspacePath(user.role)} onClick={() => setOpen(false)}>
+          <Link href="/workspace/profile" onClick={() => setOpen(false)}>
             Tài khoản của tôi
+          </Link>
+          <Link href="/workspace/settings" onClick={() => setOpen(false)}>
+            Cài đặt
           </Link>
           <Button
             variant="quiet"

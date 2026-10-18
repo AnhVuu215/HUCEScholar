@@ -91,3 +91,11 @@ export async function readProfile(response: Response): Promise<Profile> {
 export function workspacePath(role: Role): string {
   return `/workspace/${role.toLowerCase()}`;
 }
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const token = await csrfToken();
+  await apiRequest('/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}

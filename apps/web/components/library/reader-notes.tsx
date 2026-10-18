@@ -34,7 +34,14 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
   const effectiveDraftPage = content || editing || busy ? draftPage : page;
   const fetching = loading || loadedPage !== page;
   useNotesLeaveGuard(dirty || uncertain, busy);
-  useAnnotationEditor('page', { dirty, busy, uncertain }, () => discard(false));
+  useAnnotationEditor(
+    'page',
+    { dirty, busy, uncertain },
+    () => discard(false),
+    (item) => {
+      if (item.kind === 'PAGE_NOTE') restore(item);
+    },
+  );
   const load = useCallback(
     (after: string | null = null) => {
       request.current?.abort();
@@ -89,16 +96,17 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
     if (focus) textarea.current?.focus();
   }
   function edit(note: PageNote) {
-    panel.begin('page', () => {
-      setContent(note.content);
-      setEditing(note);
-      setDraftPage(note.pageNumber);
-      requestId.current = null;
-      setError('');
-      setNotice('');
-      setUncertain(false);
-      textarea.current?.focus();
-    });
+    panel.begin('page', () => restore(note));
+  }
+  function restore(note: PageNote) {
+    setContent(note.content);
+    setEditing(note);
+    setDraftPage(note.pageNumber);
+    requestId.current = null;
+    setError('');
+    setNotice('');
+    setUncertain(false);
+    textarea.current?.focus();
   }
   async function save() {
     if (busy || !content.trim()) return;

@@ -448,6 +448,7 @@ model saved_documents {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model users {
+  preferences user_preferences?
   source_uploads document_source_uploads[]
   id                                                            BigInt                  @id @default(autoincrement())
   email                                                         String                  @unique @db.VarChar(254)
@@ -485,6 +486,17 @@ model users {
   other_users                                                   users[]                 @relation("usersTousers")
   visibility_events                                             visibility_events[]
 
+  @@schema("hucescholar")
+}
+
+model user_preferences {
+  user_id BigInt @id
+  highlight_color String @default("#FFF59D") @db.VarChar(7)
+  default_zoom String @default("fit-width") @db.VarChar(16)
+  annotation_panel_open Boolean @default(false)
+  revision Int @default(1)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   @@schema("hucescholar")
 }
 

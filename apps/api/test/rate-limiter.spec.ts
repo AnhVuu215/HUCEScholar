@@ -47,4 +47,29 @@ describe('rate limiter service recovery', () => {
     );
     expect(connection.disconnect).toHaveBeenCalledTimes(1);
   });
+  it('uses separate hashed password-change quotas and fails closed on Redis outage', async () => {
+    const limiter = new LoginRateLimiter(config);
+    const connection = (Redis as unknown as jest.Mock).mock.results.at(-1)!.value;
+    connection.eval
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1)
+      .mockRejectedValueOnce(new Error('private connection details'));
+    await expect(limiter.checkPasswordChange('127.0.0.1', '123')).resolves.toBeUndefined();
+    const args = connection.eval.mock.calls[0];
+    expect(args.slice(2)).toEqual([
+      expect.stringMatching(/^hs:password-change:user:[a-f0-9]{64}$/),
+      expect.stringMatching(/^hs:password-change:ip:[a-f0-9]{64}$/),
+      5,
+      900000,
+      30,
+      900000,
+    ]);
+    await expect(limiter.checkPasswordChange('127.0.0.1', '123')).rejects.toMatchObject({
+      status: 429,
+    });
+    await expect(limiter.checkPasswordChange('127.0.0.1', '123')).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+    limiter.onModuleDestroy();
+  });
 });

@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { WorkspaceNavigation } from './workspace-navigation';
 import { WorkspaceHeader } from './workspace-header';
+import { WorkspaceProfileContext } from './workspace-profile-context';
+import { ProfileEditor } from '../account/profile-editor';
 import type { WorkspaceSection } from '../../lib/workspace-navigation';
 import {
   ApiError,
@@ -21,14 +23,6 @@ type State =
   | { kind: 'ready'; user: Profile }
   | { kind: 'denied'; user: Profile }
   | { kind: 'error' };
-const upcoming: Record<Role, string> = {
-  ADMIN:
-    'Bạn có thể quản lý tài khoản, danh mục, phân công và kiểm duyệt. Mở Quản lý học liệu để bàn giao giảng viên hoặc ẩn/khôi phục toàn tài liệu.',
-  LECTURER:
-    'Bạn có thể xem phân công, chuẩn bị bản nháp và tự công bố PDF sau khi file quét đạt, không cần admin duyệt. Cập nhật tài liệu bằng phiên bản kế tiếp trong Học liệu của tôi. Mở Kho học liệu để đọc, ghi chú riêng và mở lại trang đã đọc.',
-  STUDENT:
-    'Bạn có thể tìm và đọc trong Kho học liệu, ghi chú riêng theo trang, mở lại trang đã đọc, tải khi được phép, chuẩn bị tài liệu bổ sung và theo dõi kết quả duyệt.',
-};
 
 export function RoleWorkspace({
   role,
@@ -49,7 +43,15 @@ export function RoleWorkspace({
   const [logoutError, setLogoutError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
-  const navigationRole = state.kind === 'ready' || state.kind === 'denied' ? state.user.role : role;
+  const updateProfile = useCallback((user: Profile) => {
+    setState((current) =>
+      current.kind === 'ready' && current.user.id === user.id ? { ...current, user } : current,
+    );
+  }, []);
+  // Auth resolves after hydration; earlier role links could navigate as plain anchors
+  // and lose in-memory drafts when Back/Forward loads a new document.
+  const navigationRole =
+    state.kind === 'ready' || state.kind === 'denied' ? state.user.role : undefined;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -201,7 +203,13 @@ export function RoleWorkspace({
           </>
         )}
         {state.kind === 'ready' && (
-          <>
+          <WorkspaceProfileContext.Provider
+            key={state.user.id}
+            value={{
+              user: state.user,
+              update: updateProfile,
+            }}
+          >
             <WorkspaceHeader
               user={state.user}
               title={title ?? 'Tài khoản của tôi'}
@@ -215,41 +223,12 @@ export function RoleWorkspace({
                 <p className="intro">{description ?? `Chào ${state.user.displayName}.`}</p>
               </div>
             </div>
-            {children ?? (
-              <>
-                <section className="account-details" aria-labelledby="account-title">
-                  <h2 id="account-title">Tài khoản của bạn</h2>
-                  <dl className="scope-list">
-                    <div>
-                      <dt>Họ tên</dt>
-                      <dd>{state.user.displayName}</dd>
-                    </div>
-                    <div>
-                      <dt>Email</dt>
-                      <dd>{state.user.email}</dd>
-                    </div>
-                    <div>
-                      <dt>Vai trò</dt>
-                      <dd>{roleLabels[state.user.role]}</dd>
-                    </div>
-                  </dl>
-                </section>
-                <section className="content-section" aria-labelledby="upcoming-title">
-                  <h2 id="upcoming-title">Không gian đang được hoàn thiện</h2>
-                  <p>{upcoming[state.user.role]}</p>
-                  <p>
-                    {state.user.role === 'ADMIN'
-                      ? 'Bạn có thể cấp và quản lý tài khoản giảng viên, sinh viên. Chưa có học liệu thật trong hệ thống.'
-                      : 'Mở Kho học liệu để tìm và đọc; mở Học liệu của tôi để chuẩn bị bản nháp và theo dõi kết quả duyệt.'}
-                  </p>
-                </section>
-              </>
-            )}
+            {children ?? <ProfileEditor />}
             <footer className="page-footer workspace-footer">
               <span>HUCEScholar · Đang phát triển</span>
               <Link href="/project">Tiến độ dự án</Link>
             </footer>
-          </>
+          </WorkspaceProfileContext.Provider>
         )}
       </main>
     </div>

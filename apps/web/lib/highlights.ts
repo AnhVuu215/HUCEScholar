@@ -33,7 +33,7 @@ export interface TextHighlight {
   updatedAt: string;
 }
 const validId = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
-function isHighlight(v: unknown): v is TextHighlight {
+export function isHighlight(v: unknown): v is TextHighlight {
   if (!v || typeof v !== 'object') return false;
   const r = v as TextHighlight,
     a = r.anchor;

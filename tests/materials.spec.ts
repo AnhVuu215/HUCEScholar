@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
 import { readerPdf } from './helpers/reader-pdf';
+import { configureReaderPanel } from './helpers/reader-session';
 
 async function readerChoice(page: Page, label: string, option: string) {
   if (label === 'Màu tô sáng') {
@@ -345,6 +346,7 @@ async function openPersonalReader(page: Page, prefix: string) {
   ).toBe(201);
   await logoutForTest(page);
   await login(page, 'student', prefix);
+  await configureReaderPanel(page);
   await page.goto(`/workspace/library/versions/${item.versionId}`);
   await expect(page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' })).toBeVisible(
     { timeout: 15_000 },
@@ -1374,11 +1376,22 @@ test('lecturer reopens a legacy change request, self-publishes and retains older
 }) => {
   test.setTimeout(60000);
   const { code } = await submittedForReview(page, 'lecturer');
+  let moderationDocuments = 0;
+  page.on('request', (request) => {
+    if (
+      request.isNavigationRequest() &&
+      request.frame() === page.mainFrame() &&
+      new URL(request.url()).pathname === '/workspace/admin/moderation'
+    )
+      moderationDocuments++;
+  });
   await adminReviewLogin(page, code);
-  await page.getByLabel('Quyết định', { exact: true }).selectOption('CHANGES_REQUIRED');
+  expect(moderationDocuments).toBe(0);
+  await page.getByLabel('Quyết định', { exact: true }).selectOption('APPROVED');
   await page
     .getByLabel('Lý do quyết định', { exact: true })
     .fill('Bổ sung dẫn chứng quyền sử dụng');
+  await page.getByLabel('Đã kiểm tra nội dung và căn cứ quyền sử dụng', { exact: true }).check();
   await page.goBack();
   await expect(page).toHaveURL('/workspace/admin');
   await page.goForward();
@@ -1390,7 +1403,15 @@ test('lecturer reopens a legacy change request, self-publishes and retains older
   await expect(page.getByLabel('Lý do quyết định', { exact: true })).toHaveValue(
     'Bổ sung dẫn chứng quyền sử dụng',
   );
-  await expect(page.getByLabel('Quyết định', { exact: true })).toHaveValue('CHANGES_REQUIRED');
+  expect(moderationDocuments).toBe(0);
+  await expect(page.getByLabel('Quyết định', { exact: true })).toHaveValue('APPROVED');
+  await expect(
+    page.getByLabel('Đã kiểm tra nội dung và căn cứ quyền sử dụng', { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole('button', { name: 'Xác nhận quyết định', exact: true }),
+  ).toBeDisabled();
+  await page.getByLabel('Quyết định', { exact: true }).selectOption('CHANGES_REQUIRED');
   await page.getByRole('button', { name: 'Xác nhận quyết định', exact: true }).click();
   await page.getByRole('button', { name: 'Lưu quyết định', exact: true }).click();
   await expect(page.locator('.moderation-detail')).toContainText('Đã lưu quyết định');

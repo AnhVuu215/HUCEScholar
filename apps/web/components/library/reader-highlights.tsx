@@ -18,6 +18,9 @@ import { useNotesLeaveGuard } from './use-notes-leave-guard';
 import { HighlightPalette } from './highlight-palette';
 import { ReaderSelectionToolbar } from './reader-selection-toolbar';
 import { useAnnotationEditor, useAnnotationPanel } from './reader-annotation-panel';
+import type { LibraryItem } from '../../lib/library';
+import { formatCitation } from '../../lib/citations';
+import { ReaderCitation, type CitationStatus } from './reader-citation';
 
 type Draft = {
   page: number;
@@ -31,12 +34,18 @@ export function ReaderHighlights({
   surface,
   tools,
   available,
+  source,
+  onEdit,
+  defaultColor = '#FFF59D',
 }: {
   versionId: string;
   page: number;
   surface: HighlightSurface | null;
   tools: HTMLDivElement | null;
   available: boolean;
+  source: LibraryItem;
+  onEdit?: () => void;
+  defaultColor?: string;
 }) {
   const panel = useAnnotationPanel();
   const [data, setData] = useState<{ page: number; items: TextHighlight[] } | null>(null);
@@ -44,6 +53,11 @@ export function ReaderHighlights({
     [listError, setListError] = useState('');
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [selectionError, setSelectionError] = useState('');
+  const [citation, setCitation] = useState<{ selection: ReaderSelection; text: string } | null>(
+    null,
+  );
+  const [citationStatus, setCitationStatus] = useState<CitationStatus>('copying');
+  const copyRequest = useRef(0);
   const [overlaps, setOverlaps] = useState<TextHighlight[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null),
     [content, setContent] = useState('');
@@ -63,7 +77,9 @@ export function ReaderHighlights({
   const items = !listError && data?.page === page && available ? data.items : [];
   const fetching = loading || data?.page !== page;
   useNotesLeaveGuard(dirty || uncertain, busy);
-  useAnnotationEditor('highlight', { dirty, busy, uncertain }, discard);
+  useAnnotationEditor('highlight', { dirty, busy, uncertain }, discard, (item) => {
+    if (item.kind === 'TEXT_HIGHLIGHT') restore(item);
+  });
   const load = useCallback(() => {
     request.current?.abort();
     const controller = new AbortController();
@@ -109,19 +125,23 @@ export function ReaderHighlights({
   }, [draft]);
   function open(note: TextHighlight) {
     if (locked) return;
-    panel.begin('highlight', () => {
-      setDraft({
-        page: note.pageNumber,
-        anchor: note.anchor,
-        original: note,
-        requestId: crypto.randomUUID(),
-      });
-      setContent(note.content);
-      setColor(note.color);
-      setError('');
-      setNotice('');
-      input.current?.focus();
+    beginEdit(() => restore(note));
+  }
+  function beginEdit(action: () => void) {
+    if (panel.begin('highlight', action)) onEdit?.();
+  }
+  function restore(note: TextHighlight) {
+    setDraft({
+      page: note.pageNumber,
+      anchor: note.anchor,
+      original: note,
+      requestId: crypto.randomUUID(),
     });
+    setContent(note.content);
+    setColor(note.color);
+    setError('');
+    setNotice('');
+    input.current?.focus();
   }
   const capture = useEffectEvent(() => {
     if (!surface || locked) return;
@@ -147,12 +167,25 @@ export function ReaderHighlights({
       }),
     );
     if (matches.length === 1) open(matches[0]);
-    else if (matches.length > 1) panel.begin('highlight', () => setOverlaps(matches));
+    else if (matches.length > 1) beginEdit(() => setOverlaps(matches));
+  });
+  const dismissOnStage = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || (!candidate && !citation)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (citation) closeCitation();
+    else {
+      setSelection(null);
+      window.getSelection()?.removeAllRanges();
+    }
   });
   useEffect(() => {
     if (!surface) return;
     const selectionChanged = () => capture();
     const clicked = (event: MouseEvent) => hit(event);
+    const stage = surface.element.closest('.reader-stage');
+    const keyDown = (event: Event) => dismissOnStage(event as KeyboardEvent);
+    stage?.addEventListener('keydown', keyDown);
     document.addEventListener('selectionchange', selectionChanged);
     surface.layer.addEventListener('pointerup', selectionChanged);
     surface.layer.addEventListener('click', clicked);
@@ -160,6 +193,7 @@ export function ReaderHighlights({
       document.removeEventListener('selectionchange', selectionChanged);
       surface.layer.removeEventListener('pointerup', selectionChanged);
       surface.layer.removeEventListener('click', clicked);
+      stage?.removeEventListener('keydown', keyDown);
     };
   }, [surface]);
   function discard() {
@@ -230,10 +264,9 @@ export function ReaderHighlights({
     selection.pageNumber === surface.page
       ? selection
       : null;
-  function startDraft() {
-    if (!candidate || locked || !available) return;
-    const snapshot = candidate;
-    panel.begin('highlight', () => {
+  function startDraft(snapshot: ReaderSelection | null) {
+    if (!snapshot || locked || !available) return;
+    beginEdit(() => {
       setDraft({
         page: snapshot.pageNumber,
         anchor: snapshot.anchor,
@@ -241,7 +274,7 @@ export function ReaderHighlights({
         requestId: crypto.randomUUID(),
       });
       setContent('');
-      setColor('#FFF59D');
+      setColor(defaultColor);
       setError('');
       setNotice('');
       setSelection(null);
@@ -249,14 +282,51 @@ export function ReaderHighlights({
       window.getSelection()?.removeAllRanges();
     });
   }
+  async function copyCitation(snapshot: ReaderSelection, text: string) {
+    const requestId = ++copyRequest.current;
+    setCitation({ selection: snapshot, text });
+    setCitationStatus('copying');
+    setSelection(null);
+    window.getSelection()?.removeAllRanges();
+    try {
+      await navigator.clipboard.writeText(text);
+      if (alive.current && requestId === copyRequest.current) setCitationStatus('copied');
+    } catch {
+      if (alive.current && requestId === copyRequest.current) setCitationStatus('manual');
+    }
+  }
+  function cite() {
+    if (!candidate || !available) return;
+    void copyCitation(
+      candidate,
+      formatCitation({
+        quote: candidate.anchor.quote,
+        title: source.title,
+        authors: source.authors,
+        versionId,
+        versionNo: source.versionNo,
+        pageNumber: candidate.pageNumber,
+        origin: window.location.origin,
+      }),
+    );
+  }
+  function closeCitation() {
+    ++copyRequest.current;
+    setCitation(null);
+    tools
+      ?.closest('.reader-highlight-region')
+      ?.querySelector<HTMLElement>('.reader-stage')
+      ?.focus();
+  }
   return (
     <>
       {candidate && available && (
         <ReaderSelectionToolbar
           selection={candidate}
           disabled={locked}
-          onHighlight={startDraft}
-          onNote={startDraft}
+          onHighlight={() => startDraft(candidate)}
+          onNote={() => startDraft(candidate)}
+          onCite={cite}
           onDismiss={() => {
             setSelection(null);
             window.getSelection()?.removeAllRanges();
@@ -270,7 +340,7 @@ export function ReaderHighlights({
               className="secondary-button"
               disabled={!candidate || locked || !available}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={startDraft}
+              onClick={() => startDraft(candidate)}
             >
               Tô sáng đoạn chọn
             </button>
@@ -278,9 +348,17 @@ export function ReaderHighlights({
               className="secondary-button"
               disabled={!candidate || locked || !available}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={startDraft}
+              onClick={() => startDraft(candidate)}
             >
               Ghi chú đoạn chọn
+            </button>
+            <button
+              className="secondary-button"
+              disabled={!candidate || !available}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={cite}
+            >
+              Trích dẫn đoạn chọn
             </button>
             {!panel.open && (
               <button
@@ -303,6 +381,16 @@ export function ReaderHighlights({
               <span role="status" className="field-hint">
                 {selectionError}
               </span>
+            )}
+            {citation && (
+              <ReaderCitation
+                text={citation.text}
+                status={citationStatus}
+                onCopy={() => void copyCitation(citation.selection, citation.text)}
+                onSave={() => startDraft(citation.selection)}
+                saveDisabled={locked || !available}
+                onClose={closeCitation}
+              />
             )}
           </div>,
           tools,
