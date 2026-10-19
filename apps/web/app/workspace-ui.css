@@ -1,3 +1,4 @@
+/* workspace-ui.css — updated to fix workspace header layout */
 .select-field {
   min-width: 0;
 }
@@ -135,11 +136,15 @@
   padding-block: 12px;
   border-bottom: 1px solid var(--line);
 }
+
+/* --- UPDATED: breadcrumb should take remaining space and truncate when needed --- */
 .workspace-breadcrumb {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
+  /* allow breadcrumb to grow/shrink inside header row and enable truncation */
+  flex: 1 1 auto;
+  min-width: 0; /* necessary for text-overflow to work inside flex */
   color: var(--muted);
   font-size: 0.875rem;
 }
@@ -148,22 +153,35 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* --- UPDATED: constrain account area so it doesn't push breadcrumb off-screen --- */
 .workspace-account {
   position: relative;
-  flex-shrink: 0;
-  max-width: 55%;
+  /* don't grow; take only needed space */
+  flex: 0 0 auto;
+  max-width: 40%;
 }
+
+/* ensure trigger is a compact inline-flex row and won't expand the account area */
 .workspace-account .workspace-account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   max-width: 100%;
   padding: 4px 8px;
+  overflow: hidden;
 }
+
+/* allow the account name to truncate properly */
 .workspace-account-name {
   overflow: hidden;
   max-width: 180px;
   white-space: nowrap;
   text-overflow: ellipsis;
   font-size: 0.875rem;
+  min-width: 0; /* important for truncation inside flex/inline-flex */
 }
+
 .workspace-avatar {
   display: grid;
   place-items: center;
