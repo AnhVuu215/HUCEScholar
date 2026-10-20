@@ -25,7 +25,7 @@ for (const [device, width, height] of [
     await page.getByLabel('Email', { exact: true }).fill('e2e-admin@example.test');
     await password.fill(process.env.E2E_PASSWORD!);
     await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Tài khoản của bạn' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Học tiếp', exact: true })).toBeVisible();
     const navigation = page.getByRole('navigation', { name: 'Điều hướng không gian' });
     const menu = page.getByRole('button', { name: 'Menu', exact: true });
     const sidebar = page.getByRole('complementary');

@@ -25,6 +25,7 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [Kế hoạch cải thiện web, backlog ưu tiên và ý tưởng sản phẩm —17/10/2026](docs/roadmap/2026-10-17-web-improvement-roadmap.md)
 - [Kế hoạch bảo mật dùng lại trong V2: tự đổi mật khẩu](docs/superpowers/specs/2026-10-17-self-service-password-change.md) và [plan triển khai](docs/superpowers/plans/2026-10-17-self-service-password-change.md) — đã triển khai
 - [AUTH-02: buộc đổi mật khẩu được cấp và admin cấp lại mật khẩu](docs/implementation/2026-10-20-forced-password-change.md)
+- [HOME-01: trang đầu theo vai trò](docs/implementation/2026-10-20-role-home.md)
 - [Tech stack và kiến trúc MVP](docs/HUCEScholar-tech-stack.md)
 - [Mô hình dữ liệu và SQL tham chiếu](docs/database/README.md)
 - [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)
