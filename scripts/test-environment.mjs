@@ -78,6 +78,8 @@ try {
     ['home-student', 'STUDENT'],
     ['ux-admin', 'ADMIN'],
     ['ux-student', 'STUDENT'],
+    ['upload-admin', 'ADMIN'],
+    ['upload-student', 'STUDENT'],
     ['users-admin', 'ADMIN'],
     ['catalog-admin', 'ADMIN'],
     ['assignments-admin', 'ADMIN'],

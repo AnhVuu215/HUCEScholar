@@ -7,12 +7,14 @@ import {
   uploadDraftPdf,
   type MaterialDraft,
 } from '../../lib/materials';
+import { ScanWatchHint, useScanWatch } from './scan-watch';
 
 export function DraftPdf({
   current,
   metadataDirty,
   interactionBlocked = false,
   changed,
+  watched,
   busy,
   selectionChanged,
 }: {
@@ -20,6 +22,8 @@ export function DraftPdf({
   metadataDirty: boolean;
   interactionBlocked?: boolean;
   changed: (item: MaterialDraft) => void;
+  /** Automatic status updates; must keep metadata being edited. */
+  watched: (item: MaterialDraft) => void;
   busy: (value: boolean) => void;
   selectionChanged: (value: boolean) => void;
 }) {
@@ -29,6 +33,7 @@ export function DraftPdf({
   const [uncertain, setUncertain] = useState(false);
   const [notice, setNotice] = useState('');
   const input = useRef<HTMLInputElement>(null);
+  const watch = useScanWatch(current, current.fileState === 'CHECKING', watched);
   const feedback = useRef<HTMLParagraphElement>(null);
   const states = {
     MISSING: 'Chưa có PDF',
@@ -50,6 +55,7 @@ export function DraftPdf({
     try {
       const item = upload ? await uploadDraftPdf(current, file!) : await currentDraft(current.id);
       changed(item);
+      watch.refreshed();
       setUncertain(false);
       setNotice(
         upload
@@ -85,6 +91,7 @@ export function DraftPdf({
     <section className="draft-pdf" aria-labelledby="draft-pdf-title">
       <h3 id="draft-pdf-title">PDF của bản nháp</h3>
       <p role="status">{states[current.fileState]}</p>
+      {current.fileState === 'CHECKING' && <ScanWatchHint watch={watch} />}
       {current.pdf && (
         <p className="field-hint draft-file-name">
           {current.pdf.name} · {(current.pdf.byteSize / 1024 / 1024).toFixed(2)} MiB
