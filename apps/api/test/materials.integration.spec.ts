@@ -8,6 +8,7 @@ import Redis from 'ioredis';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApplication } from '../src/configure-application';
+import { foldVietnamese } from '../src/materials/search-fold';
 import { MaterialsService } from '../src/materials/materials.service';
 import { PrivateStore } from '../src/files/private-store';
 import { ScanQueue } from '../src/files/scan-queue';
@@ -1028,6 +1029,79 @@ describe('private material drafts', () => {
     const page = await agents.student.get('/api/v1/library?limit=1').expect(200);
     expect(page.body.items).toHaveLength(1);
     await agents.student.get('/api/v1/library/versions/9223372036854775808').expect(400);
+  });
+  it('library search ignores Vietnamese accents and case and keeps wildcards literal', async () => {
+    const code = randomBytes(4).toString('hex');
+    // Create with a placeholder, then edit: covers both the insert and the update trigger path.
+    const created = await write('student', { ...body(), title: `Tạm ${code}` });
+    expect(created.status).toBe(201);
+    const edited = await write(
+      'student',
+      {
+        ...body(),
+        title: `Giáo trình Đường lối ${code}`,
+        authors: `Nguyễn Thị Ấn ${code}`,
+        revision: created.body.item.revision,
+      },
+      created.body.item.id,
+    );
+    expect(edited.status).toBe(200);
+    const draft = edited.body.item;
+    expect(
+      (
+        await db.query('SELECT folded FROM hucescholar.version_search WHERE version_id=$1', [
+          draft.versionId,
+        ])
+      ).rows,
+    ).toEqual([{ folded: `giao trinh duong loi ${code} nguyen thi an ${code}` }]);
+    const uploaded = await upload('student', draft.id, draft.revision);
+    expect(uploaded.status).toBe(201);
+    await db.query(
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=1,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE document_id=$1)",
+      [draft.id],
+    );
+    expect(
+      (
+        await publication('student', draft.id, 'submit', {
+          revision: uploaded.body.item.revision,
+        })
+      ).status,
+    ).toBe(201);
+    const pending = (
+      await db.query(
+        "SELECT id FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+        [draft.versionId],
+      )
+    ).rows[0];
+    expect(
+      (
+        await review(pending.id, {
+          ...decision(),
+          submittedRevision: uploaded.body.item.revision + 1,
+        })
+      ).status,
+    ).toBe(201);
+    const found = async (search: string) =>
+      (
+        await agents.student
+          .get(`/api/v1/library?search=${encodeURIComponent(search)}&limit=100`)
+          .expect(200)
+      ).body.items.some((v: { versionId: string }) => v.versionId === draft.versionId);
+    for (const search of [
+      `giao trinh duong loi ${code}`,
+      `GIÁO TRÌNH ĐƯỜNG LỐI ${code}`,
+      `Giao Trình đường lối ${code}`,
+      `nguyen thi an ${code}`,
+      `  Đường  `.trim() + ` lối ${code}`,
+    ])
+      expect(await found(search)).toBe(true);
+    for (const search of [`giao_trinh ${code}`, `giao%trinh ${code}`, `giáo trình khác ${code}`])
+      expect(await found(search)).toBe(false);
+    const letters = 'aàáạảãâầấậẩẫăằắặẳẵeèéẹẻẽêềếệểễiìíịỉĩoòóọỏõôồốộổỗơờớợởỡuùúụủũưừứựửữyỳýỵỷỹđ';
+    const sample = letters + letters.toLocaleUpperCase('vi') + ' Hà Nội 123_%';
+    const folded = (await db.query('SELECT hucescholar.fold_vi($1) AS value', [sample])).rows[0];
+    expect(folded.value).toBe(foldVietnamese(sample));
+    expect(folded.value).not.toMatch(/[^a-z0-9 _%]/);
   });
   it('library streams exact private byte ranges and separately enforces download permission', async () => {
     const item = await submitted();

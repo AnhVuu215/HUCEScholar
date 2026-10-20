@@ -161,6 +161,7 @@ model courses {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model document_versions {
+  search version_search?
   id                                                           BigInt                @id @default(autoincrement())
   document_id                                                  BigInt                @unique(map: "ux_one_working_version", where: raw("((review_status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'CHANGES_REQUIRED'::character varying])::text[]))"))
   version_no                                                   Int
@@ -486,6 +487,15 @@ model users {
   users                                                         users?                  @relation("usersTousers", fields: [verified_by], references: [id], onDelete: Restrict, onUpdate: NoAction)
   other_users                                                   users[]                 @relation("usersTousers")
   visibility_events                                             visibility_events[]
+
+  @@schema("hucescholar")
+}
+
+/// Accent-insensitive title/author text for library search; maintained by tr_refresh_version_search.
+model version_search {
+  version_id        BigInt            @id
+  folded            String
+  document_versions document_versions @relation(fields: [version_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@schema("hucescholar")
 }
