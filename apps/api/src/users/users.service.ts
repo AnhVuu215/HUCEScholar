@@ -9,7 +9,13 @@ import * as argon2 from 'argon2';
 import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
 import { passwordOptions } from '../auth/auth.service';
-import { CreateUserDto, ListUsersDto, UpdateUserDto, UserStatusDto } from './users.dto';
+import {
+  CreateUserDto,
+  ListUsersDto,
+  ResetPasswordDto,
+  UpdateUserDto,
+  UserStatusDto,
+} from './users.dto';
 
 const fields = {
   id: true,
@@ -21,6 +27,7 @@ const fields = {
   created_at: true,
   updated_at: true,
   revision: true,
+  must_change_password: true,
 } satisfies Prisma.usersSelect;
 type SafeUser = Prisma.usersGetPayload<{ select: typeof fields }>;
 const serialize = (user: SafeUser) => ({
@@ -33,6 +40,7 @@ const serialize = (user: SafeUser) => ({
   createdAt: user.created_at.toISOString(),
   updatedAt: user.updated_at.toISOString(),
   revision: user.revision,
+  mustChangePassword: user.must_change_password,
 });
 const conflict = () =>
   new ConflictException({
@@ -133,6 +141,7 @@ export class UsersService {
             display_name: body.displayName,
             role: body.role,
             password_hash: hash,
+            must_change_password: true,
             status: 'ACTIVE',
             verified_at: new Date(),
             verified_by: actorId,
@@ -182,6 +191,33 @@ export class UsersService {
     } catch (error) {
       this.duplicate(error);
     }
+  }
+
+  async resetPassword(actor: string, rawId: string, body: ResetPasswordDto) {
+    const id = userId(rawId);
+    const actorId = userId(actor);
+    const hash = await argon2.hash(body.password, passwordOptions);
+    const user = await this.db.$transaction(async (tx) => {
+      await this.requireAdmin(tx, actorId);
+      await this.editable(tx, id, body.revision);
+      // The password_hash trigger revokes every session; the temporary password must be replaced.
+      const updated = await tx.users.update({
+        where: { id },
+        data: {
+          password_hash: hash,
+          must_change_password: true,
+          updated_at: new Date(),
+          revision: { increment: 1 },
+        },
+        select: fields,
+      });
+      await tx.$executeRaw`UPDATE hucescholar.password_reset_tokens
+        SET used_at=greatest(clock_timestamp(), created_at)
+        WHERE user_id=${id} AND used_at IS NULL`;
+      await this.audit(tx, actorId, id, 'ACCOUNT_PASSWORD_RESET');
+      return updated;
+    });
+    return { user: serialize(user) };
   }
 
   async setStatus(actor: string, rawId: string, body: UserStatusDto) {

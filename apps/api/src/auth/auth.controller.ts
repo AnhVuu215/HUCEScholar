@@ -5,7 +5,7 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { CsrfGuard } from './csrf.guard';
 import { AuthenticatedRequest } from './auth.types';
-import { SessionGuard } from './session.guard';
+import { AllowPendingPasswordChange, SessionGuard } from './session.guard';
 import { ChangePasswordDto } from './change-password.dto';
 
 class LoginDto {
@@ -38,6 +38,7 @@ export class AuthController {
   }
   @Get('me')
   @UseGuards(SessionGuard)
+  @AllowPendingPasswordChange()
   me(@Req() request: AuthenticatedRequest) {
     return { user: request.user };
   }
@@ -49,6 +50,7 @@ export class AuthController {
   @Post('change-password')
   @HttpCode(204)
   @UseGuards(SessionGuard)
+  @AllowPendingPasswordChange()
   async changePassword(
     @Body() body: ChangePasswordDto,
     @Req() request: AuthenticatedRequest,

@@ -134,6 +134,7 @@ describe('self-service account with real sessions and PostgreSQL', () => {
         'displayName',
         'email',
         'id',
+        'mustChangePassword',
         'revision',
         'role',
       ]);

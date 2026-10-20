@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ApiError, apiRequest, csrfToken, readProfile, workspacePath } from '../../lib/auth';
+import { ApiError, apiRequest, csrfToken, landingPath, readProfile } from '../../lib/auth';
 
 export function LoginForm() {
   const [pending, setPending] = useState(false);
@@ -27,7 +27,7 @@ export function LoginForm() {
         body: JSON.stringify({ email: form.get('email'), password: form.get('password') }),
       });
       const user = await readProfile(response);
-      window.location.replace(workspacePath(user.role));
+      window.location.replace(landingPath(user));
     } catch (failure) {
       const messages: Record<number, string> = {
         400: 'Kiểm tra email và mật khẩu rồi thử lại.',

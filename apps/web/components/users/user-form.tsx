@@ -153,8 +153,8 @@ export function UserForm({
                   aria-describedby="password-guidance"
                 />
                 <p id="password-guidance" className="field-hint">
-                  16–128 ký tự. Chuyển mật khẩu cho người nhận qua kênh riêng. Hệ thống chưa gửi
-                  email hoặc hỗ trợ đổi mật khẩu.
+                  16–128 ký tự. Chuyển mật khẩu cho người nhận qua kênh riêng. Người nhận phải đổi
+                  mật khẩu này ở lần đăng nhập đầu.
                 </p>
               </div>
               <label className="eligibility-check">

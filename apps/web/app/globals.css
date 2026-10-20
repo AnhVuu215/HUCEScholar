@@ -951,6 +951,10 @@ button[aria-busy='true'] {
   color: var(--danger);
   background: var(--danger-bg);
 }
+.user-password-pending {
+  display: block;
+  margin-top: 4px;
+}
 .user-status-pending {
   color: var(--muted);
   background: var(--ground);
