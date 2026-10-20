@@ -20,7 +20,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     children,
     ...props
   },
-  ref
+  ref,
 ) {
   const classes = `${variant}-button control-${size} ${className}`.trim();
   return (
