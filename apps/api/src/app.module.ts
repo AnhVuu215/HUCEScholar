@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module';
 import { AcademicModule } from './academic/academic.module';
 import { MaterialsModule } from './materials/materials.module';
 import { AccountModule } from './account/account.module';
+import { OpsModule } from './ops/ops.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { AccountModule } from './account/account.module';
     AcademicModule,
     MaterialsModule,
     AccountModule,
+    OpsModule,
   ],
   controllers: [HealthController],
 })

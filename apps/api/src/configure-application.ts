@@ -1,11 +1,18 @@
-import { INestApplication, PayloadTooLargeException, ValidationPipe } from '@nestjs/common';
+import { INestApplication, Logger, PayloadTooLargeException, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Request, Response, NextFunction } from 'express';
+import { requestContext } from './ops/request-context';
 
 export function configureApplication(app: INestApplication, trustedProxyIps: string[] = []): void {
   (app as NestExpressApplication).set('trust proxy', trustedProxyIps);
+  // Test suites issue thousands of requests; they keep the id header but skip access lines.
+  app.use(
+    requestContext(
+      process.env.NODE_ENV === 'test' ? undefined : (line) => Logger.log(line, 'Http'),
+    ),
+  );
   app.use((_request: Request, response: Response, next: NextFunction) => {
     response.setHeader('Cache-Control', 'no-store');
     next();

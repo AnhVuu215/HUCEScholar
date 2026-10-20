@@ -1,6 +1,9 @@
 import { expect, test, type Page } from './helpers/test';
 import { openReaderFixture, readerLogin, readerLogout } from './helpers/reader-session';
 
+// Submitting writes through CSRF + a transaction; allow the same 15 s the reader fixture uses.
+const saved = { timeout: 15_000 };
+
 async function report(page: Page, category: string, description: string) {
   await page.getByRole('button', { name: 'Báo cáo vấn đề với tài liệu', exact: true }).click();
   await expect(page.getByLabel('Loại vấn đề', { exact: true })).toBeFocused();
@@ -32,14 +35,14 @@ test('readers report a version and admins dismiss or resolve with hiding', async
   ).toBeFocused();
 
   await report(page, 'File lỗi, thiếu trang hoặc chữ mờ', 'Trang 2 bị mờ khi phóng to.');
-  await expect(page.getByRole('status').filter({ hasText: 'Đã gửi báo cáo.' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã gửi báo cáo.' })).toBeVisible(saved);
   const mine = page.getByRole('list', { name: 'Báo cáo bạn đã gửi cho phiên bản này' });
   await expect(mine).toContainText('Đang chờ xử lý');
   await report(page, 'File lỗi, thiếu trang hoặc chữ mờ', 'Gửi lại cùng loại.');
-  await expect(page.getByRole('alert').filter({ hasText: 'cùng loại' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'cùng loại' })).toBeVisible(saved);
   await page.getByRole('button', { name: 'Hủy báo cáo', exact: true }).click();
   await report(page, 'Nghi vấn quyền sử dụng', 'Có thể chưa được tác giả cho phép.');
-  await expect(mine.getByRole('listitem')).toHaveCount(2);
+  await expect(mine.getByRole('listitem')).toHaveCount(2, saved);
   // A report never hides the document by itself.
   expect((await page.request.get(`/api/v1/library/versions/${versionId}`)).status()).toBe(200);
   await readerLogout(page);

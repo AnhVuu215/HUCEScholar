@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { Logger, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Worker } from 'bullmq';
+import Redis from 'ioredis';
 import { DatabaseModule } from './database/database.module';
 import { FilesModule } from './files/files.module';
 import { ScanProcessor } from './files/scan-processor';
@@ -11,6 +12,7 @@ import { SafeLogger } from './safe-logger';
 import { MaterialDraftCoreModule } from './materials/material-draft-core.module';
 import { SourceConversionProcessor } from './materials/source-conversion.processor';
 import { SOURCE_QUEUE } from './files/source-conversion-queue';
+import { WORKER_HEARTBEAT_INTERVAL_MS, WORKER_HEARTBEAT_KEY } from './ops/readiness.service';
 
 @Module({ imports: [DatabaseModule, FilesModule, MaterialDraftCoreModule] })
 class FileWorkerModule {}
@@ -58,11 +60,25 @@ async function bootstrap() {
   };
   await reconcile();
   const interval = setInterval(() => void reconcile(), 30_000);
+  // Heartbeat for API readiness. Expires on its own if this process dies without cleanup.
+  const heartbeat = new Redis(queueConnection(config.redisUrl));
+  heartbeat.on('error', () => undefined);
+  const beat = () =>
+    heartbeat
+      .set(WORKER_HEARTBEAT_KEY, String(Date.now()), 'EX', 60)
+      .catch(() => Logger.warn('Worker heartbeat not recorded; will retry.', 'FileWorker'));
+  await beat();
+  const beating = setInterval(() => void beat(), WORKER_HEARTBEAT_INTERVAL_MS);
   let closing = false;
   const close = async () => {
     if (closing) return;
     closing = true;
     clearInterval(interval);
+    clearInterval(beating);
+    await heartbeat
+      .del(WORKER_HEARTBEAT_KEY)
+      .catch(() => undefined)
+      .finally(() => heartbeat.disconnect());
     await worker.close();
     await sourceWorker.close();
     await app.close();
