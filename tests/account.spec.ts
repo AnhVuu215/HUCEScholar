@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './helpers/test';
 import { readerLogin } from './helpers/reader-session';
 for (const role of ['admin', 'lecturer', 'student'] as const) {
   test(`${role}: edits its profile, updates shell, reloads and preserves legacy route`, async ({

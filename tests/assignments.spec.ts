@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './helpers/test';
 import { randomBytes } from 'node:crypto';
 import { captureCatalog } from './catalog-capture';
 

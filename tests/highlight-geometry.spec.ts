@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/test';
 import { quadBounds, rectToQuad, type HighlightViewport } from '../apps/web/lib/highlight-geometry';
 
 const quad = [0.1, 0.9, 0.3, 0.9, 0.3, 0.8, 0.1, 0.8];

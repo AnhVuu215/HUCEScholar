@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './helpers/test';
 import { parseLibraryQuery, libraryQueryString } from '../apps/web/lib/library-query';
 
 test('public library filters round-trip with the API bounds', () => {
