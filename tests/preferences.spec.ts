@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './helpers/test';
 import { readerLogin } from './helpers/reader-session';
 test('settings exposes only functional reader preferences', async ({ page }) => {
   await readerLogin(page, 'student', 'preferences');

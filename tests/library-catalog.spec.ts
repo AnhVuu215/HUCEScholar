@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route } from './helpers/test';
 import { readerLogin } from './helpers/reader-session';
 import type { LibraryItem } from '../apps/web/lib/library';
 

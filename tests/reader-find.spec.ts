@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './helpers/test';
 import { openReaderFixture, readerLogin, selectReaderText } from './helpers/reader-session';
 
 let fixture: Awaited<ReturnType<typeof openReaderFixture>>;

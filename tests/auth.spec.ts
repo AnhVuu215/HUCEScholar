@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './helpers/test';
 
 const password = process.env.E2E_PASSWORD;
 if (!password) throw new Error('Run pnpm test:setup before browser tests.');

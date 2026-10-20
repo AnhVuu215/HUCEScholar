@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './helpers/test';
 import { randomBytes } from 'node:crypto';
 import { readerHeaders } from './helpers/reader-session';
 async function login(page: Page, account: string, supplied = process.env.E2E_PASSWORD!) {

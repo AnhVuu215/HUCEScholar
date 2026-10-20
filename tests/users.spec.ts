@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './helpers/test';
 import { randomBytes } from 'node:crypto';
 
 const password = process.env.E2E_PASSWORD;

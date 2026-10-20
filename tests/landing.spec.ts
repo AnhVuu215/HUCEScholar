@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './helpers/test';
 import { mkdirSync } from 'node:fs';
 
 test('landing explains access and offers a real login destination', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './helpers/test';
 import { randomUUID } from 'node:crypto';
 import { openReaderFixture, readerHeaders, readerLogin } from './helpers/reader-session';
 

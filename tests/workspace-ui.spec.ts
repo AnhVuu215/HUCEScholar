@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './helpers/test';
 import { mkdirSync } from 'node:fs';
 
 async function login(page: Page, role: 'admin' | 'lecturer' | 'student' = 'student') {
