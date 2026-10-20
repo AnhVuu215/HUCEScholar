@@ -30,6 +30,7 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [UPLOAD-01: theo dõi trạng thái kiểm tra file](docs/implementation/2026-10-20-scan-status.md)
 - [SEARCH-01: tìm học liệu không dấu](docs/implementation/2026-10-20-library-search.md)
 - [REPORT-01: báo cáo tài liệu và xử lý](docs/implementation/2026-10-20-material-reports.md)
+- [OPS-01: readiness và log có request ID](docs/implementation/2026-10-20-readiness-logging.md)
 - [Tech stack và kiến trúc MVP](docs/HUCEScholar-tech-stack.md)
 - [Mô hình dữ liệu và SQL tham chiếu](docs/database/README.md)
 - [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)
@@ -62,7 +63,7 @@ pnpm --filter @hucescholar/api db:migrate
 pnpm dev
 ```
 
-Mở [http://127.0.0.1:3000/](http://127.0.0.1:3000/) rồi đăng nhập. API health ở `http://127.0.0.1:3001/api/v1/health`. Dừng web/API bằng `Ctrl+C`. Trang tiến độ dự án và kiểm tra API nằm ở `/project`.
+Mở [http://127.0.0.1:3000/](http://127.0.0.1:3000/) rồi đăng nhập. API liveness ở `http://127.0.0.1:3001/api/v1/health`; readiness (DB, Redis, kho file và heartbeat worker) ở `/api/v1/health/ready`, trả 503 khi dependency bắt buộc lỗi. Mỗi phản hồi có `X-Request-Id`, trùng với id trong log truy cập và log lỗi. Dừng web/API bằng `Ctrl+C`. Trang tiến độ dự án và kiểm tra API nằm ở `/project`.
 
 `setup:local` tạo `infra/.env` và `apps/api/.env` với password/CSRF secret ngẫu nhiên, giữ nguyên file đã có và không in secret. PostgreSQL mặc định **55432**, Redis **56379**, chỉ bind `127.0.0.1`; không đụng PostgreSQL khác trên 5432. `pnpm infra:down` giữ named volumes; không thêm `-v` khi cần giữ dữ liệu.
 

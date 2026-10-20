@@ -4,9 +4,10 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadBucketCommand,
 } from '@aws-sdk/client-s3';
 import { constants, createReadStream } from 'node:fs';
-import { copyFile, mkdir, rm } from 'node:fs/promises';
+import { access, copyFile, mkdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
@@ -85,6 +86,17 @@ export class PrivateStore implements OnModuleDestroy {
       throw new Error('Private range response mismatch.');
     }
     return object.Body;
+  }
+  /** Readiness probe: the private bucket answers, or the local root exists and is writable. */
+  async reachable(signal: AbortSignal) {
+    if (this.s3) {
+      await this.s3.send(new HeadBucketCommand({ Bucket: this.config.bucket }), {
+        abortSignal: signal,
+      });
+      return;
+    }
+    await mkdir(this.config.root, { recursive: true });
+    await access(this.config.root, constants.W_OK);
   }
   async remove(key: string, isSource = false) {
     const path = this.path(key, isSource);
