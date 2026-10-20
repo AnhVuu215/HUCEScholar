@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../lib/auth';
+import { useReturnFocus } from '../../lib/use-return-focus';
 import {
   changePublication,
   currentDraft,
@@ -30,6 +31,7 @@ export function PublicationActions({
 }) {
   const lecturer = current.kind === 'LECTURER_MATERIAL';
   const refreshLabel = lecturer ? 'Tải trạng thái công bố' : 'Tải trạng thái duyệt';
+  const returnFocus = useReturnFocus();
   const [reason, setReason] = useState('');
   const [confirm, setConfirm] = useState(false);
   const [nextConfirm, setNextConfirm] = useState(false);
@@ -186,7 +188,10 @@ export function PublicationActions({
             type="button"
             className="secondary-button"
             disabled={locked || uncertain}
-            onClick={() => setNextConfirm(true)}
+            onClick={() => {
+              returnFocus.remember();
+              setNextConfirm(true);
+            }}
           >
             Tạo phiên bản kế tiếp
           </button>
@@ -212,7 +217,10 @@ export function PublicationActions({
                   type="button"
                   className="secondary-button"
                   disabled={pending}
-                  onClick={() => setNextConfirm(false)}
+                  onClick={() => {
+                    setNextConfirm(false);
+                    returnFocus.restore();
+                  }}
                 >
                   Chưa tạo
                 </button>
@@ -233,6 +241,7 @@ export function PublicationActions({
             className="primary-button"
             disabled={locked || uncertain || !canSubmit}
             onClick={() => {
+              returnFocus.remember();
               setConfirm(true);
               requestAnimationFrame(() => confirmation.current?.focus());
             }}
@@ -265,7 +274,10 @@ export function PublicationActions({
                   type="button"
                   className="secondary-button"
                   disabled={pending}
-                  onClick={() => setConfirm(false)}
+                  onClick={() => {
+                    setConfirm(false);
+                    returnFocus.restore();
+                  }}
                 >
                   Chưa gửi
                 </button>

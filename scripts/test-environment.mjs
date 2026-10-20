@@ -76,6 +76,8 @@ try {
     ['ui-inventory-student', 'STUDENT'],
     ['home-admin', 'ADMIN'],
     ['home-student', 'STUDENT'],
+    ['ux-admin', 'ADMIN'],
+    ['ux-student', 'STUDENT'],
     ['users-admin', 'ADMIN'],
     ['catalog-admin', 'ADMIN'],
     ['assignments-admin', 'ADMIN'],

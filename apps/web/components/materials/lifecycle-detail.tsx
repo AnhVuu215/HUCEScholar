@@ -9,6 +9,7 @@ import {
   type MaterialLifecycle,
 } from '../../lib/lifecycle';
 import { publicationLabel } from '../../lib/materials';
+import { useReturnFocus } from '../../lib/use-return-focus';
 export function LifecycleDetail({
   id,
   close,
@@ -18,6 +19,7 @@ export function LifecycleDetail({
   close: () => void;
   changed: () => void;
 }) {
+  const returnFocus = useReturnFocus();
   const [current, setCurrent] = useState<MaterialLifecycle | null>(null),
     [page, setPage] = useState(1),
     [attempt, setAttempt] = useState(0);
@@ -191,7 +193,10 @@ export function LifecycleDetail({
                 type="button"
                 className="secondary-button"
                 disabled={!recipient || !transferReason.trim()}
-                onClick={() => setConfirmation('transfer')}
+                onClick={() => {
+                  returnFocus.remember();
+                  setConfirmation('transfer');
+                }}
               >
                 Bàn giao
               </button>
@@ -214,7 +219,10 @@ export function LifecycleDetail({
                     <button
                       type="button"
                       className="secondary-button"
-                      onClick={() => setConfirmation(null)}
+                      onClick={() => {
+                        setConfirmation(null);
+                        returnFocus.restore();
+                      }}
                     >
                       Chưa bàn giao
                     </button>
@@ -258,7 +266,10 @@ export function LifecycleDetail({
               type="button"
               className="secondary-button"
               disabled={!visibilityReason.trim() || (current.visibility === 'HIDDEN' && !resolved)}
-              onClick={() => setConfirmation('visibility')}
+              onClick={() => {
+                returnFocus.remember();
+                setConfirmation('visibility');
+              }}
             >
               {current.visibility === 'VISIBLE' ? 'Ẩn toàn tài liệu' : 'Khôi phục hiển thị'}
             </button>
@@ -280,7 +291,10 @@ export function LifecycleDetail({
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={() => setConfirmation(null)}
+                    onClick={() => {
+                      setConfirmation(null);
+                      returnFocus.restore();
+                    }}
                   >
                     Chưa đổi
                   </button>

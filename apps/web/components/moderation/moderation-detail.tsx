@@ -10,6 +10,7 @@ import {
 } from '../../lib/moderation';
 import { materialTypes } from '../../lib/materials';
 import { apiRequest, readProfile } from '../../lib/auth';
+import { useReturnFocus } from '../../lib/use-return-focus';
 // One ephemeral decision per tab, bound to the authenticated actor and snapshot.
 // Survives Next.js history navigation; never written to browser storage or the API.
 let retainedDecision: {
@@ -28,6 +29,7 @@ export function ModerationDetail({
   close: () => void;
   changed: () => void;
 }) {
+  const returnFocus = useReturnFocus();
   const [row, setRow] = useState<ReviewItem | null>(null),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
@@ -101,7 +103,10 @@ export function ModerationDetail({
         return;
       event.preventDefault();
       event.stopPropagation();
-      if (!pending) setLeaving({ destination: logout ?? link!.href });
+      if (!pending) {
+        returnFocus.remember();
+        setLeaving({ destination: logout ?? link!.href });
+      }
     }
     window.addEventListener('beforeunload', before);
     document.addEventListener('click', navigate, true);
@@ -109,7 +114,7 @@ export function ModerationDetail({
       window.removeEventListener('beforeunload', before);
       document.removeEventListener('click', navigate, true);
     };
-  }, [dirty, pending]);
+  }, [dirty, pending, returnFocus]);
   async function refresh() {
     if (pending) return;
     setPending(true);
@@ -348,6 +353,7 @@ export function ModerationDetail({
                   (outcome === 'APPROVED' && !rights)
                 }
                 onClick={() => {
+                  returnFocus.remember();
                   setConfirm(true);
                   requestAnimationFrame(() => confirmation.current?.focus());
                 }}
@@ -382,7 +388,10 @@ export function ModerationDetail({
                     <button
                       className="secondary-button"
                       disabled={pending}
-                      onClick={() => setConfirm(false)}
+                      onClick={() => {
+                        setConfirm(false);
+                        returnFocus.restore();
+                      }}
                     >
                       Quay lại
                     </button>
@@ -406,7 +415,13 @@ export function ModerationDetail({
             kết quả.
           </p>
           <div className="user-form-actions">
-            <button className="secondary-button" onClick={() => setLeaving(null)}>
+            <button
+              className="secondary-button"
+              onClick={() => {
+                setLeaving(null);
+                returnFocus.restore();
+              }}
+            >
               Tiếp tục kiểm duyệt
             </button>
             <button
@@ -429,7 +444,11 @@ export function ModerationDetail({
         <button
           className="secondary-button"
           disabled={pending}
-          onClick={() => (dirty ? setLeaving({ destination: null }) : close())}
+          onClick={() => {
+            if (!dirty) return close();
+            returnFocus.remember();
+            setLeaving({ destination: null });
+          }}
         >
           Đóng yêu cầu
         </button>
