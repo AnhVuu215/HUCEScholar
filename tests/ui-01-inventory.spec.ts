@@ -15,7 +15,6 @@ test.describe('UI-01 control inventory — geometry checks', () => {
     await page.goto('/workspace/student');
     // apply zoom; some browsers may not support document.body.style.zoom in headless — Playwright supports evaluate
     await page.evaluate(() => {
-      // @ts-ignore
       document.body.style.zoom = '2';
     });
     const header = page.locator('.workspace-header');
