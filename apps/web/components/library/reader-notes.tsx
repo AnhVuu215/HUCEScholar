@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../lib/auth';
+import { useReturnFocus } from '../../lib/use-return-focus';
 import {
   createNote,
   personalError,
@@ -13,6 +14,7 @@ import { useNotesLeaveGuard } from './use-notes-leave-guard';
 import { useAnnotationEditor, useAnnotationPanel } from './reader-annotation-panel';
 export function ReaderNotes({ versionId, page }: { versionId: string; page: number }) {
   const panel = useAnnotationPanel();
+  const returnFocus = useReturnFocus();
   const [items, setItems] = useState<PageNote[]>([]),
     [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true),
@@ -258,7 +260,10 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
               <button
                 className="secondary-button"
                 disabled={busy || dirty || uncertain || !!editing}
-                onClick={() => setDeleting(note)}
+                onClick={() => {
+                  returnFocus.remember();
+                  setDeleting(note);
+                }}
               >
                 Xóa
               </button>
@@ -277,7 +282,10 @@ export function ReaderNotes({ versionId, page }: { versionId: string; page: numb
                   <button
                     className="secondary-button"
                     disabled={busy}
-                    onClick={() => setDeleting(null)}
+                    onClick={() => {
+                      setDeleting(null);
+                      returnFocus.restore();
+                    }}
                   >
                     Giữ lại
                   </button>

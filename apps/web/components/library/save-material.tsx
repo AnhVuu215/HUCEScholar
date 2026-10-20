@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { changeSaved, savedStatus } from '../../lib/personal-library';
 import { libraryError } from '../../lib/library';
+import { useReturnFocus } from '../../lib/use-return-focus';
 export function SaveMaterial({
   documentId,
   initiallySaved,
@@ -11,6 +12,7 @@ export function SaveMaterial({
   initiallySaved?: boolean;
   changed?: (notice: string) => void;
 }) {
+  const returnFocus = useReturnFocus();
   const [saved, setSaved] = useState<boolean | null>(initiallySaved ?? null);
   const [pending, setPending] = useState(false),
     [uncertain, setUncertain] = useState(false);
@@ -81,7 +83,11 @@ export function SaveMaterial({
         type="button"
         className="secondary-button"
         disabled={pending || uncertain || saved === null}
-        onClick={() => (saved ? setConfirm(true) : void run(false))}
+        onClick={() => {
+          if (!saved) return void run(false);
+          returnFocus.remember();
+          setConfirm(true);
+        }}
       >
         {saved === null ? 'Đang kiểm tra lưu…' : saved ? 'Bỏ lưu tài liệu' : 'Lưu tài liệu'}
       </button>
@@ -107,7 +113,14 @@ export function SaveMaterial({
             >
               Xác nhận bỏ lưu
             </button>
-            <button type="button" className="secondary-button" onClick={() => setConfirm(false)}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setConfirm(false);
+                returnFocus.restore();
+              }}
+            >
               Giữ tài liệu
             </button>
           </div>

@@ -8,7 +8,7 @@ Cập nhật: 17/10/2026. Mốc đối chiếu: commit `b7cef22`, nhánh `codex/
 
 ## Cập nhật 20/10
 
-V2 (A–C, gồm AUTH-01) đã vào `main` qua PR #8. AUTH-02 đã triển khai theo [mốc buộc đổi mật khẩu](../implementation/2026-10-20-forced-password-change.md): tài khoản cũ không bị gắn cờ, admin cấp lại mật khẩu tạm. HOME-01 đã có [trang đầu theo vai trò](../implementation/2026-10-20-role-home.md). Bảng hiện trạng bên dưới giữ nguyên mốc 17/10.
+V2 (A–C, gồm AUTH-01) đã vào `main` qua PR #8. AUTH-02 đã triển khai theo [mốc buộc đổi mật khẩu](../implementation/2026-10-20-forced-password-change.md): tài khoản cũ không bị gắn cờ, admin cấp lại mật khẩu tạm. HOME-01 đã có [trang đầu theo vai trò](../implementation/2026-10-20-role-home.md); UX-01 ở [mốc lỗi thao tác nhỏ](../implementation/2026-10-20-interaction-fixes.md). Bảng hiện trạng bên dưới giữ nguyên mốc 17/10.
 
 ## Bổ sung yêu cầu V2 ngày 17/10
 
