@@ -81,13 +81,27 @@ describe('ADMIN account management', () => {
   async function csrf(browser: Browser) {
     return (await browser.get('/api/v1/auth/csrf').expect(200)).body.csrfToken as string;
   }
-  async function login(browser: Browser, email: string) {
+  async function login(browser: Browser, email: string, secret = password) {
     const token = await csrf(browser);
     return browser
       .post('/api/v1/auth/login')
       .set('Origin', origin)
       .set('X-CSRF-Token', token)
-      .send({ email, password });
+      .send({ email, password: secret });
+  }
+  async function changeOwnPassword(browser: Browser, currentPassword: string, newPassword: string) {
+    return browser
+      .post('/api/v1/auth/change-password')
+      .set('Origin', origin)
+      .set('X-CSRF-Token', await csrf(browser))
+      .send({ currentPassword, newPassword });
+  }
+  async function resetPassword(browser: Browser, id: string, body: object) {
+    return browser
+      .post(`/api/v1/admin/users/${id}/password`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', await csrf(browser))
+      .send(body);
   }
   async function create(suffix: string, role = 'STUDENT') {
     const response = await admin
@@ -157,6 +171,7 @@ describe('ADMIN account management', () => {
         'displayName',
         'email',
         'id',
+        'mustChangePassword',
         'revision',
         'role',
         'status',
@@ -446,5 +461,109 @@ describe('ADMIN account management', () => {
     ).rows[0];
     expect(session.valid).toBe(true);
     await browser.get('/api/v1/auth/me').expect(401);
+  });
+
+  it('requires an issued password to be changed before any other workspace request', async () => {
+    const user = await create('forced', 'STUDENT');
+    expect(user).toEqual(expect.objectContaining({ mustChangePassword: true }));
+    const browser = request.agent(app.getHttpServer());
+    const signedIn = await login(browser, user.email);
+    expect(signedIn.status).toBe(200);
+    expect(signedIn.body.user.mustChangePassword).toBe(true);
+    expect((await browser.get('/api/v1/auth/me').expect(200)).body.user.mustChangePassword).toBe(
+      true,
+    );
+    for (const path of ['/api/v1/workspace/student', '/api/v1/account/profile', '/api/v1/library'])
+      expect((await browser.get(path).expect(403)).body.code).toBe('PASSWORD_CHANGE_REQUIRED');
+    expect((await changeOwnPassword(browser, password, password)).status).toBe(400);
+    const replacement = randomBytes(24).toString('base64url');
+    expect((await changeOwnPassword(browser, password, replacement)).status).toBe(204);
+    expect((await browser.get('/api/v1/auth/me').expect(200)).body.user.mustChangePassword).toBe(
+      false,
+    );
+    await browser.get('/api/v1/workspace/student').expect(200);
+    const stored = (
+      await db.query('SELECT must_change_password FROM hucescholar.users WHERE id=$1', [user.id])
+    ).rows[0];
+    expect(stored.must_change_password).toBe(false);
+  });
+
+  it('lets a pending account sign out and keeps existing accounts unflagged', async () => {
+    const user = await create('forced-logout');
+    const browser = request.agent(app.getHttpServer());
+    await login(browser, user.email).then((response) => expect(response.status).toBe(200));
+    await browser
+      .post('/api/v1/auth/logout')
+      .set('Origin', origin)
+      .set('X-CSRF-Token', await csrf(browser))
+      .expect(204);
+    await browser.get('/api/v1/auth/me').expect(401);
+    const fixture = (
+      await db.query('SELECT must_change_password FROM hucescholar.users WHERE id=$1', [ids[2]])
+    ).rows[0];
+    expect(fixture.must_change_password).toBe(false);
+  });
+
+  it('resets a password to a temporary one, revoking sessions and old credentials', async () => {
+    const user = await create('reset', 'LECTURER');
+    const owner = request.agent(app.getHttpServer());
+    await login(owner, user.email);
+    const settled = randomBytes(24).toString('base64url');
+    expect((await changeOwnPassword(owner, password, settled)).status).toBe(204);
+    const current = (await admin.get(`/api/v1/admin/users/${user.id}`).expect(200)).body.user;
+    expect(current.mustChangePassword).toBe(false);
+    const temporary = randomBytes(24).toString('base64url');
+    expect((await resetPassword(admin, user.id, { password: temporary, revision: 1 })).status).toBe(
+      409,
+    );
+    expect(
+      (await resetPassword(admin, user.id, { password: 'short', revision: current.revision }))
+        .status,
+    ).toBe(400);
+    const reset = await resetPassword(admin, user.id, {
+      password: temporary,
+      revision: current.revision,
+    });
+    expect(reset.status).toBe(200);
+    expect(reset.body.user).toEqual(
+      expect.objectContaining({ mustChangePassword: true, revision: current.revision + 1 }),
+    );
+    expect(JSON.stringify(reset.body)).not.toContain(temporary);
+    await owner.get('/api/v1/auth/me').expect(401);
+    expect((await login(request.agent(app.getHttpServer()), user.email, settled)).status).toBe(401);
+    const next = request.agent(app.getHttpServer());
+    const signedIn = await login(next, user.email, temporary);
+    expect(signedIn.status).toBe(200);
+    expect(signedIn.body.user.mustChangePassword).toBe(true);
+    await next.get('/api/v1/workspace/lecturer').expect(403);
+    const audit = (
+      await db.query(
+        "SELECT actor_id FROM hucescholar.audit_events WHERE entity_type='USER' AND entity_id=$1 AND event_type='ACCOUNT_PASSWORD_RESET'",
+        [user.id],
+      )
+    ).rows;
+    expect(audit).toEqual([{ actor_id: ids[0] }]);
+  });
+
+  it('allows only an admin to reset non-admin passwords', async () => {
+    const temporary = randomBytes(24).toString('base64url');
+    const adminRow = (await admin.get(`/api/v1/admin/users/${ids[0]}`).expect(200)).body.user;
+    expect(
+      (await resetPassword(admin, ids[0], { password: temporary, revision: adminRow.revision }))
+        .status,
+    ).toBe(403);
+    await request(app.getHttpServer())
+      .post(`/api/v1/admin/users/${ids[2]}/password`)
+      .send({ password: temporary, revision: 1 })
+      .expect(403);
+    const lecturer = request.agent(app.getHttpServer());
+    await login(lecturer, emails.LECTURER);
+    expect(
+      (await resetPassword(lecturer, ids[2], { password: temporary, revision: 1 })).status,
+    ).toBe(403);
+    expect(
+      (await resetPassword(admin, '9223372036854775807', { password: temporary, revision: 1 }))
+        .status,
+    ).toBe(404);
   });
 });

@@ -1,7 +1,24 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { Roles, RolesGuard, SessionGuard } from '../auth/session.guard';
-import { CreateUserDto, ListUsersDto, UpdateUserDto, UserStatusDto } from './users.dto';
+import {
+  CreateUserDto,
+  ListUsersDto,
+  ResetPasswordDto,
+  UpdateUserDto,
+  UserStatusDto,
+} from './users.dto';
 import { UsersService } from './users.service';
 
 @Controller('admin/users')
@@ -24,6 +41,15 @@ export class UsersController {
     @Body() body: UpdateUserDto,
   ) {
     return this.users.update(request.user.id, id, body);
+  }
+  @Post(':id/password')
+  @HttpCode(200)
+  resetPassword(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: ResetPasswordDto,
+  ) {
+    return this.users.resetPassword(request.user.id, id, body);
   }
   @Patch(':id/status') status(
     @Req() request: AuthenticatedRequest,

@@ -12,6 +12,7 @@ import {
 } from '../../lib/users';
 import { UserForm } from './user-form';
 import { StatusConfirm } from './status-confirm';
+import { PasswordReset } from './password-reset';
 
 type ListState =
   { kind: 'loading' } | { kind: 'ready'; data: UserList } | { kind: 'error'; denied: boolean };
@@ -19,6 +20,7 @@ type Editor =
   | { kind: 'create' }
   | { kind: 'edit'; user: ManagedUser }
   | { kind: 'status'; user: ManagedUser }
+  | { kind: 'password'; user: ManagedUser }
   | null;
 
 export function UserManagement() {
@@ -61,8 +63,10 @@ export function UserManagement() {
   function saved(user: ManagedUser) {
     setNotice(
       editor?.kind === 'create'
-        ? `Đã cấp tài khoản cho ${user.displayName}. Chuyển thông tin đăng nhập cho người nhận qua kênh riêng.`
-        : `Đã cập nhật tài khoản ${user.displayName}.`,
+        ? `Đã cấp tài khoản cho ${user.displayName}. Chuyển thông tin đăng nhập cho người nhận qua kênh riêng; họ phải đổi mật khẩu ở lần đăng nhập đầu.`
+        : editor?.kind === 'password'
+          ? `Đã cấp lại mật khẩu cho ${user.displayName}. Tài khoản đã bị đăng xuất và phải đổi mật khẩu tạm khi đăng nhập.`
+          : `Đã cập nhật tài khoản ${user.displayName}.`,
     );
     reload();
   }
@@ -106,6 +110,15 @@ export function UserManagement() {
       )}
       {editor?.kind === 'edit' && (
         <UserForm
+          key={editor.user.id}
+          user={editor.user}
+          onSaved={saved}
+          onClose={close}
+          onReload={reload}
+        />
+      )}
+      {editor?.kind === 'password' && (
+        <PasswordReset
           key={editor.user.id}
           user={editor.user}
           onSaved={saved}
@@ -233,6 +246,9 @@ export function UserManagement() {
                         <span className={`user-status user-status-${user.status.toLowerCase()}`}>
                           {statusLabels[user.status]}
                         </span>
+                        {user.mustChangePassword && (
+                          <span className="field-hint user-password-pending">Chờ đổi mật khẩu</span>
+                        )}
                       </td>
                       <td className="user-row-actions">
                         {user.role === 'ADMIN' ? (
@@ -247,6 +263,15 @@ export function UserManagement() {
                               onClick={() => open({ kind: 'edit', user })}
                             >
                               Sửa
+                            </button>
+                            <button
+                              className="text-button"
+                              type="button"
+                              disabled={editor !== null}
+                              aria-label={`Cấp lại mật khẩu ${user.displayName}`}
+                              onClick={() => open({ kind: 'password', user })}
+                            >
+                              Cấp lại mật khẩu
                             </button>
                             <button
                               className="text-button"

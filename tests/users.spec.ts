@@ -15,6 +15,8 @@ async function login(page: Page, role = 'admin') {
 }
 
 test('admin provisions, edits, locks and unlocks a real account', async ({ page, browser }) => {
+  // Covers two forced password changes, each with Argon2id hashing on the API.
+  test.setTimeout(90_000);
   const email = `browser-${randomBytes(6).toString('hex')}@example.test`;
   await login(page);
   await page.getByRole('link', { name: 'Quản lý tài khoản', exact: true }).first().click();
@@ -33,13 +35,34 @@ test('admin provisions, edits, locks and unlocks a real account', async ({ page,
   await page.getByRole('button', { name: 'Áp dụng', exact: true }).click();
   const row = page.getByRole('row').filter({ hasText: email });
   await expect(row).toBeVisible();
+  await expect(row).toContainText('Chờ đổi mật khẩu');
   const studentContext = await browser.newContext();
   const student = await studentContext.newPage();
-  await student.goto('/login');
-  await student.getByLabel('Email', { exact: true }).fill(email);
-  await student.getByLabel('Mật khẩu', { exact: true }).fill(password!);
-  await student.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-  await expect(student).toHaveURL('/workspace/student');
+  const signIn = async (secret: string) => {
+    await student.goto('/login');
+    await student.getByLabel('Email', { exact: true }).fill(email);
+    await student.getByLabel('Mật khẩu', { exact: true }).fill(secret);
+    await student.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  };
+  const replaceIssued = async (issued: string) => {
+    await expect(student).toHaveURL('/change-password');
+    const replacement = randomBytes(24).toString('base64url');
+    await student.getByLabel('Mật khẩu được cấp', { exact: true }).fill(issued);
+    await student.getByLabel('Mật khẩu mới', { exact: true }).fill(replacement);
+    await student.getByLabel('Nhập lại mật khẩu mới', { exact: true }).fill(replacement);
+    await student.getByRole('button', { name: 'Đổi mật khẩu', exact: true }).click();
+    await expect(student).toHaveURL('/workspace/student');
+  };
+  await signIn(password!);
+  // An issued password opens only the change form; workspace URLs send the user back to it.
+  await expect(student).toHaveURL('/change-password');
+  await student.goto('/workspace/library');
+  await expect(student).toHaveURL('/change-password');
+  await replaceIssued(password!);
+  await page.reload();
+  await page.getByLabel('Tìm tài khoản').fill(email);
+  await page.getByRole('button', { name: 'Áp dụng', exact: true }).click();
+  await expect(row).not.toContainText('Chờ đổi mật khẩu');
   await row.getByRole('button', { name: 'Sửa Sinh viên thử nghiệm', exact: true }).click();
   await page.getByLabel('Họ và tên', { exact: true }).fill('Sinh viên đã cập nhật');
   await page.getByRole('button', { name: 'Lưu thay đổi', exact: true }).click();
@@ -56,6 +79,22 @@ test('admin provisions, edits, locks and unlocks a real account', async ({ page,
   await row.getByRole('button', { name: 'Mở khóa Sinh viên đã cập nhật', exact: true }).click();
   await page.getByRole('button', { name: 'Xác nhận mở khóa', exact: true }).click();
   await expect(row).toContainText('Hoạt động');
+  const temporary = randomBytes(24).toString('base64url');
+  await row
+    .getByRole('button', { name: 'Cấp lại mật khẩu Sinh viên đã cập nhật', exact: true })
+    .click();
+  await page.getByLabel('Mật khẩu tạm', { exact: true }).fill(temporary);
+  await page.getByRole('button', { name: 'Cấp lại mật khẩu', exact: true }).click();
+  await expect(
+    page.getByRole('main').getByRole('status').filter({ hasText: 'Đã cấp lại mật khẩu' }),
+  ).toBeVisible();
+  await expect(row).toContainText('Chờ đổi mật khẩu');
+  await signIn(temporary);
+  await expect(student).toHaveURL('/change-password');
+  await student.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
+  await expect(student).toHaveURL('/login');
+  await signIn(temporary);
+  await replaceIssued(temporary);
   await studentContext.close();
 });
 
