@@ -15,6 +15,7 @@ import { PrivateStore, type ByteRange } from '../files/private-store';
 import { LibraryListDto } from './library.dto';
 import { DOCX_MIME } from '../files/receive-docx';
 import { MaterialsService } from './materials.service';
+import { foldedContains } from './search-fold';
 
 const selection = {
   id: true,
@@ -133,7 +134,43 @@ export class LibraryService {
     };
   }
   async list(query: LibraryListDto) {
-    const where: Prisma.document_versionsWhereInput = {
+    return this.db.$transaction(
+      async (tx) => {
+        const where = await this.listWhere(tx, query);
+        return {
+          items: (
+            await tx.document_versions.findMany({
+              where,
+              select: selection,
+              orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
+              skip: (query.page - 1) * query.limit,
+              take: query.limit,
+            })
+          ).map(serialize),
+          total: await tx.document_versions.count({ where }),
+          page: query.page,
+          limit: query.limit,
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  private async listWhere(
+    tx: Prisma.TransactionClient,
+    query: LibraryListDto,
+  ): Promise<Prisma.document_versionsWhereInput> {
+    // Accent-insensitive title/author match ("giao trinh" finds "Giáo trình") against text folded
+    // on write (version_search), limited to current approved versions; then narrows the regular
+    // Prisma filter by id.
+    const matches = query.search
+      ? await tx.$queryRaw<{ id: bigint }[]>`
+          SELECT v.id FROM hucescholar.document_versions v
+          JOIN hucescholar.documents d ON d.current_version_id = v.id
+          JOIN hucescholar.version_search s ON s.version_id = v.id
+          WHERE v.review_status = 'APPROVED'
+            AND s.folded LIKE ${foldedContains(query.search)} ESCAPE ${'\\'}`
+      : null;
+    return {
       AND: [
         available(),
         {
@@ -144,34 +181,10 @@ export class LibraryService {
           ...(query.courseId
             ? { version_courses: { some: { course_id: academicId(query.courseId) } } }
             : {}),
-          ...(query.search
-            ? {
-                OR: [
-                  { title: { contains: query.search, mode: 'insensitive' } },
-                  { authors: { contains: query.search, mode: 'insensitive' } },
-                ],
-              }
-            : {}),
+          ...(matches ? { id: { in: matches.map((row) => row.id) } } : {}),
         },
       ],
     };
-    return this.db.$transaction(
-      async (tx) => ({
-        items: (
-          await tx.document_versions.findMany({
-            where,
-            select: selection,
-            orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
-            skip: (query.page - 1) * query.limit,
-            take: query.limit,
-          })
-        ).map(serialize),
-        total: await tx.document_versions.count({ where }),
-        page: query.page,
-        limit: query.limit,
-      }),
-      { isolationLevel: 'RepeatableRead' },
-    );
   }
   private async readable(tx: Prisma.TransactionClient, id: bigint) {
     const row = await tx.document_versions.findFirst({
