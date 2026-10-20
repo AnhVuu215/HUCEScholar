@@ -63,4 +63,25 @@ export class LoginRateLimiter implements OnModuleInit, OnModuleDestroy {
     if (denied === 1)
       throw new HttpException('Bạn đã thử quá nhiều lần. Vui lòng thử lại sau.', 429);
   }
+  async checkPasswordChange(ip: string, userId: string): Promise<void> {
+    let denied: unknown;
+    try {
+      denied = await this.redis.eval(
+        consume,
+        2,
+        `hs:password-change:user:${tokenHash(userId)}`,
+        `hs:password-change:ip:${tokenHash(ip)}`,
+        5,
+        900_000,
+        30,
+        900_000,
+      );
+    } catch {
+      throw new ServiceUnavailableException(
+        'Đổi mật khẩu tạm thời gián đoạn. Vui lòng thử lại sau.',
+      );
+    }
+    if (denied === 1)
+      throw new HttpException('Bạn đã thử quá nhiều lần. Vui lòng thử lại sau.', 429);
+  }
 }

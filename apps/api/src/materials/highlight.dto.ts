@@ -18,7 +18,16 @@ export interface HighlightAnchor {
   quote: string;
   quads: number[][];
 }
-export const highlightColors = ['#FFF59D', '#A5D6A7', '#90CAF9'];
+export const highlightColors = [
+  '#FFF59D',
+  '#A5D6A7',
+  '#90CAF9',
+  '#F8BBD0',
+  '#CE93D8',
+  '#FFCC80',
+  '#80CBC4',
+  '#B0BEC5',
+];
 @ValidatorConstraint({ name: 'highlightAnchor', async: false })
 export class HighlightAnchorValidator implements ValidatorConstraintInterface {
   validate(value: unknown): value is HighlightAnchor {

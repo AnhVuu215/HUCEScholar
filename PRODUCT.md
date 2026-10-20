@@ -14,6 +14,18 @@ web
 
 Ngày17/10 bổ sung PDF/DOCX giảng viên: chọn file cùng tiêu đề/môn, Word gốc riêng tư và converter LibreOffice cách ly tạo bản PDF để đọc/tô/ghi chú. Công bố chỉ sau nguồn và PDF SAFE/READY; tải Word gốc theo quyền tải. Xem docs/implementation/2026-10-17-lecturer-pdf-docx-upload.md.
 
+READ-02 đã bổ sung tám màu tô sáng có tên/dấu chọn và thao tác bàn phím. Màu cũ giữ nguyên; decoder đọc màu hex hợp lệ ngoài palette, yêu cầu chọn màu hỗ trợ trước sửa. Xem docs/implementation/2026-10-17-reader-highlight-palette.md.
+
+READ-03 local: toolbar gần đoạn chọn để tô sáng/ghi chú, panel gọn bên phải trên desktop và dưới PDF trên màn hẹp. Một editor hoạt động mỗi lần; bản soạn giữ đúng phiên bản/trang/đoạn gốc, vùng tô chồng nhau có lựa chọn rõ ràng. Xem docs/implementation/2026-10-17-reader-direct-annotations.md.
+
+CITE-01: chọn chữ để sao chép trích dẫn plain text kèm nguồn, tác giả nếu có, phiên bản và trang PDF. Link cùng origin mở đúng phiên bản/trang, ưu tiên trang được dẫn và có đường quay lại tiến độ trước. Clipboard bị chặn có sao chép thủ công; lưu đoạn vào ghi chú là thao tác riêng. Guard bảo vệ cả link và Back/Forward khi chỉ đổi query trang. Xem docs/implementation/2026-10-18-reader-citations.md.
+
+LEARN-01 local: sổ ghi chú riêng trên mọi trang của cùng phiên bản, tìm nội dung/chữ đã tô, lọc loại/màu và tải thêm. Mở kết quả tới đúng trang bằng bộ soạn hiện có; duyệt/lọc giữ bản soạn và sửa vẫn kiểm revision. Xem docs/implementation/2026-10-18-reader-notebook.md.
+
+READ-01 local: tìm chữ trong PDF theo lô, kết quả trước/tiếp và dấu tạm theo text layer; mục lục chỉ mở đích trang nội bộ qua guard. Đọc tập trung ẩn chrome/panel nhưng giữ bản soạn; mở ghi chú sẽ hiện editor, Escape đóng công cụ trước khi thoát. Chưa OCR/tìm không dấu. Xem docs/implementation/2026-10-18-reader-find-focus.md.
+
+SEARCH-02 local: kho ưu tiên tìm kiếm/môn, thu gọn nguồn/loại inline và có xóa lọc. Bộ lọc công khai và trang ở URL đã kiểm tra giá trị; Back/Forward khôi phục form/kết quả, request cũ bị hủy. Ghi chú riêng không nằm trong URL. Chi tiết và bàn giao palette/zoom cho PREF-01: docs/implementation/2026-10-18-library-catalog.md.
+
 Đã bổ sung metadata bản nháp riêng cho giảng viên/sinh viên, upload PDF private, BullMQ worker ClamAV/Poppler và trạng thái kỹ thuật độc lập kiểm duyệt. Local dùng filesystem ngoài webroot, production bắt buộc S3 private nhưng chưa kiểm chứng cloud. Bản chưa có PDF vẫn là DRAFT. Đã có gửi/rút, lịch sử, admin xem PDF SAFE và quyết định yêu cầu sửa/từ chối/duyệt bản hiện hành nguyên tử. Chủ mở lại CHANGES_REQUIRED để sửa/gửi lại; APPROVED/REJECTED bất biến. Đã có kho học liệu tìm tiêu đề/tác giả, lọc môn/loại/nguồn, trình đọc PDF.js chuyển trang/zoom/xoay/chọn chữ và tải theo quyền; file API hỗ trợ byte Range private. Đã có ghi chú plain text riêng theo phiên bản/trang, sửa/xóa có revision và retry tạo không nhân đôi; tiến độ lưu sau khi render thành công, mở lại đúng trang và báo xung đột tab. Đã có phiên bản kế tiếp và lịch sử từng bản, bàn giao giáo trình giảng viên, ẩn/khôi phục toàn tài liệu có lịch sử và kiểm tra quyền. Revision tăng qua các phiên bản để ngăn thao tác tab cũ sửa nhầm bản mới. Đã có vùng tô chữ và ghi chú kèm riêng theo phiên bản/trang; chưa đọc PDF offline. Xem docs/implementation/2026-10-17-pdf-text-highlights.md. Xem docs/implementation/2026-10-12-material-lifecycle.md.
 
 ## Users

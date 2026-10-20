@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './helpers/test';
 
 test('web reaches the real API through its own origin', async ({ page, request }) => {
   const response = await request.get('/api/v1/health');
