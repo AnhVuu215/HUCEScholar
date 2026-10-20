@@ -125,13 +125,14 @@ test('after the watch budget the page says the file is still processing', async 
   const { title } = await checkingDraft(page);
   await page.clock.install();
   await openDraft(page, title);
-  // Advance fake time one poll at a time and let each real response land before the next step,
-  // so the request's own timeout is never fast-forwarded.
-  for (let step = 0; step < 20; step++) {
+  // Jump fake time one poll at a time and let each real response land before the next step.
+  // fastForward fires each due timer once at the end of the jump, so the 8 s timeout of the
+  // request it starts is never fast-forwarded (runFor would keep advancing past it).
+  for (let step = 0; step < 25; step++) {
     const response = page
       .waitForResponse((r) => /\/api\/v1\/material-drafts\/\d+$/.test(r.url()), { timeout: 3_000 })
       .catch(() => null);
-    await page.clock.runFor(16_000);
+    await page.clock.fastForward(16_000);
     await response;
     if ((await hint(page).textContent())?.includes('Sau ba phút')) break;
   }

@@ -148,6 +148,13 @@ describe('private material drafts', () => {
           [ids],
         );
         await db.query(
+          'DELETE FROM hucescholar.report_actions WHERE performed_by=ANY($1::bigint[]) OR report_id IN (SELECT id FROM hucescholar.reports WHERE reported_by=ANY($1::bigint[]))',
+          [ids],
+        );
+        await db.query('DELETE FROM hucescholar.reports WHERE reported_by=ANY($1::bigint[])', [
+          ids,
+        ]);
+        await db.query(
           'DELETE FROM hucescholar.visibility_events WHERE performed_by=ANY($1::bigint[])',
           [ids],
         );
@@ -1102,6 +1109,148 @@ describe('private material drafts', () => {
     const folded = (await db.query('SELECT hucescholar.fold_vi($1) AS value', [sample])).rows[0];
     expect(folded.value).toBe(foldVietnamese(sample));
     expect(folded.value).not.toMatch(/[^a-z0-9 _%]/);
+  });
+  async function reportWrite(name: string, path: string, data: object) {
+    const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+    return agents[name].post(path).set('Origin', origin).set('X-CSRF-Token', csrf).send(data);
+  }
+  async function published() {
+    const item = await submitted();
+    expect((await review(item.requestId, decision())).status).toBe(201);
+    return item;
+  }
+  it('readers report a readable version once per category without changing visibility', async () => {
+    const item = await published();
+    const path = `/api/v1/library/versions/${item.versionId}/reports`;
+    const data = { category: 'FILE_ERROR', description: '  Trang 3 bị mờ, không đọc được.  ' };
+    const results = await Promise.all([
+      reportWrite('student', path, data),
+      reportWrite('student', path, data),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+    const created = results.find((r) => r.status === 201)!.body.item;
+    expect(created).toMatchObject({
+      versionId: item.versionId,
+      category: 'FILE_ERROR',
+      description: 'Trang 3 bị mờ, không đọc được.',
+      status: 'OPEN',
+      result: null,
+    });
+    expect(results.find((r) => r.status === 409)!.body.code).toBe('DUPLICATE_REPORT');
+    expect((await reportWrite('student', path, { ...data, category: 'WRONG_COURSE' })).status).toBe(
+      201,
+    );
+    expect((await reportWrite('lecturer', path, data)).status).toBe(201);
+    for (const invalid of [
+      { ...data, category: 'SPAM' },
+      { ...data, description: '   ' },
+      { ...data, description: 'x'.repeat(2001) },
+      { ...data, status: 'RESOLVED' },
+      { ...data, noteId: '1' },
+    ])
+      expect((await reportWrite('other', path, invalid)).status).toBe(400);
+    await request(app.getHttpServer()).post(path).send(data).expect(403);
+    await request(app.getHttpServer()).get(`${path}/mine`).expect(401);
+    const doc = (
+      await db.query('SELECT visibility FROM hucescholar.documents WHERE id=$1', [item.id])
+    ).rows[0];
+    expect(doc.visibility).toBe('VISIBLE');
+    const mine = (await agents.student.get(`${path}/mine`).expect(200)).body.items;
+    expect(mine).toHaveLength(2);
+    expect((await agents.other.get(`${path}/mine`).expect(200)).body.items).toEqual([]);
+    const draft = await safeDraft();
+    expect(
+      (await reportWrite('student', `/api/v1/library/versions/${draft.versionId}/reports`, data))
+        .status,
+    ).toBe(404);
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [item.id]);
+    expect((await reportWrite('other', path, data)).status).toBe(404);
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [item.id]);
+    await agents.student.get('/api/v1/admin/reports').expect(403);
+  });
+  it('admins review, resolve or dismiss reports with CAS and can hide the document on resolve', async () => {
+    const item = await published();
+    const path = `/api/v1/library/versions/${item.versionId}/reports`;
+    const first = (
+      await reportWrite('student', path, { category: 'RIGHTS', description: 'Nghi vấn bản quyền.' })
+    ).body.item;
+    const second = (
+      await reportWrite('other', path, { category: 'CONTENT', description: 'Nội dung sai chương.' })
+    ).body.item;
+    const queue = (
+      await agents.admin.get('/api/v1/admin/reports?status=OPEN&limit=100').expect(200)
+    ).body;
+    const row = queue.items.find((r: { id: string }) => r.id === first.id);
+    expect(row).toMatchObject({ documentId: item.id, status: 'OPEN', revision: 1 });
+    expect(row.reporter.email).toContain('-student@');
+    const act = (id: string, body: object) =>
+      reportWrite('admin', `/api/v1/admin/reports/${id}/actions`, body);
+    expect((await act(first.id, { action: 'TAKE_REVIEW', revision: 2 })).status).toBe(409);
+    const reviewing = await act(first.id, { action: 'TAKE_REVIEW', revision: 1 });
+    expect(reviewing.status).toBe(201);
+    expect(reviewing.body.item.status).toBe('IN_REVIEW');
+    expect((await agents.student.get(`${path}/mine`)).body.items[0]).toMatchObject({
+      status: 'IN_REVIEW',
+      result: 'Quản trị viên đang xem xét báo cáo.',
+    });
+    expect((await act(first.id, { action: 'RESOLVE', revision: 2 })).status).toBe(400);
+    expect(
+      (await act(first.id, { action: 'DISMISS', revision: 2, result: 'x', hide: true })).status,
+    ).toBe(400);
+    const detail = (await agents.admin.get(`/api/v1/admin/reports/${first.id}`).expect(200)).body
+      .item;
+    const resolveBody = {
+      action: 'RESOLVE',
+      revision: 2,
+      result: 'Đã tạm ẩn tài liệu để kiểm tra quyền.',
+      hide: true,
+      hideReason: 'Báo cáo quyền sử dụng',
+    };
+    const stale = await act(first.id, {
+      ...resolveBody,
+      documentRevision: detail.document.revision + 5,
+    });
+    expect(stale.status).toBe(409);
+    expect(
+      (await db.query('SELECT status FROM hucescholar.reports WHERE id=$1', [first.id])).rows[0]
+        .status,
+    ).toBe('IN_REVIEW');
+    const resolved = await act(first.id, {
+      ...resolveBody,
+      documentRevision: detail.document.revision,
+    });
+    expect(resolved.status).toBe(201);
+    expect(resolved.body.item).toMatchObject({
+      status: 'RESOLVED',
+      document: { visibility: 'HIDDEN' },
+    });
+    expect(resolved.body.item.actions.at(-1)).toMatchObject({
+      action: 'RESOLVE',
+      hiddenReason: 'Báo cáo quyền sử dụng',
+    });
+    await agents.student.get(`/api/v1/library/versions/${item.versionId}`).expect(404);
+    expect((await agents.student.get(`${path}/mine`)).body.items[0]).toMatchObject({
+      status: 'RESOLVED',
+      result: 'Đã tạm ẩn tài liệu để kiểm tra quyền.',
+    });
+    expect((await act(first.id, { action: 'DISMISS', revision: 3, result: 'x' })).status).toBe(409);
+    const dismissed = await act(second.id, {
+      action: 'DISMISS',
+      revision: 1,
+      result: 'Nội dung đúng chương theo đề cương.',
+    });
+    expect(dismissed.status).toBe(201);
+    expect(dismissed.body.item.status).toBe('DISMISSED');
+    expect((await act(second.id, { action: 'TAKE_REVIEW', revision: 2 })).status).toBe(409);
+    expect(
+      (
+        await reportWrite('student', `/api/v1/admin/reports/${second.id}/actions`, {
+          action: 'DISMISS',
+          revision: 2,
+          result: 'x',
+        })
+      ).status,
+    ).toBe(403);
   });
   it('library streams exact private byte ranges and separately enforces download permission', async () => {
     const item = await submitted();

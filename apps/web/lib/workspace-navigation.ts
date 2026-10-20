@@ -6,6 +6,7 @@ export type WorkspaceSection =
   | 'assignments'
   | 'materials'
   | 'moderation'
+  | 'reports'
   | 'library'
   | 'lifecycle'
   | 'personal';
@@ -39,6 +40,7 @@ export function workspaceNavigation(role: Role): WorkspaceGroup[] {
             href: '/workspace/admin/moderation',
             label: 'Kiểm duyệt học liệu',
           },
+          { section: 'reports', href: '/workspace/admin/reports', label: 'Báo cáo tài liệu' },
           { section: 'users', href: '/workspace/admin/users', label: 'Quản lý tài khoản' },
           {
             section: 'catalog',
