@@ -146,7 +146,7 @@ function CatalogSession({
               id="library-search"
               value={search}
               maxLength={200}
-              placeholder="Tiêu đề hoặc tác giả"
+              placeholder="Tiêu đề hoặc tác giả, gõ có dấu hay không đều được"
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>

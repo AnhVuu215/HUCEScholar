@@ -13,17 +13,17 @@ describe('migrated PostgreSQL authentication lifecycle', () => {
     await client?.end();
   });
 
-  it('preserves 25 tables, constraints, partial indexes and snapshot triggers', async () => {
+  it('preserves 26 tables, constraints, partial indexes and snapshot triggers', async () => {
     const tables = await client.query(
       "SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='hucescholar' AND table_type='BASE TABLE'",
     );
-    expect(tables.rows[0].n).toBe(25);
+    expect(tables.rows[0].n).toBe(26);
     const constraints = await client.query(
       "SELECT contype, count(*)::int n FROM pg_constraint WHERE connamespace='hucescholar'::regnamespace GROUP BY contype",
     );
     expect(constraints.rows).toEqual(
       expect.arrayContaining([
-        { contype: 'f', n: 52 },
+        { contype: 'f', n: 53 },
         { contype: 'c', n: 77 },
       ]),
     );
@@ -34,7 +34,7 @@ describe('migrated PostgreSQL authentication lifecycle', () => {
     const guards = await client.query(
       "SELECT count(*)::int n FROM pg_trigger WHERE tgrelid IN ('hucescholar.document_versions'::regclass,'hucescholar.version_courses'::regclass,'hucescholar.files'::regclass,'hucescholar.documents'::regclass) AND NOT tgisinternal",
     );
-    expect(guards.rows[0].n).toBe(6);
+    expect(guards.rows[0].n).toBe(7);
   });
 
   it.each(['status', 'password_hash', 'role', 'verified_at'])(
