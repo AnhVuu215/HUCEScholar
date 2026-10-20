@@ -1791,7 +1791,7 @@ test('student keeps entered draft after stale conflict and explicitly discards c
   await openAccount(page);
   await page.getByRole('link', { name: 'Tài khoản của tôi', exact: true }).click();
   await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
-  await expect(page).toHaveURL('/workspace/student');
+  await expect(page).toHaveURL('/workspace/profile');
 });
 test('draft list retries network failure', async ({ page }) => {
   await login(page, 'student');
