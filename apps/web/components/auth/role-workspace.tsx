@@ -11,6 +11,7 @@ import {
   ApiError,
   apiRequest,
   csrfToken,
+  passwordChangePath,
   readProfile,
   roleLabels,
   workspacePath,
@@ -67,6 +68,10 @@ export function RoleWorkspace({
         if (controller.signal.aborted) return;
         if (error instanceof ApiError && error.status === 401) {
           window.location.replace('/login');
+          return;
+        }
+        if (error instanceof ApiError && error.code === 'PASSWORD_CHANGE_REQUIRED') {
+          window.location.replace(passwordChangePath);
           return;
         }
         if (error instanceof ApiError && error.status === 403) {

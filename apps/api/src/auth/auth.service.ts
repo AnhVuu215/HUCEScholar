@@ -13,7 +13,7 @@ import * as argon2 from 'argon2';
 import type { Request, Response } from 'express';
 import { DatabaseService } from '../database/database.module';
 import { AUTH_CONFIG, AuthConfiguration } from './auth.config';
-import { cookieValue, Profile, Role } from './auth.types';
+import { cookieValue, Role, SessionProfile } from './auth.types';
 import { tokenHash } from './csrf.guard';
 import { LoginRateLimiter } from './login-rate-limiter';
 import type { Prisma } from '../generated/prisma/client';
@@ -30,11 +30,13 @@ const profile = (user: {
   email: string;
   display_name: string;
   role: string;
-}): Profile => ({
+  must_change_password: boolean;
+}): SessionProfile => ({
   id: user.id.toString(),
   email: user.email,
   displayName: user.display_name,
   role: user.role as Role,
+  mustChangePassword: user.must_change_password,
 });
 
 @Injectable()
@@ -79,7 +81,7 @@ export class AuthService implements OnModuleInit {
     password: string,
     request: Request,
     response: Response,
-  ): Promise<Profile> {
+  ): Promise<SessionProfile> {
     await this.limiter.check(request.ip ?? '', email);
     const candidate = await this.db.users.findUnique({ where: { email } });
     let valid = false;
@@ -126,7 +128,7 @@ export class AuthService implements OnModuleInit {
     return user;
   }
 
-  async authenticate(request: Request): Promise<Profile> {
+  async authenticate(request: Request): Promise<SessionProfile> {
     const token = cookieValue(request, this.config.sessionCookie);
     if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new UnauthorizedException();
     const session = await this.db.auth_sessions.findUnique({
@@ -199,7 +201,12 @@ export class AuthService implements OnModuleInit {
         const session = await this.requireLiveSession(tx, request, id);
         await tx.users.update({
           where: { id },
-          data: { password_hash: hash, revision: { increment: 1 }, updated_at: new Date() },
+          data: {
+            password_hash: hash,
+            must_change_password: false,
+            revision: { increment: 1 },
+            updated_at: new Date(),
+          },
         });
         await tx.$executeRaw`UPDATE hucescholar.auth_sessions SET revoked_at=greatest(clock_timestamp(), created_at) WHERE user_id=${id} AND revoked_at IS NULL`;
         await tx.$executeRaw`UPDATE hucescholar.password_reset_tokens SET used_at=greatest(clock_timestamp(), created_at) WHERE user_id=${id} AND used_at IS NULL`;

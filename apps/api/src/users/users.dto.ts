@@ -30,6 +30,10 @@ export class CreateUserDto extends UserFieldsDto {
 export class UpdateUserDto extends UserFieldsDto {
   @IsInt() @Min(1) @Max(2147483646) revision!: number;
 }
+export class ResetPasswordDto {
+  @IsString() @MinLength(16) @MaxLength(128) password!: string;
+  @IsInt() @Min(1) @Max(2147483646) revision!: number;
+}
 export class UserStatusDto {
   @IsIn(['ACTIVE', 'LOCKED']) status!: 'ACTIVE' | 'LOCKED';
   @IsInt() @Min(1) @Max(2147483646) revision!: number;

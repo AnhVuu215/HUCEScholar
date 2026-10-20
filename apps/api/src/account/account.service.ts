@@ -21,12 +21,14 @@ const profile = (user: {
   display_name: string;
   role: string;
   revision: number;
+  must_change_password: boolean;
 }) => ({
   id: String(user.id),
   email: user.email,
   displayName: user.display_name,
   role: user.role,
   revision: user.revision,
+  mustChangePassword: user.must_change_password,
 });
 @Injectable()
 export class AccountService {

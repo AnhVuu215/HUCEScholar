@@ -7,8 +7,12 @@ export interface Profile {
   displayName: string;
   role: Role;
 }
+/** The signed-in user; internal actors built for authorization checks are plain profiles. */
+export interface SessionProfile extends Profile {
+  mustChangePassword: boolean;
+}
 export interface AuthenticatedRequest extends Request {
-  user: Profile;
+  user: SessionProfile;
 }
 
 export function cookieValue(request: Request, name: string): string {
