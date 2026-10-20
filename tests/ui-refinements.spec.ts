@@ -56,6 +56,8 @@ for (const [device, width, height] of [
       await navigation.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
       await expect(menu).toHaveAttribute('aria-expanded', 'false');
       await expect(navigation).toBeHidden();
+      // Wait for the destination workspace before reopening its menu for the same-route check.
+      await expect(page.getByRole('heading', { name: 'Kho học liệu', exact: true })).toBeVisible();
       await menu.click();
     } else {
       await expect(menu).toBeHidden();
