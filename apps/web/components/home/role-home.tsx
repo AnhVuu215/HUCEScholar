@@ -6,6 +6,12 @@ import { libraryError } from '../../lib/library';
 import { draftList, materialError, type DraftList } from '../../lib/materials';
 import { reviewError, reviewList, type ReviewList } from '../../lib/moderation';
 import { personalList, type PersonalList } from '../../lib/personal-library';
+import {
+  adminReports,
+  reportCategories,
+  reportError,
+  type AdminReportList,
+} from '../../lib/reports';
 
 type Loaded<T> = { data: T | null; error: string; retry: () => void };
 
@@ -228,12 +234,53 @@ function ModerationQueue() {
   );
 }
 
+const loadReports = (signal: AbortSignal) =>
+  adminReports(new URLSearchParams({ status: 'OPEN', page: '1', limit: '5' }), signal);
+
+function OpenReports() {
+  const reports = useSection<AdminReportList>(loadReports, reportError);
+  return (
+    <section className="content-section home-section" aria-labelledby="home-reports">
+      <h2 id="home-reports">Báo cáo đang mở</h2>
+      <SectionState section={reports} loading="Đang tải báo cáo…" retryLabel="Tải lại báo cáo">
+        {(list) =>
+          list.items.length ? (
+            <>
+              <p>{list.total} báo cáo chưa nhận xem xét. Cũ nhất ở trên.</p>
+              <ul className="home-list">
+                {list.items.map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.title}</strong>
+                    <span className="field-hint"> · {reportCategories[item.category]}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p>Không có báo cáo đang mở.</p>
+          )
+        }
+      </SectionState>
+      <p>
+        <Link href="/workspace/admin/reports">Mở báo cáo tài liệu</Link>
+      </p>
+    </section>
+  );
+}
+
 /** First page after sign-in: the work this role should pick up next, from real data only. */
 export function RoleHome({ role }: { role: Role }) {
   return (
     <div className="role-home">
       <ContinueReading />
-      {role === 'ADMIN' ? <ModerationQueue /> : <MaterialTasks role={role} />}
+      {role === 'ADMIN' ? (
+        <>
+          <ModerationQueue />
+          <OpenReports />
+        </>
+      ) : (
+        <MaterialTasks role={role} />
+      )}
     </div>
   );
 }

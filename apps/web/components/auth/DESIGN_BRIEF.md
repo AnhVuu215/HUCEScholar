@@ -2,7 +2,7 @@
 
 Mode: Operate. Applies to `RoleWorkspace` and its navigation/header across the three roles. Preserve the existing navy/blue production identity, Segoe UI and ordinary task forms. Root DESIGN.md remains historical wireframe guidance.
 
-Primary journey: choose a learning/work destination → complete the page task → reach account utilities without expanding the primary navigation. Sidebar groups contain 3 student, 4 lecturer or 7 admin destinations. Student contributions retain the familiar “Học liệu của tôi” label under “Đóng góp”. Project status lives in the page footer; install is available by direct route, outside daily workspace navigation.
+Primary journey: choose a learning/work destination → complete the page task → reach account utilities without expanding the primary navigation. Sidebar groups contain 3 student, 4 lecturer or 8 admin destinations (REPORT-01 added “Báo cáo tài liệu”). Student contributions retain the familiar “Học liệu của tôi” label under “Đóng góp”. Project status lives in the page footer; install is available by direct route, outside daily workspace navigation.
 
 Header: short role/location trail, account initials/name and a disclosure with account/logout. Keep one h1 and page description below. No dashboard metrics, settings placeholder or unfinished profile routes. On narrow screens retain the mobile Menu button and use an avatar-only account trigger with an accessible label. Sidebar uses normal text links, groups and current-page state rather than unlabeled icons.
 

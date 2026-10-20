@@ -29,6 +29,7 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [UX-01: trả focus khi hủy xác nhận, ca biên thư viện cá nhân](docs/implementation/2026-10-20-interaction-fixes.md)
 - [UPLOAD-01: theo dõi trạng thái kiểm tra file](docs/implementation/2026-10-20-scan-status.md)
 - [SEARCH-01: tìm học liệu không dấu](docs/implementation/2026-10-20-library-search.md)
+- [REPORT-01: báo cáo tài liệu và xử lý](docs/implementation/2026-10-20-material-reports.md)
 - [Tech stack và kiến trúc MVP](docs/HUCEScholar-tech-stack.md)
 - [Mô hình dữ liệu và SQL tham chiếu](docs/database/README.md)
 - [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)

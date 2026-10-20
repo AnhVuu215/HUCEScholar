@@ -311,3 +311,18 @@
 .home-group + .home-group {
   margin-top: 16px;
 }
+
+/* REPORT-01: reader report control and report histories. */
+.reader-report {
+  margin-block: 8px 16px;
+}
+.report-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding-left: 20px;
+}
+.report-list li,
+.reader-report .note-content {
+  overflow-wrap: anywhere;
+}
