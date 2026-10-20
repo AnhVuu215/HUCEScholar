@@ -18,6 +18,7 @@ import type { AnnotationItem } from '../../lib/annotations';
 import { quadBounds } from '../../lib/highlight-geometry';
 import { useReadingProgress } from './use-reading-progress';
 import { SaveMaterial } from './save-material';
+import { ReaderReport } from './reader-report';
 import { ReaderHighlights } from './reader-highlights';
 import type { HighlightSurface } from '../../lib/highlight-geometry';
 import { SelectField } from '../ui/select-field';
@@ -405,6 +406,7 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                     {!item.current ? ' · Bản công bố trước' : ''}
                   </p>
                   <SaveMaterial key={item.documentId} documentId={item.documentId} />
+                  <ReaderReport key={item.versionId} versionId={item.versionId} />
                   <div className="reader-toolbar" aria-label="Điều khiển đọc PDF">
                     <button
                       className="secondary-button"

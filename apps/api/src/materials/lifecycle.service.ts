@@ -353,26 +353,57 @@ export class LifecycleService {
             'Bản hiện hành phải đã duyệt, PDF an toàn và còn quyền sử dụng.',
           );
       }
-      await tx.documents.update({
-        where: { id },
-        data: { visibility: body.visibility, revision: { increment: 1 }, updated_at: new Date() },
-      });
-      await tx.visibility_events.create({
-        data: {
-          document_id: id,
-          performed_by: actorId,
-          from_visibility: doc.visibility,
-          to_visibility: body.visibility,
-          reason: body.reason,
-        },
-      });
-      await this.materials.audit(
-        tx,
-        actorId,
-        id,
-        body.visibility === 'HIDDEN' ? 'MATERIAL_HIDDEN' : 'MATERIAL_RESTORED',
-      );
+      await this.applyVisibility(tx, actorId, id, doc.visibility, body.visibility, body.reason);
       return { item: await this.detail(tx, id) };
     });
+  }
+  /**
+   * Hides a document inside a caller's transaction (report resolution). The caller has already
+   * verified an active admin; this takes the same locks and revision check as `visibility`.
+   */
+  async hideWithin(
+    tx: Prisma.TransactionClient,
+    actorId: bigint,
+    id: bigint,
+    revision: number,
+    reason: string,
+  ) {
+    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(68467,1)`;
+    await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${id} FOR UPDATE`;
+    const doc = await this.read(tx, id);
+    if (doc.revision !== revision)
+      throw fail('STALE_REVISION', 'Tài liệu đã thay đổi. Tải trạng thái trước khi tiếp tục.');
+    if (doc.visibility === 'HIDDEN')
+      throw fail('VISIBILITY_UNCHANGED', 'Tài liệu đã bị ẩn. Tải lại để đối chiếu.');
+    return this.applyVisibility(tx, actorId, id, doc.visibility, 'HIDDEN', reason);
+  }
+  private async applyVisibility(
+    tx: Prisma.TransactionClient,
+    actorId: bigint,
+    id: bigint,
+    from: string,
+    to: string,
+    reason: string,
+  ) {
+    await tx.documents.update({
+      where: { id },
+      data: { visibility: to, revision: { increment: 1 }, updated_at: new Date() },
+    });
+    const event = await tx.visibility_events.create({
+      data: {
+        document_id: id,
+        performed_by: actorId,
+        from_visibility: from,
+        to_visibility: to,
+        reason,
+      },
+    });
+    await this.materials.audit(
+      tx,
+      actorId,
+      id,
+      to === 'HIDDEN' ? 'MATERIAL_HIDDEN' : 'MATERIAL_RESTORED',
+    );
+    return event.id;
   }
 }
