@@ -51,7 +51,9 @@ function isUser(value: unknown): value is ManagedUser {
     'createdAt' in value &&
     typeof value.createdAt === 'string' &&
     'updatedAt' in value &&
-    typeof value.updatedAt === 'string'
+    typeof value.updatedAt === 'string' &&
+    'mustChangePassword' in value &&
+    typeof value.mustChangePassword === 'boolean'
   );
 }
 

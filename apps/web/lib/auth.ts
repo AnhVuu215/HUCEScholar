@@ -9,6 +9,8 @@ export interface Profile {
   email: string;
   displayName: string;
   role: Role;
+  /** Set while the account still uses a password issued by an administrator. */
+  mustChangePassword: boolean;
 }
 
 export class ApiError extends Error {
@@ -81,7 +83,9 @@ export async function readProfile(response: Response): Promise<Profile> {
       typeof user.displayName === 'string' &&
       'role' in user &&
       typeof user.role === 'string' &&
-      Object.hasOwn(roleLabels, user.role)
+      Object.hasOwn(roleLabels, user.role) &&
+      'mustChangePassword' in user &&
+      typeof user.mustChangePassword === 'boolean'
     )
       return user as Profile;
   }
@@ -90,6 +94,10 @@ export async function readProfile(response: Response): Promise<Profile> {
 
 export function workspacePath(role: Role): string {
   return `/workspace/${role.toLowerCase()}`;
+}
+export const passwordChangePath = '/change-password';
+export function landingPath(user: Profile): string {
+  return user.mustChangePassword ? passwordChangePath : workspacePath(user.role);
 }
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const token = await csrfToken();

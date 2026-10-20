@@ -23,7 +23,8 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [Kế hoạch V2: UI, sidebar/header, reader thông minh, hồ sơ/cài đặt và 36 ý tưởng để chọn](docs/superpowers/specs/2026-10-17-workspace-v2-design.md) — đề xuất, kèm ba plan kỹ thuật theo đợt
 - [Upload PDF/DOCX cho giảng viên: kết quả triển khai và giới hạn local](docs/implementation/2026-10-17-lecturer-pdf-docx-upload.md), [thiết kế](docs/superpowers/specs/2026-10-17-lecturer-pdf-docx-upload.md) và [plan gốc](docs/superpowers/plans/2026-10-17-lecturer-pdf-docx-upload.md) — đã triển khai trên nhánh tính năng
 - [Kế hoạch cải thiện web, backlog ưu tiên và ý tưởng sản phẩm —17/10/2026](docs/roadmap/2026-10-17-web-improvement-roadmap.md)
-- [Kế hoạch bảo mật dùng lại trong V2: tự đổi mật khẩu](docs/superpowers/specs/2026-10-17-self-service-password-change.md) và [plan triển khai](docs/superpowers/plans/2026-10-17-self-service-password-change.md) — chưa triển khai
+- [Kế hoạch bảo mật dùng lại trong V2: tự đổi mật khẩu](docs/superpowers/specs/2026-10-17-self-service-password-change.md) và [plan triển khai](docs/superpowers/plans/2026-10-17-self-service-password-change.md) — đã triển khai
+- [AUTH-02: buộc đổi mật khẩu được cấp và admin cấp lại mật khẩu](docs/implementation/2026-10-20-forced-password-change.md)
 - [Tech stack và kiến trúc MVP](docs/HUCEScholar-tech-stack.md)
 - [Mô hình dữ liệu và SQL tham chiếu](docs/database/README.md)
 - [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)
@@ -75,7 +76,7 @@ pnpm --filter @hucescholar/api db:bootstrap-admin
 Remove-Item -LiteralPath apps/api/.env.bootstrap
 ```
 
-CLI tạo account ACTIVE/verified và audit trong transaction; gọi lại không ghi đè tài khoản/mật khẩu. Đây chỉ là bootstrap ADMIN đầu tiên. Sau khi đăng nhập Admin, mở `/workspace/admin/users` để cấp tài khoản giảng viên/sinh viên. Admin nhập mật khẩu khởi tạo 16–128 ký tự và xác nhận đã đối chiếu danh sách hợp lệ; chuyển thông tin qua kênh riêng. Chưa có gửi email, reset hoặc buộc đổi mật khẩu. Tài khoản E2E ở database test không dùng để đăng nhập ứng dụng local.
+CLI tạo account ACTIVE/verified và audit trong transaction; gọi lại không ghi đè tài khoản/mật khẩu. Đây chỉ là bootstrap ADMIN đầu tiên. Sau khi đăng nhập Admin, mở `/workspace/admin/users` để cấp tài khoản giảng viên/sinh viên. Admin nhập mật khẩu khởi tạo 16–128 ký tự và xác nhận đã đối chiếu danh sách hợp lệ; chuyển thông tin qua kênh riêng. Người nhận phải đổi mật khẩu được cấp ở lần đăng nhập đầu; admin có thể cấp lại mật khẩu tạm tại cùng màn hình. Chưa có gửi email hoặc tự khôi phục mật khẩu. Tài khoản E2E ở database test không dùng để đăng nhập ứng dụng local.
 
 Danh sách hỗ trợ tìm tên/email, lọc vai trò/trạng thái và phân trang. Sửa tên/email, khóa/mở khóa sử dụng revision chống ghi đè. Xung đột cho tải thông tin mới để đối chiếu trong khi giữ nội dung đang nhập. Khóa hoặc đổi email thu hồi mọi phiên của tài khoản; mở khóa không phục hồi cookie cũ. Role của tài khoản được giữ nguyên; ADMIN chỉ đọc ở chức năng này. Không xóa tài khoản.
 
@@ -143,7 +144,7 @@ Admin mở **Quản lý học liệu** tại `/workspace/admin/materials` để 
 
 ## Lộ trình còn lại
 
-1. Hoàn thiện tài khoản: tự đổi/buộc đổi mật khẩu khởi tạo; reset cần SMTP.
+1. Hoàn thiện tài khoản: tự khôi phục mật khẩu (AUTH-03) cần SMTP. Tự đổi (AUTH-01) và buộc đổi mật khẩu được cấp (AUTH-02) đã có.
 2. Nguồn nội dung có quyền rõ ràng; môi trường pilot S3 private, HTTPS, backup/phục hồi.
 3. Cài PWA và kiểm thử thiết bị thật đang tạm hoãn theo yêu cầu người dùng. Xem [tiến độ17/10](docs/implementation/2026-10-17-web-reader-history.md).
 

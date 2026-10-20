@@ -6,6 +6,10 @@ Cập nhật: 17/10/2026. Mốc đối chiếu: commit `b7cef22`, nhánh `codex/
 
 Đây là đề xuất phát triển sau khi đọc code, schema, CI và nhật ký triển khai. Các hạng mục bên dưới chưa được triển khai chỉ vì xuất hiện trong kế hoạch. Không dùng số lượng test hoặc số bảng để suy ra phần trăm hoàn thành sản phẩm.
 
+## Cập nhật 20/10
+
+V2 (A–C, gồm AUTH-01) đã vào `main` qua PR #8. AUTH-02 đã triển khai theo [mốc buộc đổi mật khẩu](../implementation/2026-10-20-forced-password-change.md): tài khoản cũ không bị gắn cờ, admin cấp lại mật khẩu tạm. Bảng hiện trạng bên dưới giữ nguyên mốc 17/10.
+
 ## Bổ sung yêu cầu V2 ngày 17/10
 
 Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.

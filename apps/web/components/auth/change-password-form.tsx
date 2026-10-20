@@ -3,7 +3,14 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, changePassword } from '../../lib/auth';
 import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
-export function ChangePasswordForm() {
+export function ChangePasswordForm({
+  forced = false,
+  onChanged,
+}: {
+  /** The account still uses a password issued by an administrator. */
+  forced?: boolean;
+  onChanged?: () => void;
+} = {}) {
   const [current, setCurrent] = useState(''),
     [next, setNext] = useState(''),
     [confirmation, setConfirmation] = useState('');
@@ -49,7 +56,7 @@ export function ChangePasswordForm() {
     let validation = '',
       field = 1;
     if (!current || current.length > 128) {
-      validation = 'Nhập mật khẩu hiện tại, tối đa128 đơn vị UTF-16.';
+      validation = `Nhập ${forced ? 'mật khẩu được cấp' : 'mật khẩu hiện tại'}, tối đa128 đơn vị UTF-16.`;
       field = 0;
     } else if (Array.from(next).length < 16 || next.length > 128)
       validation = 'Mật khẩu mới cần ít nhất16 ký tự Unicode, tối đa128 đơn vị UTF-16.';
@@ -70,12 +77,15 @@ export function ChangePasswordForm() {
       if (!alive.current) return;
       clear();
       setNotice('Đã đổi mật khẩu. Các phiên đăng nhập cũ đã kết thúc.');
+      onChanged?.();
     } catch (failure) {
       if (!alive.current) return;
       if (failure instanceof ApiError && failure.status === 400) {
         setError(
           failure.code === 'INVALID_CURRENT_PASSWORD'
-            ? 'Mật khẩu hiện tại không đúng.'
+            ? forced
+              ? 'Mật khẩu được cấp không đúng.'
+              : 'Mật khẩu hiện tại không đúng.'
             : 'Mật khẩu mới không hợp lệ hoặc trùng mật khẩu hiện tại. Kiểm tra rồi thử lại.',
         );
         rejectedField.current = failure.code === 'INVALID_CURRENT_PASSWORD' ? 0 : 1;
@@ -102,7 +112,7 @@ export function ChangePasswordForm() {
   const fields = [
     {
       id: 'password-current',
-      label: 'Mật khẩu hiện tại',
+      label: forced ? 'Mật khẩu được cấp' : 'Mật khẩu hiện tại',
       value: current,
       set: setCurrent,
       autocomplete: 'current-password',
@@ -124,8 +134,12 @@ export function ChangePasswordForm() {
   ];
   return (
     <section className="content-section profile-editor" aria-label="Bảo mật tài khoản">
-      <h2>Bảo mật tài khoản</h2>
-      <p>Đổi mật khẩu</p>
+      {!forced && (
+        <>
+          <h2>Bảo mật tài khoản</h2>
+          <p>Đổi mật khẩu</p>
+        </>
+      )}
       <p className="field-hint">
         Mật khẩu mới cần ít nhất16 ký tự Unicode, tối đa128 đơn vị UTF-16. Khoảng trắng được giữ
         nguyên.
