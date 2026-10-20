@@ -73,6 +73,7 @@ try {
     ['workspace-ui-admin', 'ADMIN'],
     ['workspace-ui-lecturer', 'LECTURER'],
     ['workspace-ui-student', 'STUDENT'],
+    ['ui-inventory-student', 'STUDENT'],
     ['users-admin', 'ADMIN'],
     ['catalog-admin', 'ADMIN'],
     ['assignments-admin', 'ADMIN'],
