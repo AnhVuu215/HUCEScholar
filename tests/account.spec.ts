@@ -34,7 +34,7 @@ for (const role of ['admin', 'lecturer', 'student'] as const) {
     await page.reload();
     await expect(page.getByLabel('Tên hiển thị', { exact: true })).toHaveValue(name);
     await page.goto(`/workspace/${role}`);
-    await expect(page.getByLabel('Tên hiển thị', { exact: true })).toHaveValue(name);
+    await expect(page.locator('.workspace-account-name')).toHaveText(name);
     await page.getByRole('button', { name: 'Menu tài khoản', exact: true }).click();
     await expect(
       page.getByRole('link', { name: 'Tài khoản của tôi', exact: true }),

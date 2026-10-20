@@ -40,18 +40,18 @@ for (const [role, label] of [
     ).toBeVisible();
     await expect(page.locator('#workspace-navigation a').first()).toBeVisible();
     await page.unroute(profilePath);
-    await expect(
-      page.getByText(`e2e-${role.toLowerCase()}@example.test`, { exact: true }),
-    ).toBeVisible();
+    await expect(page.locator('.workspace-account-name')).toHaveText(
+      `${role} — tài khoản kiểm thử`,
+    );
     await page.reload();
-    await expect(
-      page.getByText(`e2e-${role.toLowerCase()}@example.test`, { exact: true }),
-    ).toBeVisible();
+    await expect(page.locator('.workspace-account-name')).toHaveText(
+      `${role} — tài khoản kiểm thử`,
+    );
     await page.getByRole('button', { name: 'Menu tài khoản', exact: true }).click();
     await page.getByRole('button', { name: 'Đăng xuất' }).click();
     await expect(page).toHaveURL('/login');
     await page.goBack();
-    await expect(page.getByRole('heading', { name: 'Tài khoản của bạn' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Học tiếp', exact: true })).toHaveCount(0);
     await page.goto(`/workspace/${role.toLowerCase()}`);
     await expect(page).toHaveURL('/login');
   });
@@ -118,7 +118,7 @@ for (const [name, width, height] of [
     await page.getByLabel('Email').fill('e2e-student@example.test');
     await page.getByLabel('Mật khẩu', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Tài khoản của bạn' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Học tiếp', exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

@@ -276,3 +276,38 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* HOME-01: role home. Plain sections and lists; no metric tiles. */
+.role-home {
+  display: grid;
+  gap: 24px;
+}
+.home-section h2 {
+  margin-bottom: 12px;
+}
+.home-continue-card {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--paper);
+}
+.home-continue-card h3,
+.home-group h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.home-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding-left: 20px;
+}
+.home-list li {
+  overflow-wrap: anywhere;
+}
+.home-group + .home-group {
+  margin-top: 16px;
+}

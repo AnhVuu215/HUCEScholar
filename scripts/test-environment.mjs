@@ -74,6 +74,8 @@ try {
     ['workspace-ui-lecturer', 'LECTURER'],
     ['workspace-ui-student', 'STUDENT'],
     ['ui-inventory-student', 'STUDENT'],
+    ['home-admin', 'ADMIN'],
+    ['home-student', 'STUDENT'],
     ['users-admin', 'ADMIN'],
     ['catalog-admin', 'ADMIN'],
     ['assignments-admin', 'ADMIN'],
