@@ -80,6 +80,8 @@ try {
     ['ux-student', 'STUDENT'],
     ['upload-admin', 'ADMIN'],
     ['upload-student', 'STUDENT'],
+    ['reports-admin', 'ADMIN'],
+    ['reports-student', 'STUDENT'],
     ['users-admin', 'ADMIN'],
     ['catalog-admin', 'ADMIN'],
     ['assignments-admin', 'ADMIN'],

@@ -39,7 +39,7 @@ test('library controls align and keep readable targets', async ({ page }) => {
 });
 
 for (const [role, count] of [
-  ['admin', 7],
+  ['admin', 8],
   ['lecturer', 4],
   ['student', 3],
 ] as const) {
