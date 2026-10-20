@@ -7,7 +7,7 @@ async function login(page: Page, role: 'admin' | 'lecturer' | 'student' = 'stude
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await expect(page).toHaveURL(`/workspace/${role}`);
-  await expect(page.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Học tiếp', exact: true })).toBeVisible();
 }
 
 test('library controls align and keep readable targets', async ({ page }) => {
