@@ -20,6 +20,7 @@ import { ReaderSelectionToolbar } from './reader-selection-toolbar';
 import { useAnnotationEditor, useAnnotationPanel } from './reader-annotation-panel';
 import type { LibraryItem } from '../../lib/library';
 import { formatCitation } from '../../lib/citations';
+import { useReturnFocus } from '../../lib/use-return-focus';
 import { ReaderCitation, type CitationStatus } from './reader-citation';
 
 type Draft = {
@@ -48,6 +49,7 @@ export function ReaderHighlights({
   defaultColor?: string;
 }) {
   const panel = useAnnotationPanel();
+  const returnFocus = useReturnFocus();
   const [data, setData] = useState<{ page: number; items: TextHighlight[] } | null>(null);
   const [loading, setLoading] = useState(true),
     [listError, setListError] = useState('');
@@ -509,7 +511,10 @@ export function ReaderHighlights({
                 <button
                   className="secondary-button"
                   disabled={dirty || locked || !!draft}
-                  onClick={() => setDeleting(item)}
+                  onClick={() => {
+                    returnFocus.remember();
+                    setDeleting(item);
+                  }}
                 >
                   Xóa vùng tô
                 </button>
@@ -528,7 +533,10 @@ export function ReaderHighlights({
                     <button
                       className="secondary-button"
                       disabled={busy}
-                      onClick={() => setDeleting(null)}
+                      onClick={() => {
+                        setDeleting(null);
+                        returnFocus.restore();
+                      }}
                     >
                       Giữ vùng tô
                     </button>
