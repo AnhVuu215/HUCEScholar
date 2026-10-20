@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   currentDraft,
   materialError,
   retryDraftSource,
   type MaterialDraft,
 } from '../../lib/materials';
+import { ScanWatchHint, useScanWatch } from './scan-watch';
 
 export function MaterialFileStatus({
   current,
@@ -17,47 +18,12 @@ export function MaterialFileStatus({
   blocked: boolean;
 }) {
   const [error, setError] = useState(''),
-    [busy, setBusy] = useState(false),
-    [stopped, setStopped] = useState(false);
-  const callback = useRef(changed);
-  useEffect(() => {
-    callback.current = changed;
-  }, [changed]);
+    [busy, setBusy] = useState(false);
   const source = current.source;
   const waiting = source
     ? ['QUEUED', 'RUNNING'].includes(source.conversionState)
     : current.fileState === 'CHECKING';
-  useEffect(() => {
-    if (!waiting || stopped) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let delay = 2000;
-    const controller = new AbortController(),
-      started = Date.now();
-    const poll = async () => {
-      if (controller.signal.aborted) return;
-      if (Date.now() - started > 180_000) {
-        setStopped(true);
-        return;
-      }
-      if (document.visibilityState === 'visible')
-        try {
-          const item = await currentDraft(current.id, controller.signal);
-          if (!controller.signal.aborted && item.versionId === current.versionId)
-            callback.current(item);
-        } catch {
-          /* Manual refresh remains available; never overwrite the local form. */
-        }
-      if (!controller.signal.aborted) {
-        delay = Math.min(delay * 1.5, 15000);
-        timer = setTimeout(() => void poll(), delay);
-      }
-    };
-    timer = setTimeout(() => void poll(), delay);
-    return () => {
-      controller.abort();
-      if (timer) clearTimeout(timer);
-    };
-  }, [current.id, current.versionId, source?.id, waiting, stopped]);
+  const watch = useScanWatch(current, waiting, changed);
   async function refresh(retry = false) {
     if (busy || blocked) return;
     setBusy(true);
@@ -65,7 +31,7 @@ export function MaterialFileStatus({
     try {
       const item = retry ? await retryDraftSource(current) : await currentDraft(current.id);
       changed(item);
-      setStopped(false);
+      watch.refreshed();
     } catch (failure) {
       setError(materialError(failure));
     } finally {
@@ -127,8 +93,8 @@ export function MaterialFileStatus({
         </p>
       )}
       <div className="user-form-actions">
-        {waiting && !stopped && (
-          <button type="button" className="text-button" onClick={() => setStopped(true)}>
+        {waiting && !watch.stopped && (
+          <button type="button" className="text-button" onClick={watch.stop}>
             Dừng chờ tự động
           </button>
         )}
@@ -165,14 +131,7 @@ export function MaterialFileStatus({
             </button>
           )}
       </div>
-      {waiting && (
-        <p className="field-hint">
-          File đã lưu riêng tư, chưa công bố.{' '}
-          {stopped
-            ? 'Đã dừng chờ tự động; bấm cập nhật để kiểm tra.'
-            : 'Trạng thái tự cập nhật trong ba phút khi trang đang mở.'}
-        </p>
-      )}
+      {waiting && <ScanWatchHint watch={watch} />}
       {error && (
         <p role="alert" className="form-error">
           {error}

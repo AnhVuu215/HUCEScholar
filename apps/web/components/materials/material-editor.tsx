@@ -654,6 +654,7 @@ function DraftForm({
           metadataDirty={metadataDirty || pending}
           interactionBlocked={publicationBusy || publicationUncertain}
           changed={acceptCurrent}
+          watched={updateFileState}
           busy={setPdfBusy}
           selectionChanged={setPdfSelected}
         />
