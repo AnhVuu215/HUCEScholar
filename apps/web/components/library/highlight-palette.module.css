@@ -1,0 +1,76 @@
+.palette {
+  min-width: 0;
+  margin: 16px 0;
+  padding: 0;
+  border: 0;
+}
+.palette legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: 600;
+}
+.choices {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(var(--highlight-color-width, 128px), 100%), 1fr)
+  );
+  gap: 8px;
+  max-width: 600px;
+}
+.choices .option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-height);
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.swatch {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--ink);
+}
+.swatch svg {
+  visibility: hidden;
+}
+.option:has(input:checked) {
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.option:has(input:checked) svg {
+  visibility: visible;
+}
+.option:has(input:focus-visible) {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.option:hover:has(input:enabled) {
+  border-color: var(--accent);
+}
+.option:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

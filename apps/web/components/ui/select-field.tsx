@@ -53,7 +53,7 @@ export function SelectField({
   function choose(index: number) {
     const option = options[index];
     if (!option || option.disabled || disabled) return;
-    onChange(option.value);
+    if (option.value !== value) onChange(option.value);
     setOpen(false);
     trigger.current?.focus();
   }

@@ -1,4 +1,5 @@
 import type { HighlightAnchor } from './highlights';
+import type { PdfTextPart } from './pdf-find';
 export interface HighlightViewport {
   width: number;
   height: number;
@@ -13,6 +14,7 @@ export interface HighlightSurface {
   layer: HTMLDivElement;
   overlay: HTMLDivElement;
   viewport: HighlightViewport;
+  text?: { parts: PdfTextPart[]; elements: HTMLElement[] };
 }
 const normalize = (n: number) => Math.round(Math.max(0, Math.min(1, n)) * 1e6) / 1e6;
 export function rectToQuad(

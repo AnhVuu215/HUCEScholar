@@ -27,7 +27,7 @@ function isProgress(v: unknown): v is ReadingProgress {
     typeof r.updatedAt === 'string'
   );
 }
-function isNote(v: unknown): v is PageNote {
+export function isNote(v: unknown): v is PageNote {
   if (!isProgress(v)) return false;
   const r = v as unknown as Record<string, unknown>;
   return validId(r.id) && r.kind === 'PAGE_NOTE' && typeof r.content === 'string';

@@ -31,13 +31,15 @@ const fresh = (): Session => ({
   saved: 0,
   wanted: 0,
 });
-export function useReadingProgress(versionId: string) {
+export function useReadingProgress(versionId: string, initialPage?: number | null) {
   const [page, setPage] = useState(1),
     [ready, setReady] = useState(false);
   const [status, setStatus] = useState<Status>('loading'),
     [savedPage, setSavedPage] = useState(0);
   const [attempt, setAttempt] = useState(0);
+  const [previousPage, setPreviousPage] = useState(0);
   const session = useRef<Session>(fresh());
+  const linkedTargetApplied = useRef<string | null>(null);
   useEffect(() => {
     const current = fresh(),
       controller = new AbortController();
@@ -49,7 +51,15 @@ export function useReadingProgress(versionId: string) {
         current.enabled = true;
         current.revision = item?.revision ?? 0;
         current.saved = item?.pageNumber ?? 0;
-        setPage(item?.pageNumber ?? 1);
+        // Reload after a conflict reconciles with the server, including after
+        // recovery from an invalid link. Apply the link only on the first load.
+        setPage(
+          (linkedTargetApplied.current !== versionId ? initialPage : undefined) ??
+            item?.pageNumber ??
+            1,
+        );
+        linkedTargetApplied.current = versionId;
+        setPreviousPage(current.saved);
         setSavedPage(current.saved);
         setStatus(item ? 'saved' : 'loaded');
         setReady(true);
@@ -62,7 +72,7 @@ export function useReadingProgress(versionId: string) {
       controller.abort();
       clearTimeout(current.timer);
     };
-  }, [versionId, attempt]);
+  }, [versionId, attempt, initialPage]);
   const flush = useCallback(async () => {
     const current = session.current;
     if (!current.live || !current.enabled || current.blocked || current.busy) return;
@@ -126,6 +136,7 @@ export function useReadingProgress(versionId: string) {
   }
   function skip() {
     session.current.enabled = false;
+    linkedTargetApplied.current = versionId;
     setPage(1);
     setReady(true);
     setStatus('skipped');
@@ -145,6 +156,7 @@ export function useReadingProgress(versionId: string) {
   };
   return {
     page,
+    previousPage,
     setPage,
     ready,
     status,

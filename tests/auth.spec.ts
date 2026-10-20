@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './helpers/test';
 
 const password = process.env.E2E_PASSWORD;
 if (!password) throw new Error('Run pnpm test:setup before browser tests.');
@@ -9,15 +9,37 @@ for (const [role, label] of [
   ['STUDENT', 'Sinh viên'],
 ] as const) {
   test(`${role}: login, restore session and logout`, async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: 'Đăng nhập', exact: true }).click();
-    await page.getByLabel('Email').fill(`e2e-${role.toLowerCase()}@example.test`);
-    await page.getByLabel('Mật khẩu', { exact: true }).fill(password);
-    await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-    await expect(page).toHaveURL(`/workspace/${role.toLowerCase()}`);
+    let releaseProfile!: () => void;
+    let profileRequested!: () => void;
+    const holdProfile = new Promise<void>((resolve) => {
+      releaseProfile = resolve;
+    });
+    const profileStarted = new Promise<void>((resolve) => {
+      profileRequested = resolve;
+    });
+    const profilePath = `**/api/v1/workspace/${role.toLowerCase()}`;
+    await page.route(profilePath, async (route) => {
+      profileRequested();
+      await holdProfile;
+      await route.continue();
+    });
+    try {
+      await page.goto('/');
+      await page.getByRole('link', { name: 'Đăng nhập', exact: true }).click();
+      await page.getByLabel('Email').fill(`e2e-${role.toLowerCase()}@example.test`);
+      await page.getByLabel('Mật khẩu', { exact: true }).fill(password);
+      await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+      await expect(page).toHaveURL(`/workspace/${role.toLowerCase()}`);
+      await profileStarted;
+      await expect(page.locator('#workspace-navigation a')).toHaveCount(0);
+    } finally {
+      releaseProfile();
+    }
     await expect(
       page.getByRole('heading', { name: `Không gian ${label.toLowerCase()}` }),
     ).toBeVisible();
+    await expect(page.locator('#workspace-navigation a').first()).toBeVisible();
+    await page.unroute(profilePath);
     await expect(
       page.getByText(`e2e-${role.toLowerCase()}@example.test`, { exact: true }),
     ).toBeVisible();
