@@ -296,6 +296,7 @@ test('real DOCX conversion supports lecturer publication and student private not
     await expect(student.locator('[data-highlight-id]').first()).toBeVisible();
     await student.getByRole('button', { name: 'Xoay trang', exact: true }).click();
     await student.reload();
+    await student.getByRole('tab', { name: 'Ghi chú trang', exact: true }).click();
     await expect(
       student.getByText('Ghi chú riêng trên bản đọc DOCX', { exact: true }),
     ).toBeVisible();

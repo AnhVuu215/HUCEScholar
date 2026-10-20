@@ -5,8 +5,16 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
 import { readerPdf } from './helpers/reader-pdf';
+import { configureReaderPanel } from './helpers/reader-session';
 
 async function readerChoice(page: Page, label: string, option: string) {
+  if (label === 'Màu tô sáng') {
+    await page
+      .getByRole('group', { name: label, exact: true })
+      .getByRole('radio', { name: option, exact: true })
+      .check();
+    return;
+  }
   await page.getByRole('combobox', { name: label, exact: true }).click();
   await page.getByRole('option', { name: option, exact: true }).click();
 }
@@ -338,10 +346,13 @@ async function openPersonalReader(page: Page, prefix: string) {
   ).toBe(201);
   await logoutForTest(page);
   await login(page, 'student', prefix);
+  await configureReaderPanel(page);
   await page.goto(`/workspace/library/versions/${item.versionId}`);
   await expect(page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' })).toBeVisible(
     { timeout: 15_000 },
   );
+  if (prefix.includes('highlights'))
+    await page.getByRole('tab', { name: 'Đoạn tô', exact: true }).click();
   return `/api/v1/library/versions/${item.versionId}`;
 }
 async function capturePersonal(page: Page, prefix: string) {
@@ -718,6 +729,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
     .locator('.textLayer span')
     .filter({ hasText: 'HUCEScholar reader fixture' })
     .first();
+  await text.scrollIntoViewIfNeeded();
   const box = (await text.boundingBox())!;
   await page.mouse.move(box.x + 1, box.y + box.height / 2);
   await page.mouse.down();
@@ -726,8 +738,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await page.getByRole('button', { name: 'Tô sáng đoạn chọn', exact: true }).click();
   const editor = page.getByLabel('Ghi chú cho đoạn tô', { exact: true });
   await editor.fill('Điểm cần nhớ <b>riêng tư</b>');
-  const pageNote = page.getByLabel('Nội dung ghi chú', { exact: true });
-  await pageNote.fill('Bản soạn ghi chú theo trang');
+  await expect(page.getByLabel('Nội dung ghi chú', { exact: true })).toBeHidden();
   let leavePrompts = 0;
   const stay = async (dialog: import('@playwright/test').Dialog) => {
     leavePrompts++;
@@ -737,9 +748,7 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
   expect(leavePrompts).toBe(1);
   await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
-  await expect(pageNote).toHaveValue('Bản soạn ghi chú theo trang');
   page.off('dialog', stay);
-  await page.getByRole('button', { name: 'Bỏ thay đổi', exact: true }).click();
   await readerChoice(page, 'Màu tô sáng', 'Xanh dương');
   await page.route('**/api/v1/library/versions/*/highlights', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
@@ -758,7 +767,9 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Lưu vùng tô', exact: true })).toBeEnabled();
   await expect(editor).toHaveAttribute('readonly', '');
-  await expect(page.getByLabel('Màu tô sáng', { exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole('group', { name: 'Màu tô sáng', exact: true }).getByRole('radio').first(),
+  ).toBeDisabled();
   await page.unroute('**/api/v1/auth/csrf');
   await page.getByRole('button', { name: 'Lưu vùng tô', exact: true }).click();
   const list = (await (await page.request.get(`${path}/highlights?pageNumber=1`)).json()).items;
@@ -801,10 +812,12 @@ test('private PDF text highlights survive retry, zoom, rotation, page changes an
   await expect(overlay).toBeVisible();
   await page.reload();
   await expect(overlay).toBeVisible();
+  await page.getByRole('tab', { name: 'Đoạn tô', exact: true }).click();
   const row = page.getByRole('article', { name: `Vùng tô ${id}`, exact: true });
   await expect(row.getByText('Điểm cần nhớ <b>riêng tư</b>', { exact: true })).toBeVisible();
   expect(await row.locator('b').count()).toBe(0);
   // Click through the overlay into the PDF text, then edit the existing selection.
+  await overlay.scrollIntoViewIfNeeded();
   const hit = (await overlay.boundingBox())!;
   await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
   await expect(editor).toHaveValue('Điểm cần nhớ <b>riêng tư</b>');
@@ -1363,11 +1376,22 @@ test('lecturer reopens a legacy change request, self-publishes and retains older
 }) => {
   test.setTimeout(60000);
   const { code } = await submittedForReview(page, 'lecturer');
+  let moderationDocuments = 0;
+  page.on('request', (request) => {
+    if (
+      request.isNavigationRequest() &&
+      request.frame() === page.mainFrame() &&
+      new URL(request.url()).pathname === '/workspace/admin/moderation'
+    )
+      moderationDocuments++;
+  });
   await adminReviewLogin(page, code);
-  await page.getByLabel('Quyết định', { exact: true }).selectOption('CHANGES_REQUIRED');
+  expect(moderationDocuments).toBe(0);
+  await page.getByLabel('Quyết định', { exact: true }).selectOption('APPROVED');
   await page
     .getByLabel('Lý do quyết định', { exact: true })
     .fill('Bổ sung dẫn chứng quyền sử dụng');
+  await page.getByLabel('Đã kiểm tra nội dung và căn cứ quyền sử dụng', { exact: true }).check();
   await page.goBack();
   await expect(page).toHaveURL('/workspace/admin');
   await page.goForward();
@@ -1379,7 +1403,15 @@ test('lecturer reopens a legacy change request, self-publishes and retains older
   await expect(page.getByLabel('Lý do quyết định', { exact: true })).toHaveValue(
     'Bổ sung dẫn chứng quyền sử dụng',
   );
-  await expect(page.getByLabel('Quyết định', { exact: true })).toHaveValue('CHANGES_REQUIRED');
+  expect(moderationDocuments).toBe(0);
+  await expect(page.getByLabel('Quyết định', { exact: true })).toHaveValue('APPROVED');
+  await expect(
+    page.getByLabel('Đã kiểm tra nội dung và căn cứ quyền sử dụng', { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole('button', { name: 'Xác nhận quyết định', exact: true }),
+  ).toBeDisabled();
+  await page.getByLabel('Quyết định', { exact: true }).selectOption('CHANGES_REQUIRED');
   await page.getByRole('button', { name: 'Xác nhận quyết định', exact: true }).click();
   await page.getByRole('button', { name: 'Lưu quyết định', exact: true }).click();
   await expect(page.locator('.moderation-detail')).toContainText('Đã lưu quyết định');

@@ -29,6 +29,7 @@ test('library controls align and keep readable targets', async ({ page }) => {
       path: '.impeccable/review/workspace-v2/library-desktop.png',
       fullPage: true,
     });
+    await page.getByRole('button', { name: 'Bộ lọc', exact: true }).click();
     await page.getByRole('combobox', { name: 'Nguồn học liệu', exact: true }).click();
     await page.screenshot({
       path: '.impeccable/review/workspace-v2/dropdown-desktop.png',
@@ -54,8 +55,8 @@ for (const [role, count] of [
     await expect(account).toHaveAttribute('aria-expanded', 'false');
     await account.click();
     const profile = page.getByRole('link', { name: 'Tài khoản của tôi', exact: true });
-    await expect(profile).toHaveAttribute('href', `/workspace/${role}`);
-    await expect(page.getByRole('link', { name: 'Cài đặt', exact: true })).toHaveCount(0);
+    await expect(profile).toHaveAttribute('href', '/workspace/profile');
+    await expect(page.getByRole('link', { name: 'Cài đặt', exact: true })).toHaveCount(1);
     await profile.focus();
     await page.keyboard.press('Escape');
     await expect(account).toBeFocused();
@@ -75,6 +76,7 @@ test('rounded select supports keyboard, cancel, outside click and real filter su
 }) => {
   await login(page);
   await page.goto('/workspace/library');
+  await page.getByRole('button', { name: 'Bộ lọc', exact: true }).click();
   const source = page.getByRole('combobox', { name: 'Nguồn học liệu', exact: true });
   await source.focus();
   await page.keyboard.press('Enter');
@@ -117,6 +119,7 @@ for (const width of [320, 390]) {
       .getByRole('navigation', { name: 'Điều hướng không gian' })
       .getByRole('link', { name: 'Kho học liệu', exact: true })
       .click();
+    await page.getByRole('button', { name: 'Bộ lọc', exact: true }).click();
     const source = page.getByRole('combobox', { name: 'Nguồn học liệu', exact: true });
     await source.scrollIntoViewIfNeeded();
     await source.click();
@@ -153,6 +156,7 @@ test.describe('200% zoom reflow emulation', () => {
   test('controls and popup remain reachable at half the desktop CSS viewport', async ({ page }) => {
     await login(page);
     await page.goto('/workspace/library');
+    await page.getByRole('button', { name: 'Bộ lọc', exact: true }).click();
     const select = page.getByRole('combobox', { name: 'Loại học liệu', exact: true });
     await select.scrollIntoViewIfNeeded();
     await select.click();

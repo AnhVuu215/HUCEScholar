@@ -1,3 +1,4 @@
+import { AnnotationSearchDto } from './annotation-search.dto';
 import {
   Body,
   Controller,
@@ -28,6 +29,13 @@ import { CreateHighlightDto, UpdateHighlightDto } from './highlight.dto';
 @UseGuards(SessionGuard, CsrfGuard)
 export class ReadingController {
   constructor(private readonly reading: ReadingService) {}
+  @Post('annotations/search') search(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: AnnotationSearchDto,
+  ) {
+    return this.reading.search(req.user, id, dto);
+  }
   @Get('highlights') highlights(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
