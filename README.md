@@ -27,6 +27,7 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [AUTH-02: buộc đổi mật khẩu được cấp và admin cấp lại mật khẩu](docs/implementation/2026-10-20-forced-password-change.md)
 - [HOME-01: trang đầu theo vai trò](docs/implementation/2026-10-20-role-home.md)
 - [UX-01: trả focus khi hủy xác nhận, ca biên thư viện cá nhân](docs/implementation/2026-10-20-interaction-fixes.md)
+- [UPLOAD-01: theo dõi trạng thái kiểm tra file](docs/implementation/2026-10-20-scan-status.md)
 - [Tech stack và kiến trúc MVP](docs/HUCEScholar-tech-stack.md)
 - [Mô hình dữ liệu và SQL tham chiếu](docs/database/README.md)
 - [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)
