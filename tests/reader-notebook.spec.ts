@@ -265,3 +265,29 @@ test('switching versions aborts the old search and leaves the new version empty'
   await page.unrouteAll({ behavior: 'wait' });
   await expect(notebook(page).getByRole('article')).toHaveCount(0);
 });
+test('notebook downloads the owner notes as Markdown and text, and reports a lost version', async ({
+  page,
+}) => {
+  await page.getByRole('tab', { name: 'Toàn tài liệu', exact: true }).click();
+  const group = notebook(page).getByRole('group', { name: 'Tải ghi chú của bạn', exact: true });
+  const markdown = page.waitForEvent('download');
+  await group.getByRole('button', { name: 'Markdown (.md)', exact: true }).click();
+  const md = await markdown;
+  expect(md.suggestedFilename()).toBe(`ghi-chu-phien-ban-${fixture.versionId}.md`);
+  const body = await (await md.createReadStream()).toArray();
+  const content = Buffer.concat(body).toString('utf8');
+  expect(content).toContain('## Trang 1');
+  expect(content).toContain('Ôn tập 0');
+  expect(content).toContain(String.raw`> Trích dẫn 50%\_\\ tiếng Việt`);
+  await expect(group.getByRole('status')).toHaveText('Đã tạo file ghi chú.');
+  const text = page.waitForEvent('download');
+  await group.getByRole('button', { name: 'Văn bản (.txt)', exact: true }).click();
+  expect((await text).suggestedFilename()).toBe(`ghi-chu-phien-ban-${fixture.versionId}.txt`);
+  // A version that stopped being readable yields a message, not an error page saved as a file.
+  await page.route(`**/versions/${fixture.versionId}/annotations/export*`, (route) =>
+    route.fulfill({ status: 404, contentType: 'application/json', body: '{}' }),
+  );
+  await group.getByRole('button', { name: 'Markdown (.md)', exact: true }).click();
+  await expect(group.getByRole('status')).toContainText('không còn khả dụng');
+  await page.unrouteAll({ behavior: 'wait' });
+});

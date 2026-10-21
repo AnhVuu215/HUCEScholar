@@ -2945,6 +2945,58 @@ describe('private material drafts', () => {
       expect((await readingWrite('student', `${path}/progress`, invalid, 'put')).status).toBe(400);
     await agents.student.put(`${path}/progress`).send({ pageNumber: 1, revision: 2 }).expect(403);
   });
+  it('exports only the owner notes for a readable version, escaped, and not after access is lost', async () => {
+    const { path, id } = await readingFixture();
+    expect(
+      (
+        await readingWrite('student', `${path}/notes`, {
+          pageNumber: 3,
+          content: 'Ôn [link](https://x.test) <b>đậm</b>',
+          requestId: randomUUID(),
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await readingWrite('student', `${path}/highlights`, {
+          pageNumber: 1,
+          content: '',
+          color: '#90CAF9',
+          requestId: randomUUID(),
+          anchor: { ...highlightAnchor(), quote: 'Định nghĩa chính' },
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await readingWrite('other', `${path}/notes`, {
+          pageNumber: 1,
+          content: 'Bí mật chủ khác',
+          requestId: randomUUID(),
+        })
+      ).status,
+    ).toBe(201);
+    const md = await agents.student.get(`${path}/annotations/export`).expect(200);
+    expect(md.headers['content-type']).toBe('text/markdown; charset=utf-8');
+    expect(md.headers['content-disposition']).toMatch(
+      /^attachment; filename="ghi-chu-phien-ban-\d+\.md"$/,
+    );
+    expect(md.headers['cache-control']).toBe('no-store');
+    expect(md.text.indexOf('## Trang 1')).toBeLessThan(md.text.indexOf('## Trang 3'));
+    expect(md.text).toContain('> Định nghĩa chính');
+    expect(md.text).toContain('Ôn \\[link\\]\\(https\\://x.test\\) \\<b\\>đậm\\</b\\>');
+    expect(md.text).not.toContain('Bí mật chủ khác');
+    const text = await agents.student
+      .get(`${path}/annotations/export?format=text`)
+      .expect('Content-Type', 'text/plain; charset=utf-8')
+      .expect(200);
+    expect(text.text).toContain('- Ghi chú trang: Ôn [link](https://x.test) <b>đậm</b>');
+    await agents.student.get(`${path}/annotations/export?format=pdf`).expect(400);
+    // Notes are retained but not exportable while the version cannot be read.
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [id]);
+    await agents.student.get(`${path}/annotations/export`).expect(404);
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [id]);
+  });
   it('reading data stays version-bound and is retained but unavailable after hide or unsafe scan', async () => {
     const { path, id, versionId } = await readingFixture();
     const note = await readingWrite('student', `${path}/notes`, {

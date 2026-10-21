@@ -12,7 +12,7 @@ V2 (A–C, gồm AUTH-01) đã vào `main` qua PR #8. AUTH-02 đã triển khai 
 
 ## Cập nhật 21/10
 
-QA-01 có [pilot local tự động](../implementation/2026-10-21-local-pilot.md): bộ tài liệu tự soạn chạy qua ClamAV/Poppler/LibreOffice thật cho cả ba vai trò. Lượt này phát hiện và sửa lỗi trang có `/Rotate` hiển thị sai chiều. Ba điểm pilot tìm ra đã xử lý: UPLOAD-03 ở [mốc lý do file không đạt](../implementation/2026-10-21-file-check-reasons.md) (nhận PDF chỉ khóa quyền, tắt tô và trích dẫn; báo rõ lý do từ chối file), SEARCH-02 ở [mốc tìm nhiều từ](../implementation/2026-10-21-multiword-search.md). UPLOAD-04 cho admin thấy cùng lý do ([mốc](../implementation/2026-10-21-admin-file-reasons.md)). NOTIFY-01 có [lát đầu thông báo trong ứng dụng](../implementation/2026-10-21-in-app-notifications.md). Phiên dùng thử với người thật và OPS-02 vẫn mở.
+QA-01 có [pilot local tự động](../implementation/2026-10-21-local-pilot.md): bộ tài liệu tự soạn chạy qua ClamAV/Poppler/LibreOffice thật cho cả ba vai trò. Lượt này phát hiện và sửa lỗi trang có `/Rotate` hiển thị sai chiều. Ba điểm pilot tìm ra đã xử lý: UPLOAD-03 ở [mốc lý do file không đạt](../implementation/2026-10-21-file-check-reasons.md) (nhận PDF chỉ khóa quyền, tắt tô và trích dẫn; báo rõ lý do từ chối file), SEARCH-02 ở [mốc tìm nhiều từ](../implementation/2026-10-21-multiword-search.md). UPLOAD-04 cho admin thấy cùng lý do ([mốc](../implementation/2026-10-21-admin-file-reasons.md)). NOTIFY-01 có [lát đầu thông báo trong ứng dụng](../implementation/2026-10-21-in-app-notifications.md). EXPORT-01 có [xuất ghi chú Markdown/văn bản](../implementation/2026-10-21-notes-export.md). Phiên dùng thử với người thật và OPS-02 vẫn mở.
 
 ## Bổ sung yêu cầu V2 ngày 17/10
 

@@ -13,6 +13,7 @@ import { LibraryService } from './library.service';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 import { CreateHighlightDto, UpdateHighlightDto } from './highlight.dto';
+import { exportAnnotations, MAX_EXPORT_ANNOTATIONS, type ExportFormat } from './annotation-export';
 import {
   CreateNoteDto,
   NotesQueryDto,
@@ -305,6 +306,36 @@ export class ReadingService {
             data: { user_id, version_id, page_number: dto.pageNumber, page_offset: 0 },
           });
       return { item: progressItem(row) };
+    });
+  }
+  /** Everything the owner wrote on this version, while they can still read it. */
+  exportNotes(actor: Profile, id: string, format: ExportFormat) {
+    return this.run(actor, id, false, async (tx, user_id, version_id) => {
+      const rows = await tx.annotations.findMany({
+        where: { user_id, version_id },
+        select: { page_number: true, kind: true, content: true, anchor: true, color: true },
+        orderBy: [{ page_number: 'asc' }, { id: 'asc' }],
+        take: MAX_EXPORT_ANNOTATIONS + 1,
+      });
+      if (rows.length > MAX_EXPORT_ANNOTATIONS)
+        throw new BadRequestException({
+          code: 'EXPORT_TOO_LARGE',
+          message: `Phiên bản có hơn ${MAX_EXPORT_ANNOTATIONS} ghi chú; chưa xuất được một lần.`,
+        });
+      const version = await tx.document_versions.findUniqueOrThrow({
+        where: { id: version_id },
+        select: { title: true, authors: true, version_no: true },
+      });
+      return exportAnnotations(
+        {
+          title: version.title,
+          authors: version.authors,
+          versionNo: version.version_no,
+          exportedAt: new Date(),
+        },
+        rows,
+        format,
+      );
     });
   }
 }
