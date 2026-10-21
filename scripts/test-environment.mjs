@@ -115,6 +115,8 @@ try {
     ['preferences-student', 'STUDENT'],
     ['notebook-admin', 'ADMIN'],
     ['notebook-student', 'STUDENT'],
+    ['review-later-admin', 'ADMIN'],
+    ['review-later-student', 'STUDENT'],
     ['find-admin', 'ADMIN'],
     ['find-student', 'STUDENT'],
     ['find-scan-admin', 'ADMIN'],

@@ -30,7 +30,7 @@ describe('migrated PostgreSQL authentication lifecycle', () => {
     const partial = await client.query(
       "SELECT count(*)::int n FROM pg_indexes WHERE schemaname='hucescholar' AND indexdef LIKE '% WHERE %'",
     );
-    expect(partial.rows[0].n).toBe(10);
+    expect(partial.rows[0].n).toBe(11);
     const guards = await client.query(
       "SELECT count(*)::int n FROM pg_trigger WHERE tgrelid IN ('hucescholar.document_versions'::regclass,'hucescholar.version_courses'::regclass,'hucescholar.files'::regclass,'hucescholar.documents'::regclass) AND NOT tgisinternal",
     );

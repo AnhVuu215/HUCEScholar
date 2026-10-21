@@ -7,6 +7,7 @@ export interface PageNote {
   content: string;
   revision: number;
   updatedAt: string;
+  reviewLater: boolean;
 }
 export interface ReadingProgress {
   versionId: string;
@@ -30,7 +31,12 @@ function isProgress(v: unknown): v is ReadingProgress {
 export function isNote(v: unknown): v is PageNote {
   if (!isProgress(v)) return false;
   const r = v as unknown as Record<string, unknown>;
-  return validId(r.id) && r.kind === 'PAGE_NOTE' && typeof r.content === 'string';
+  return (
+    validId(r.id) &&
+    r.kind === 'PAGE_NOTE' &&
+    typeof r.content === 'string' &&
+    typeof r.reviewLater === 'boolean'
+  );
 }
 const base = (id: string) => `/library/versions/${encodeURIComponent(id)}`;
 async function write(id: string, path: string, method: string, data: object) {

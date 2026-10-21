@@ -10,6 +10,7 @@ const item = {
   color: '#123abc',
   revision: 2,
   updatedAt: '2026-10-17T00:00:00.000Z',
+  reviewLater: false,
   anchor: {
     coordinateSpace: 'normalized-pdf-v1',
     quote: 'Đoạn văn gốc',

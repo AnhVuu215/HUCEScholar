@@ -2671,6 +2671,112 @@ describe('private material drafts', () => {
     expect((await readingWrite('student', endpoint, {})).status).toBe(404);
     expect((await readingWrite('admin', endpoint, {})).status).toBe(404);
   });
+  it('owner marks notes and highlights "cần xem lại" without bumping revision, filters by it, and nobody else can', async () => {
+    const { id, path } = await readingFixture();
+    const endpoint = `${path}/annotations/search`;
+    const note = (
+      await readingWrite('student', `${path}/notes`, {
+        pageNumber: 2,
+        content: 'Chưa hiểu điều kiện',
+        requestId: randomUUID(),
+      })
+    ).body.item;
+    const highlight = (
+      await readingWrite('student', `${path}/highlights`, {
+        pageNumber: 1,
+        content: '',
+        color: '#FFF59D',
+        requestId: randomUUID(),
+        anchor: highlightAnchor(),
+      })
+    ).body.item;
+    expect(
+      (
+        await readingWrite('student', `${path}/notes`, {
+          pageNumber: 1,
+          content: 'Đã hiểu',
+          requestId: randomUUID(),
+        })
+      ).status,
+    ).toBe(201);
+    expect(note.reviewLater).toBe(false);
+    const mark = (who: string, target: string, body: object) =>
+      readingWrite(who, `${path}/annotations/${target}/review-later`, body, 'put');
+    for (const target of [note, highlight]) {
+      const marked = await mark('student', target.id, { reviewLater: true });
+      expect(marked.status).toBe(200);
+      expect(marked.body.item).toMatchObject({ id: target.id, reviewLater: true });
+      expect(marked.body.item.revision).toBe(target.revision);
+      // Setting, not toggling: a retry keeps the mark.
+      expect((await mark('student', target.id, { reviewLater: true })).body.item.reviewLater).toBe(
+        true,
+      );
+    }
+    // An edit draft opened before marking still saves.
+    const edited = await readingWrite(
+      'student',
+      `${path}/notes/${note.id}`,
+      { revision: note.revision, content: 'Chưa hiểu điều kiện áp dụng' },
+      'patch',
+    );
+    expect(edited.status).toBe(200);
+    expect(edited.body.item.reviewLater).toBe(true);
+    const flagged = await readingWrite('student', endpoint, { reviewLater: true });
+    expect(flagged.body.items.map((n: { id: string }) => n.id)).toEqual([highlight.id, note.id]);
+    expect((await readingWrite('student', endpoint, {})).body.items).toHaveLength(3);
+    expect(
+      (await readingWrite('student', endpoint, { reviewLater: false })).body.items,
+    ).toHaveLength(3);
+    expect(
+      (await readingWrite('student', endpoint, { reviewLater: true, kind: 'PAGE_NOTE' })).body
+        .items,
+    ).toHaveLength(1);
+    const page = await readingWrite('student', endpoint, { reviewLater: true, limit: 1 });
+    expect(page.body.nextCursor).toEqual(expect.any(String));
+    // A cursor from the flagged list is not valid for another filter.
+    expect((await readingWrite('student', endpoint, { cursor: page.body.nextCursor })).status).toBe(
+      400,
+    );
+    for (const body of [{}, { reviewLater: 'true' }, { reviewLater: null }])
+      expect((await mark('student', note.id, body)).status).toBe(400);
+    // Other people, admin and another version cannot see or change the mark.
+    expect((await mark('other', note.id, { reviewLater: false })).status).toBe(404);
+    expect((await mark('admin', note.id, { reviewLater: false })).status).toBe(404);
+    const otherVersion = await readingFixture();
+    expect(
+      (
+        await readingWrite(
+          'student',
+          `${otherVersion.path}/annotations/${note.id}/review-later`,
+          { reviewLater: false },
+          'put',
+        )
+      ).status,
+    ).toBe(404);
+    expect((await readingWrite('other', endpoint, { reviewLater: true })).body.items).toEqual([]);
+    expect(
+      (
+        await agents.student
+          .put(`${path}/annotations/${note.id}/review-later`)
+          .set('Origin', origin)
+          .send({
+            reviewLater: false,
+          })
+      ).status,
+    ).toBe(403);
+    const unmarked = await mark('student', note.id, { reviewLater: false });
+    expect(unmarked.body.item.reviewLater).toBe(false);
+    expect(
+      (await readingWrite('student', endpoint, { reviewLater: true })).body.items,
+    ).toHaveLength(1);
+    // Hidden documents keep the mark but refuse changes.
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [id]);
+    expect((await mark('student', highlight.id, { reviewLater: false })).status).toBe(404);
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [id]);
+    expect(
+      (await readingWrite('student', endpoint, { reviewLater: true })).body.items,
+    ).toHaveLength(1);
+  });
   it('persists all eight highlight colors through create, CAS edit and reload; rejects unknown writes', async () => {
     const { path } = await readingFixture();
     const colors = [
