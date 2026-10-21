@@ -259,7 +259,9 @@ export function ReaderHighlights({
       if (alive.current) setBusy(false);
     }
   }
+  // A copy-restricted PDF never offers its selection for highlighting or citation.
   const candidate =
+    !source.copyRestricted &&
     surface &&
     selection?.surface.element === surface.element &&
     selection.versionId === versionId &&
@@ -377,7 +379,9 @@ export function ReaderHighlights({
               </button>
             )}
             <span className="field-hint">
-              Chọn tối đa 2000 ký tự trong một trang PDF để tô sáng.
+              {source.copyRestricted
+                ? 'PDF này cấm sao chép nội dung nên không tô sáng hay trích dẫn được. Bạn vẫn ghi chú theo trang.'
+                : 'Chọn tối đa 2000 ký tự trong một trang PDF để tô sáng.'}
             </span>
             {selectionError && (
               <span role="status" className="field-hint">

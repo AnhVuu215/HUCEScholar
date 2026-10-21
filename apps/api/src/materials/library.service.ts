@@ -31,7 +31,15 @@ const selection = {
   rights_valid_until: true,
   download_allowed: true,
   updated_at: true,
-  files: { select: { id: true, byte_size: true, page_count: true, has_text_layer: true } },
+  files: {
+    select: {
+      id: true,
+      byte_size: true,
+      page_count: true,
+      has_text_layer: true,
+      copy_restricted: true,
+    },
+  },
   source_upload: {
     select: {
       original_name: true,
@@ -71,6 +79,7 @@ function serialize(v: LibraryRow) {
     downloadAllowed: v.download_allowed,
     pageCount: v.files!.page_count,
     hasTextLayer: v.files!.has_text_layer,
+    copyRestricted: v.files!.copy_restricted,
     byteSize: Number(v.files!.byte_size),
     sourceFile:
       v.source_upload?.conversion_status === 'READY' &&

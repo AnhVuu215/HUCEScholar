@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import {
   currentDraft,
+  fileErrorMessage,
   materialError,
   retryDraftSource,
   type MaterialDraft,
@@ -76,7 +77,7 @@ export function MaterialFileStatus({
               MISSING: 'Chưa có file tài liệu',
               CHECKING: 'PDF đang kiểm tra an toàn',
               SAFE: 'PDF đã qua kiểm tra an toàn',
-              FAILED: 'PDF không đạt kiểm tra; chọn file khác hoặc liên hệ quản trị viên',
+              FAILED: `PDF không đạt kiểm tra. ${fileErrorMessage(current.fileError)}`,
             }[current.fileState]
           }
         </p>
@@ -84,6 +85,12 @@ export function MaterialFileStatus({
       {current.pdf && (
         <p className="field-hint draft-file-name">
           {current.pdf.name} · {current.pdf.pageCount ?? '…'} trang
+        </p>
+      )}
+      {current.fileState === 'SAFE' && current.pdf?.copyRestricted && (
+        <p className="field-hint">
+          PDF này cấm sao chép nội dung. Người đọc vẫn đọc và ghi chú theo trang được, nhưng không
+          tô sáng hay trích dẫn đoạn chữ.
         </p>
       )}
       {source?.conversionState === 'READY' && (
