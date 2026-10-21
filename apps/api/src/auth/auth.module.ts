@@ -4,6 +4,8 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { CsrfGuard } from './csrf.guard';
 import { LoginRateLimiter } from './login-rate-limiter';
+import { Mailer } from './mailer';
+import { RecoveryService } from './recovery.service';
 import { RolesGuard, SessionGuard } from './session.guard';
 import { WorkspaceController } from './workspace.controller';
 
@@ -13,6 +15,8 @@ import { WorkspaceController } from './workspace.controller';
   providers: [
     AuthService,
     LoginRateLimiter,
+    Mailer,
+    RecoveryService,
     CsrfGuard,
     SessionGuard,
     RolesGuard,

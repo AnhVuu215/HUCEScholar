@@ -42,6 +42,9 @@ writeFileSync(
     `TEST_REDIS_URL=${redis.href}`,
     `CSRF_SECRET=${csrfSecret}`,
     `E2E_PASSWORD=${e2ePassword}`,
+    // AUTH-03: recovery mail is written here instead of being sent.
+    'MAIL_TRANSPORT=file',
+    `MAIL_DIR=${fileURLToPath(new URL('mail-outbox/', directory))}`,
     '',
   ].join('\n'),
   { mode: 0o600 },
@@ -140,6 +143,7 @@ try {
     ['lifecycle-receiver', 'LECTURER'],
     ['upload3-admin', 'ADMIN'],
     ['upload3-student', 'STUDENT'],
+    ['recover-student', 'STUDENT'],
     ['study-admin', 'ADMIN'],
     ['study-student', 'STUDENT'],
     ['course1-admin', 'ADMIN'],
