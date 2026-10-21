@@ -1,10 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { UnrecoverableError } from 'bullmq';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseService } from '../database/database.module';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
 import { PrivateStore } from './private-store';
-import { PdfScanner } from './pdf-scanner';
+import { FileCheckCode, FileCheckError, PdfScanner } from './pdf-scanner';
 import { receivePdf } from './receive-pdf';
 import { ScanQueue } from './scan-queue';
 
@@ -42,20 +43,27 @@ export class ScanProcessor {
           scan_status: 'SAFE',
           page_count: result.pageCount,
           has_text_layer: result.hasTextLayer,
+          copy_restricted: result.copyRestricted,
           checked_at: new Date(),
         },
       });
-    } catch {
-      if (finalAttempt) await this.fail(rawId);
+    } catch (error) {
+      // A verdict about the file itself will not change on retry: record it and stop.
+      if (error instanceof FileCheckError && !error.retryable) {
+        await this.fail(rawId, error.code);
+        throw new UnrecoverableError('PDF safety check failed.');
+      }
+      if (finalAttempt)
+        await this.fail(rawId, error instanceof FileCheckError ? 'CHECK_UNAVAILABLE' : null);
       throw new Error('PDF safety check failed.');
     } finally {
       if (directory) await rm(directory, { recursive: true, force: true }).catch(() => undefined);
     }
   }
-  async fail(id: string) {
+  async fail(id: string, reason: FileCheckCode | 'CHECK_UNAVAILABLE' | null = null) {
     await this.db.files.updateMany({
       where: { id: BigInt(id), scan_status: 'CHECKING' },
-      data: { scan_status: 'FAILED', checked_at: new Date() },
+      data: { scan_status: 'FAILED', check_error: reason, checked_at: new Date() },
     });
   }
   async reconcile() {
