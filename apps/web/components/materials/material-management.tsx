@@ -9,14 +9,23 @@ import {
   type DraftList,
 } from '../../lib/materials';
 import { MaterialEditor } from './material-editor';
-export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
+export function MaterialManagement({
+  role,
+  initialDraft,
+}: {
+  role: 'LECTURER' | 'STUDENT';
+  /** From a notification link; the editor loads it through the owner-checked API. */
+  initialDraft?: string;
+}) {
   const [query, setQuery] = useState({ search: '', page: 1, reviewStatus: '' });
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [data, setData] = useState<DraftList | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
-  const [editor, setEditor] = useState<{ id?: string } | null>(null);
+  const [editor, setEditor] = useState<{ id?: string } | null>(
+    initialDraft ? { id: initialDraft } : null,
+  );
   const [notice, setNotice] = useState('');
   const create = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -45,6 +54,9 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
   }
   function close() {
     setEditor(null);
+    // Drop the notification's ?draft= so a reload does not reopen the editor.
+    if (new URLSearchParams(window.location.search).has('draft'))
+      window.history.replaceState(window.history.state, '', window.location.pathname);
     reload();
     requestAnimationFrame(() => create.current?.focus());
   }

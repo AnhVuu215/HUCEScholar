@@ -171,6 +171,10 @@ describe('private material drafts', () => {
           'DELETE FROM hucescholar.version_courses WHERE version_id IN (SELECT id FROM hucescholar.document_versions WHERE created_by=ANY($1::bigint[]))',
           [ids],
         );
+        await db.query(
+          'DELETE FROM hucescholar.notifications WHERE user_id=ANY($1::bigint[]) OR document_id IN (SELECT id FROM hucescholar.documents WHERE created_by=ANY($1::bigint[]))',
+          [ids],
+        );
         await db.query('DELETE FROM hucescholar.annotations WHERE user_id=ANY($1::bigint[])', [
           ids,
         ]);
@@ -466,6 +470,150 @@ describe('private material drafts', () => {
       expect(managed.latest).toMatchObject({ fileState: 'FAILED', fileError: reason });
     } finally {
       scan.mockRestore();
+    }
+  });
+  async function notices(name: string, query = '') {
+    return (await agents[name].get(`/api/v1/notifications${query}`).expect(200)).body;
+  }
+  type Notice = { id: string; versionId: string; kind: string; read: boolean };
+  function noticeFor(list: { items: Notice[] }, versionId: string) {
+    return list.items.filter((n) => n.versionId === versionId);
+  }
+  it('notifies the uploader once when a PDF check settles, privately and without tool output', async () => {
+    const item = await create('student');
+    await upload('student', item.id, 1);
+    const file = await uploadedFile(item);
+    const versionId = String(
+      (await db.query('SELECT id FROM hucescholar.document_versions WHERE file_id=$1', [file.id]))
+        .rows[0].id,
+    );
+    const scan = jest
+      .spyOn(app.get(PdfScanner), 'scan')
+      .mockResolvedValue({ pageCount: 1, hasTextLayer: true, copyRestricted: false });
+    try {
+      const before = (await agents.student.get('/api/v1/notifications/unread').expect(200)).body;
+      await app.get(ScanProcessor).process(file.id, false);
+      await app.get(ScanProcessor).process(file.id, false);
+      const list = await notices('student');
+      const mine = noticeFor(list, versionId);
+      expect(mine).toEqual([
+        {
+          id: expect.any(String),
+          kind: 'FILE_SAFE',
+          documentId: item.id,
+          versionId,
+          title: expect.any(String),
+          detail: null,
+          createdAt: expect.any(String),
+          read: false,
+        },
+      ]);
+      expect(list.unread).toBe(before.unread + 1);
+      // Another account cannot see or mark it; the id is indistinguishable from a missing one.
+      expect(noticeFor(await notices('other'), versionId)).toEqual([]);
+      const csrf = async (name: string) =>
+        (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+      await agents.other
+        .post(`/api/v1/notifications/${mine[0].id}/read`)
+        .set('Origin', origin)
+        .set('X-CSRF-Token', await csrf('other'))
+        .expect(404);
+      await agents.student.post(`/api/v1/notifications/${mine[0].id}/read`).expect(403);
+      const marked = await agents.student
+        .post(`/api/v1/notifications/${mine[0].id}/read`)
+        .set('Origin', origin)
+        .set('X-CSRF-Token', await csrf('student'))
+        .expect(200);
+      expect(marked.body.unread).toBe(before.unread);
+      expect(noticeFor(await notices('student'), versionId)[0].read).toBe(true);
+      expect(noticeFor(await notices('student', '?filter=unread'), versionId)).toEqual([]);
+      await agents.student
+        .post('/api/v1/notifications/read-all')
+        .set('Origin', origin)
+        .set('X-CSRF-Token', await csrf('student'))
+        .expect(200, { unread: 0 });
+      await agents.student.get('/api/v1/notifications?limit=51').expect(400);
+    } finally {
+      scan.mockRestore();
+    }
+  });
+  it('a failed PDF notice carries only the stored reason code', async () => {
+    const item = await create('student');
+    await upload('student', item.id, 1);
+    const file = await uploadedFile(item);
+    const scan = jest
+      .spyOn(app.get(PdfScanner), 'scan')
+      .mockRejectedValue(new FileCheckError(false, 'PASSWORD_PROTECTED'));
+    try {
+      await expect(app.get(ScanProcessor).process(file.id, false)).rejects.toBeInstanceOf(
+        UnrecoverableError,
+      );
+      const [notice] = (await notices('student')).items.filter(
+        (n: { documentId: string }) => n.documentId === item.id,
+      );
+      expect(notice).toMatchObject({ kind: 'FILE_FAILED', detail: 'PASSWORD_PROTECTED' });
+    } finally {
+      scan.mockRestore();
+    }
+  });
+  it('notifies the submitter of a review decision and a reporter when the report closes', async () => {
+    const item = await submitted();
+    expect(
+      (await review(item.requestId, { ...decision('CHANGES_REQUIRED'), reason: 'Thiếu nguồn.' }))
+        .status,
+    ).toBe(201);
+    const [changes] = noticeFor(await notices('student'), item.versionId).filter((n) =>
+      n.kind.startsWith('REVIEW_'),
+    );
+    expect(changes).toMatchObject({ kind: 'REVIEW_CHANGES_REQUIRED', detail: null });
+    // The admin's reason stays on the draft; it is not copied into the notice.
+    expect(JSON.stringify(changes)).not.toContain('Thiếu nguồn');
+    const shown = await published();
+    const path = `/api/v1/library/versions/${shown.versionId}/reports`;
+    const report = (
+      await reportWrite('other', path, { category: 'CONTENT', description: 'Sai chương.' })
+    ).body.item;
+    const act = (body: object) =>
+      reportWrite('admin', `/api/v1/admin/reports/${report.id}/actions`, body);
+    expect((await act({ action: 'TAKE_REVIEW', revision: 1 })).status).toBe(201);
+    expect(noticeFor(await notices('other'), shown.versionId)).toEqual([]);
+    expect((await act({ action: 'DISMISS', revision: 2, result: 'Nội dung đúng.' })).status).toBe(
+      201,
+    );
+    const [closed] = noticeFor(await notices('other'), shown.versionId);
+    expect(closed).toMatchObject({ kind: 'REPORT_DISMISSED', detail: null });
+    expect(JSON.stringify(closed)).not.toContain('Nội dung đúng');
+  });
+  it('notifies each Word conversion outcome, including after a retry', async () => {
+    const item = await pendingWord(),
+      restore = fakeWordTools();
+    const convert = jest
+      .spyOn(app.get(DocxTools), 'convert')
+      .mockRejectedValue(new Error('INVALID_DOCX'));
+    try {
+      await app.get(SourceConversionProcessor).process(item.source.id);
+      const failed = (await notices('lecturer')).items.filter(
+        (n: { documentId: string }) => n.documentId === item.id,
+      );
+      expect(failed).toMatchObject([{ kind: 'SOURCE_FAILED', detail: 'INVALID_DOCX' }]);
+      const current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      // INVALID_DOCX is final; force a retryable state to check a second cycle notifies too.
+      await db.query(
+        "UPDATE hucescholar.document_source_uploads SET conversion_status='QUEUED', error_code=NULL, attempt_count=3 WHERE id=$1",
+        [item.source.id],
+      );
+      expect(current.source.conversionState).toBe('FAILED');
+      await app.get(SourceConversionProcessor).reconcile();
+      const both = (await notices('lecturer')).items.filter(
+        (n: { documentId: string }) => n.documentId === item.id,
+      );
+      expect(both.map((n: { kind: string; detail: string }) => n.detail).sort()).toEqual([
+        'INVALID_DOCX',
+        'PROCESSOR_UNAVAILABLE',
+      ]);
+    } finally {
+      convert.mockRestore();
+      restore();
     }
   });
   it('keeps a failure reason only on FAILED files', async () => {

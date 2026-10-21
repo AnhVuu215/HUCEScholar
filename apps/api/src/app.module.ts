@@ -7,6 +7,7 @@ import { AcademicModule } from './academic/academic.module';
 import { MaterialsModule } from './materials/materials.module';
 import { AccountModule } from './account/account.module';
 import { OpsModule } from './ops/ops.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { OpsModule } from './ops/ops.module';
     MaterialsModule,
     AccountModule,
     OpsModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })
