@@ -68,4 +68,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15.
 
 ## Còn lại
 
-Màn hình admin (kiểm duyệt, vòng đời) vẫn chỉ hiện trạng thái, chưa hiện lý do. Chưa thử EICAR với ClamAV thật trong lượt này; nhánh `MALWARE` được kiểm bằng server giả trả `FOUND`.
+Màn hình admin hiện lý do từ [UPLOAD-04](2026-10-21-admin-file-reasons.md). Chưa thử EICAR với ClamAV thật trong lượt này; nhánh `MALWARE` được kiểm bằng server giả trả `FOUND`.

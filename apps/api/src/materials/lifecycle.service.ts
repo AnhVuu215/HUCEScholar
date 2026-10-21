@@ -32,7 +32,7 @@ const versionSelect = {
   rights_basis: true,
   rights_valid_until: true,
   file_id: true,
-  files: { select: { scan_status: true } },
+  files: { select: { scan_status: true, check_error: true } },
 } satisfies Prisma.document_versionsSelect;
 type Doc = Prisma.documentsGetPayload<{ select: typeof docSelect }>;
 type Version = Prisma.document_versionsGetPayload<{ select: typeof versionSelect }>;
@@ -45,6 +45,7 @@ const versionItem = (v: Version | null) =>
         reviewStatus: v.review_status,
         publicationMethod: v.publication_method,
         fileState: v.files?.scan_status ?? 'MISSING',
+        fileError: v.files?.check_error ?? null,
       }
     : null;
 const overview = (d: Doc, v: Version) => ({

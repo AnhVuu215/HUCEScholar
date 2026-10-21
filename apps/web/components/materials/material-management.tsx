@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   draftList,
+  fileFailedLabel,
   materialError,
   materialTypes,
   publicationLabel,
@@ -220,7 +221,7 @@ export function MaterialManagement({ role }: { role: 'LECTURER' | 'STUDENT' }) {
                               : item.fileState === 'CHECKING'
                                 ? 'PDF đang kiểm tra'
                                 : item.fileState === 'FAILED'
-                                  ? 'PDF không đạt kiểm tra'
+                                  ? fileFailedLabel(item.fileError)
                                   : 'PDF đã kiểm tra'}
                         </p>
                         {item.editBlock === 'ASSIGNMENT_REQUIRED' && (
