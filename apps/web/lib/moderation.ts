@@ -36,6 +36,7 @@ export interface ReviewItem {
   rightsValidUntil: string | null;
   downloadAllowed: boolean;
   fileState: 'SAFE' | 'FAILED' | 'CHECKING' | 'MISSING';
+  fileError: string | null;
   pdf: { name: string; byteSize: number; pageCount: number | null } | null;
   courses: { id: string; code: string; name: string; active: boolean }[];
   snapshotMatches: boolean;
@@ -67,6 +68,7 @@ function valid(value: unknown): value is ReviewItem {
     ['LECTURER_MATERIAL', 'STUDENT_SUPPLEMENT'].includes(String(r.kind)) &&
     ['VISIBLE', 'HIDDEN'].includes(String(r.visibility)) &&
     ['SAFE', 'CHECKING', 'FAILED', 'MISSING'].includes(String(r.fileState)) &&
+    (r.fileError == null || typeof r.fileError === 'string') &&
     (r.currentVersionId === null || id(r.currentVersionId)) &&
     typeof r.snapshotMatches === 'boolean' &&
     typeof r.downloadAllowed === 'boolean' &&

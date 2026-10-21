@@ -460,6 +460,10 @@ describe('private material drafts', () => {
       });
       const draft = (await agents.student.get(`/api/v1/material-drafts/${item.id}`)).body.item;
       expect(draft).toMatchObject({ fileState: 'FAILED', fileError: reason });
+      // Admins see the same reason on the lifecycle screen.
+      const managed = (await agents.admin.get(`/api/v1/admin/materials/${item.id}`).expect(200))
+        .body.item;
+      expect(managed.latest).toMatchObject({ fileState: 'FAILED', fileError: reason });
     } finally {
       scan.mockRestore();
     }
@@ -2911,6 +2915,18 @@ describe('private material drafts', () => {
         .content,
     ).toBe('retained expired note');
   });
+  it('moderation shows why a submitted PDF failed its check', async () => {
+    const item = await submitted('lecturer');
+    // Synthetic verdict; a SAFE file only changes state through the scan worker in production.
+    await db.query(
+      "UPDATE hucescholar.files SET scan_status='FAILED', check_error='INVALID_PDF' WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)",
+      [item.versionId],
+    );
+    const detail = await agents.admin
+      .get(`/api/v1/admin/publication-requests/${item.requestId}`)
+      .expect(200);
+    expect(detail.body.item).toMatchObject({ fileState: 'FAILED', fileError: 'INVALID_PDF' });
+  });
   it('admin reviews a submitted snapshot and publishes atomically without opening HIDDEN', async () => {
     const item = await submitted('lecturer');
     await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [item.id]);
@@ -2927,6 +2943,7 @@ describe('private material drafts', () => {
       submittedRevision: 3,
       versionRevision: 3,
       fileState: 'SAFE',
+      fileError: null,
     });
     expect(JSON.stringify(detail.body)).not.toMatch(/object_key|quarantine\/|password_hash/);
     const pdf = await agents.admin

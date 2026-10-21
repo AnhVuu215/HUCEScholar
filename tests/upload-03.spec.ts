@@ -78,10 +78,26 @@ test('a failed PDF says why, so the uploader knows what to fix', async ({ page }
   const { id, title } = await draftWithPdf(page);
   await failWith(id, 'PASSWORD_PROTECTED');
   await page.goto('/workspace/student/materials');
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: title })
+      .getByText('PDF không đạt kiểm tra: PDF có mật khẩu'),
+  ).toBeVisible();
   await page.getByRole('button', { name: `Mở bản nháp ${title}`, exact: true }).click();
   const pdf = page.getByRole('region', { name: 'PDF của bản nháp' });
   await expect(pdf.getByText('PDF đang đặt mật khẩu để mở', { exact: false })).toBeVisible();
   await expect(pdf.getByText('Đang kiểm tra', { exact: false })).toHaveCount(0);
+  // The admin lifecycle screen names the same reason.
+  await readerLogout(page);
+  await readerLogin(page, 'admin', 'upload3');
+  await page.goto('/workspace/admin/materials');
+  await page.getByLabel('Tìm tài liệu quản lý', { exact: true }).fill(title);
+  await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
+  await page.getByRole('button', { name: `Quản lý ${title}`, exact: true }).click();
+  await expect(
+    page.getByText('PDF không đạt kiểm tra: PDF có mật khẩu', { exact: false }),
+  ).toBeVisible();
 });
 
 test('a copy-restricted PDF can be read and page-noted but not highlighted or cited', async ({
