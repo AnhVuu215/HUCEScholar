@@ -10,6 +10,10 @@ Cập nhật: 17/10/2026. Mốc đối chiếu: commit `b7cef22`, nhánh `codex/
 
 V2 (A–C, gồm AUTH-01) đã vào `main` qua PR #8. AUTH-02 đã triển khai theo [mốc buộc đổi mật khẩu](../implementation/2026-10-20-forced-password-change.md): tài khoản cũ không bị gắn cờ, admin cấp lại mật khẩu tạm. HOME-01 đã có [trang đầu theo vai trò](../implementation/2026-10-20-role-home.md); UX-01 ở [mốc lỗi thao tác nhỏ](../implementation/2026-10-20-interaction-fixes.md); UPLOAD-01 ở [mốc trạng thái kiểm tra file](../implementation/2026-10-20-scan-status.md); SEARCH-01 ở [mốc tìm không dấu](../implementation/2026-10-20-library-search.md), hoàn tất đợt B. Đợt C bắt đầu với REPORT-01 ở [mốc báo cáo tài liệu](../implementation/2026-10-20-material-reports.md); OPS-01 ở [mốc readiness và log](../implementation/2026-10-20-readiness-logging.md). Bảng hiện trạng bên dưới giữ nguyên mốc 17/10.
 
+## Cập nhật 21/10
+
+QA-01 có [pilot local tự động](../implementation/2026-10-21-local-pilot.md): bộ tài liệu tự soạn chạy qua ClamAV/Poppler/LibreOffice thật cho cả ba vai trò. Lượt này phát hiện và sửa lỗi trang có `/Rotate` hiển thị sai chiều. Còn ba điểm chờ quyết định: PDF chỉ khóa quyền, thông báo lý do từ chối file, tìm học liệu nhiều từ không liền nhau. Phiên dùng thử với người thật và OPS-02 vẫn mở.
+
 ## Bổ sung yêu cầu V2 ngày 17/10
 
 Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.
