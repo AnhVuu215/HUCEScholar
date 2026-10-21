@@ -22,3 +22,7 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
   - ca mới: yêu cầu kiểm duyệt có PDF FAILED `INVALID_PDF` trả `fileError`; file SAFE trả `null`
 - Browser `upload-03.spec.ts`: danh sách bản nháp hiện "PDF không đạt kiểm tra: PDF có mật khẩu"; admin mở quản lý tài liệu đó thấy cùng lý do.
 - Màn hình kiểm duyệt chỉ được kiểm qua API, chưa có ca trình duyệt cho trạng thái FAILED.
+- Bộ đầy đủ sau khi gộp `main` (PR #19):
+  - `pnpm format:check`, `pnpm check` (lint, typecheck, 101 unit, build): đạt.
+  - `pnpm test:integration`: 194 passed, 1 skipped.
+  - `pnpm test:e2e --workers=1`: 161 passed, 6 skipped (5,4 phút).
