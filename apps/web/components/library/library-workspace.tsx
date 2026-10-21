@@ -8,12 +8,14 @@ export function LibraryWorkspace({
   description,
   personal = false,
   account = false,
+  readingLists = false,
 }: {
   children: ReactNode;
   title: string;
   description: string;
   personal?: boolean;
   account?: boolean;
+  readingLists?: boolean;
 }) {
   const [role, setRole] = useState<Role | null>(null),
     [error, setError] = useState(false),
@@ -59,7 +61,9 @@ export function LibraryWorkspace({
       role={role}
       title={title}
       description={description}
-      activeSection={account ? undefined : personal ? 'personal' : 'library'}
+      activeSection={
+        account ? undefined : readingLists ? 'readingLists' : personal ? 'personal' : 'library'
+      }
     >
       {children}
     </RoleWorkspace>
