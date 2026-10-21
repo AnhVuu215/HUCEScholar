@@ -56,12 +56,14 @@ model annotations {
   created_at        DateTime          @default(now()) @db.Timestamptz(6)
   updated_at        DateTime          @default(now()) @db.Timestamptz(6)
   revision          Int               @default(1)
+  review_later      Boolean           @default(false)
   users             users             @relation(fields: [user_id], references: [id], onUpdate: NoAction)
   document_versions document_versions @relation(fields: [version_id], references: [id], onUpdate: NoAction)
   study_cards study_cards[]
 
   @@index([user_id, version_id, page_number], map: "ix_annotation_owner_page")
   @@index([version_id], map: "ix_annotation_version")
+  @@index([user_id, version_id, page_number, id], map: "ix_annotation_review_later", where: raw("review_later"))
   @@unique([user_id, request_id], map: "ux_annotation_owner_request")
   @@schema("hucescholar")
 }
