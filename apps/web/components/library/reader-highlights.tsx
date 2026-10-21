@@ -22,6 +22,7 @@ import type { LibraryItem } from '../../lib/library';
 import { formatCitation } from '../../lib/citations';
 import { useReturnFocus } from '../../lib/use-return-focus';
 import { ReaderCitation, type CitationStatus } from './reader-citation';
+import { StudyCardMaker } from '../study/study-card-maker';
 
 type Draft = {
   page: number;
@@ -523,6 +524,7 @@ export function ReaderHighlights({
                   Xóa vùng tô
                 </button>
               </div>
+              <StudyCardMaker versionId={versionId} highlightId={item.id} disabled={locked} />
               {deleting?.id === item.id && (
                 <div className="note-delete">
                   <p>Xóa vùng tô và ghi chú kèm theo? Thao tác không thể hoàn tác.</p>

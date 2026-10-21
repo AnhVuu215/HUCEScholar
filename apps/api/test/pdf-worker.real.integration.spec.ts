@@ -135,6 +135,7 @@ realTest(
         [user],
       );
       await db.query('DELETE FROM hucescholar.notifications WHERE user_id=$1', [user]);
+      await db.query('DELETE FROM hucescholar.study_cards WHERE user_id=$1', [user]);
       await db.query('DELETE FROM hucescholar.document_versions WHERE created_by=$1', [user]);
       await db.query('DELETE FROM hucescholar.documents WHERE created_by=$1', [user]);
       await db.query('DELETE FROM hucescholar.files WHERE uploaded_by=$1', [user]);

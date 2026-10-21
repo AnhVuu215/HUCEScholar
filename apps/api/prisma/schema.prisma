@@ -58,6 +58,7 @@ model annotations {
   revision          Int               @default(1)
   users             users             @relation(fields: [user_id], references: [id], onUpdate: NoAction)
   document_versions document_versions @relation(fields: [version_id], references: [id], onUpdate: NoAction)
+  study_cards study_cards[]
 
   @@index([user_id, version_id, page_number], map: "ix_annotation_owner_page")
   @@index([version_id], map: "ix_annotation_version")
@@ -199,6 +200,7 @@ model document_versions {
   notifications notifications[]
   version_courses                                              version_courses[]
   reading_list_items reading_list_items[]
+  study_cards study_cards[]
 
   @@unique([document_id, id])
   @@unique([document_id, version_no])
@@ -495,6 +497,7 @@ model users {
   other_users                                                   users[]                 @relation("usersTousers")
   visibility_events                                             visibility_events[]
   reading_lists reading_lists[]
+  study_cards study_cards[]
 
   @@schema("hucescholar")
 }
@@ -545,6 +548,29 @@ model reading_list_items {
   document_versions document_versions @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   @@id([list_id, position])
   @@index([version_id], map: "ix_reading_item_version")
+  @@schema("hucescholar")
+}
+
+model study_cards {
+  id BigInt @id @default(autoincrement())
+  request_id String @db.Uuid
+  user_id BigInt
+  version_id BigInt
+  page_number Int
+  annotation_id BigInt?
+  quote String
+  question String @db.VarChar(500)
+  answer String @db.VarChar(2000)
+  revision Int @default(1)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  document_versions document_versions @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  annotations annotations? @relation(fields: [annotation_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  @@unique([user_id, request_id], map: "ux_study_card_request")
+  @@index([user_id, created_at(sort: Desc), id(sort: Desc)], map: "ix_study_card_owner")
+  @@index([user_id, version_id], map: "ix_study_card_version")
+  @@index([annotation_id], map: "ix_study_card_annotation")
   @@schema("hucescholar")
 }
 
