@@ -195,6 +195,7 @@ model document_versions {
   publication_requests                                         publication_requests?
   reading_progress                                             reading_progress[]
   reports                                                      reports[]
+  notifications notifications[]
   version_courses                                              version_courses[]
 
   @@unique([document_id, id])
@@ -223,6 +224,7 @@ model documents {
   document_versions_documents_id_current_version_idTodocument_versions document_versions?    @relation("documents_id_current_version_idTodocument_versions", fields: [id, current_version_id], references: [document_id, id], onUpdate: NoAction, map: "fk_current_version_same_document")
   ownership_transfers                                                  ownership_transfers[]
   reports                                                              reports[]
+  notifications notifications[]
   saved_documents                                                      saved_documents[]
   visibility_events                                                    visibility_events[]
 
@@ -485,6 +487,7 @@ model users {
   reading_progress                                              reading_progress[]
   report_actions                                                report_actions[]
   reports                                                       reports[]
+  notifications notifications[]
   saved_documents                                               saved_documents[]
   users                                                         users?                  @relation("usersTousers", fields: [verified_by], references: [id], onDelete: Restrict, onUpdate: NoAction)
   other_users                                                   users[]                 @relation("usersTousers")
@@ -510,6 +513,25 @@ model user_preferences {
   revision Int @default(1)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  @@schema("hucescholar")
+}
+
+model notifications {
+  id BigInt @id @default(autoincrement())
+  user_id BigInt
+  kind String @db.VarChar(24)
+  event_key String @db.VarChar(64)
+  document_id BigInt
+  version_id BigInt
+  title String @db.VarChar(300)
+  detail String? @db.VarChar(40)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  read_at DateTime? @db.Timestamptz(6)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  documents documents @relation(fields: [document_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  document_versions document_versions @relation(fields: [document_id, version_id], references: [document_id, id], onDelete: Restrict, onUpdate: NoAction, map: "fk_notification_version")
+  @@unique([user_id, event_key], map: "ux_notification_event")
+  @@index([user_id, created_at(sort: Desc), id(sort: Desc)], map: "ix_notification_owner")
   @@schema("hucescholar")
 }
 

@@ -3,11 +3,13 @@ import { UnrecoverableError } from 'bullmq';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseService } from '../database/database.module';
+import { Prisma } from '../generated/prisma/client';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
 import { PrivateStore } from './private-store';
 import { FileCheckCode, FileCheckError, PdfScanner } from './pdf-scanner';
 import { receivePdf } from './receive-pdf';
 import { ScanQueue } from './scan-queue';
+import { notify } from '../notifications/notify';
 
 @Injectable()
 export class ScanProcessor {
@@ -37,15 +39,18 @@ export class ScanProcessor {
       if (checked.sha256 !== file.sha256 || BigInt(checked.size) !== file.byte_size)
         throw new Error('Private object changed.');
       const result = await this.scanner.scan(path);
-      await this.db.files.updateMany({
-        where: { id, scan_status: 'CHECKING' },
-        data: {
-          scan_status: 'SAFE',
-          page_count: result.pageCount,
-          has_text_layer: result.hasTextLayer,
-          copy_restricted: result.copyRestricted,
-          checked_at: new Date(),
-        },
+      await this.db.$transaction(async (tx) => {
+        const { count } = await tx.files.updateMany({
+          where: { id, scan_status: 'CHECKING' },
+          data: {
+            scan_status: 'SAFE',
+            page_count: result.pageCount,
+            has_text_layer: result.hasTextLayer,
+            copy_restricted: result.copyRestricted,
+            checked_at: new Date(),
+          },
+        });
+        if (count) await this.notifyUploader(tx, id, 'FILE_SAFE', null);
       });
     } catch (error) {
       // A verdict about the file itself will not change on retry: record it and stop.
@@ -61,10 +66,35 @@ export class ScanProcessor {
     }
   }
   async fail(id: string, reason: FileCheckCode | 'CHECK_UNAVAILABLE' | null = null) {
-    await this.db.files.updateMany({
-      where: { id: BigInt(id), scan_status: 'CHECKING' },
-      data: { scan_status: 'FAILED', check_error: reason, checked_at: new Date() },
+    await this.db.$transaction(async (tx) => {
+      const { count } = await tx.files.updateMany({
+        where: { id: BigInt(id), scan_status: 'CHECKING' },
+        data: { scan_status: 'FAILED', check_error: reason, checked_at: new Date() },
+      });
+      if (count) await this.notifyUploader(tx, BigInt(id), 'FILE_FAILED', reason);
     });
+  }
+  /** Tells the uploader once the check settles; a file not attached to a draft has no link. */
+  private async notifyUploader(
+    tx: Prisma.TransactionClient,
+    id: bigint,
+    kind: 'FILE_SAFE' | 'FILE_FAILED',
+    detail: string | null,
+  ) {
+    const file = await tx.files.findUniqueOrThrow({ where: { id }, select: { uploaded_by: true } });
+    const version = await tx.document_versions.findFirst({
+      where: { file_id: id },
+      select: { id: true },
+      orderBy: { id: 'desc' },
+    });
+    if (version)
+      await notify(tx, {
+        userId: file.uploaded_by,
+        kind,
+        eventKey: `file:${id}`,
+        versionId: version.id,
+        detail,
+      });
   }
   async reconcile() {
     // Stable ordering by ID and scan cursor covers more than the first batch.

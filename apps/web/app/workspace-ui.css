@@ -193,6 +193,34 @@
   color: var(--navy);
   font-weight: 600;
 }
+/* NOTIFY-01: bell link with unread count, before the account menu. */
+.workspace-notifications {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--control-height);
+  height: var(--control-height);
+  border-radius: var(--control-radius);
+  color: var(--navy);
+}
+.workspace-notifications:hover {
+  background: var(--ground);
+}
+.workspace-notifications-count {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+}
 .workspace-account-panel {
   position: absolute;
   z-index: 40;
@@ -325,4 +353,43 @@
 .report-list li,
 .reader-report .note-content {
   overflow-wrap: anywhere;
+}
+
+/* NOTIFY-01: notification list. */
+.notification-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.notification-actions,
+.notification-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.notification-items {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 0;
+  list-style: none;
+}
+.notification-items > li {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--navy);
+  border-radius: var(--control-radius);
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.notification-items > li[data-read='true'] {
+  border-left-color: var(--line);
+}
+.notification-items > li[data-read='false'] > p:first-child {
+  font-weight: 600;
 }

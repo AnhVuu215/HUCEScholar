@@ -13,24 +13,24 @@ describe('migrated PostgreSQL authentication lifecycle', () => {
     await client?.end();
   });
 
-  it('preserves 26 tables, constraints, partial indexes and snapshot triggers', async () => {
+  it('preserves 27 tables, constraints, partial indexes and snapshot triggers', async () => {
     const tables = await client.query(
       "SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='hucescholar' AND table_type='BASE TABLE'",
     );
-    expect(tables.rows[0].n).toBe(26);
+    expect(tables.rows[0].n).toBe(27);
     const constraints = await client.query(
       "SELECT contype, count(*)::int n FROM pg_constraint WHERE connamespace='hucescholar'::regnamespace GROUP BY contype",
     );
     expect(constraints.rows).toEqual(
       expect.arrayContaining([
-        { contype: 'f', n: 53 },
-        { contype: 'c', n: 78 },
+        { contype: 'f', n: 56 },
+        { contype: 'c', n: 82 },
       ]),
     );
     const partial = await client.query(
       "SELECT count(*)::int n FROM pg_indexes WHERE schemaname='hucescholar' AND indexdef LIKE '% WHERE %'",
     );
-    expect(partial.rows[0].n).toBe(8);
+    expect(partial.rows[0].n).toBe(9);
     const guards = await client.query(
       "SELECT count(*)::int n FROM pg_trigger WHERE tgrelid IN ('hucescholar.document_versions'::regclass,'hucescholar.version_courses'::regclass,'hucescholar.files'::regclass,'hucescholar.documents'::regclass) AND NOT tgisinternal",
     );

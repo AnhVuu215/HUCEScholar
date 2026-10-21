@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { roleLabels, type Profile } from '../../lib/auth';
 import { Button } from '../ui/button';
+import { NotificationBell } from '../notifications/notification-bell';
 
 export function WorkspaceHeader({
   user,
@@ -38,6 +39,7 @@ export function WorkspaceHeader({
         <span aria-hidden="true">/</span>
         <span>{title}</span>
       </p>
+      <NotificationBell />
       <div
         className="workspace-account"
         ref={container}
