@@ -46,8 +46,8 @@ export default function LoginPage() {
           </p>
           <LoginForm />
           <p className="account-help">
-            Chưa có tài khoản hoặc cần hỗ trợ mật khẩu? Liên hệ quản trị viên học liệu để được hỗ
-            trợ.
+            <Link href="/forgot-password">Quên mật khẩu?</Link> Đặt lại qua email. Chưa có tài khoản
+            hoặc tài khoản bị khóa? Liên hệ quản trị viên học liệu.
           </p>
           <Link className="project-link" href="/project">
             Xem tiến độ dự án
