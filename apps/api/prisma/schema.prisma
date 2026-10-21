@@ -260,6 +260,8 @@ model files {
   has_text_layer    Boolean?
   checked_at        DateTime?           @db.Timestamptz(6)
   created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  check_error       String?             @db.VarChar(24)
+  copy_restricted   Boolean             @default(false)
   document_versions document_versions[]
   users             users               @relation(fields: [uploaded_by], references: [id], onUpdate: NoAction)
 

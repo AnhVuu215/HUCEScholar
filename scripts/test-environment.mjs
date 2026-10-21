@@ -138,6 +138,8 @@ try {
     ['lifecycle-admin', 'ADMIN'],
     ['lifecycle-lecturer', 'LECTURER'],
     ['lifecycle-receiver', 'LECTURER'],
+    ['upload3-admin', 'ADMIN'],
+    ['upload3-student', 'STUDENT'],
     ['lecturer', 'LECTURER'],
     ['student', 'STUDENT'],
   ];

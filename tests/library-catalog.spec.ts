@@ -20,6 +20,7 @@ const item: LibraryItem = {
   downloadAllowed: false,
   pageCount: 2,
   hasTextLayer: true,
+  copyRestricted: false,
   byteSize: 500,
   courses: [{ id: '1', code: 'TEST', name: 'Môn kiểm thử' }],
 };
