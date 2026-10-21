@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseService } from '../database/database.module';
+import { Prisma } from '../generated/prisma/client';
 import { FILE_CONFIG, FileConfiguration } from '../files/files.config';
 import { PrivateStore } from '../files/private-store';
 import { receiveDocx } from '../files/receive-docx';
@@ -12,6 +13,7 @@ import { clamScan, FileCheckError, PdfScanner } from '../files/pdf-scanner';
 import { convertDocx } from '../files/docx-converter-client';
 import { SourceConversionQueue } from '../files/source-conversion-queue';
 import { MaterialsService } from './materials.service';
+import { notify } from '../notifications/notify';
 
 @Injectable()
 export class DocxTools {
@@ -24,6 +26,17 @@ export class DocxTools {
     if (!url) return Promise.reject(new Error('PROCESSOR_UNAVAILABLE'));
     return convertDocx(source, pdf, url);
   }
+}
+
+/**
+ * A failed Word source can be retried, so each outcome gets its own cycle number. Callers hold
+ * the source row (conditional update), so the count cannot race.
+ */
+async function sourceEvent(tx: Prisma.TransactionClient, id: bigint) {
+  const previous = await tx.notifications.count({
+    where: { event_key: { startsWith: `source:${id}:` } },
+  });
+  return `source:${id}:${previous + 1}`;
 }
 
 @Injectable()
@@ -176,6 +189,12 @@ export class SourceConversionProcessor {
           data: { revision: { increment: 1 }, updated_at: new Date() },
         });
         await this.materials.audit(tx, actorId, documentId, 'MATERIAL_DOCX_READY');
+        await notify(tx, {
+          userId: source.uploaded_by,
+          kind: 'SOURCE_READY',
+          eventKey: await sourceEvent(tx, id),
+          versionId: row.id,
+        });
         callbackCompleted = true;
       });
       committed = callbackCompleted;
@@ -202,17 +221,28 @@ export class SourceConversionProcessor {
       const cancelled = checkingAuthorization && error instanceof HttpException;
       const terminal =
         cancelled || ['INVALID_DOCX', 'SCAN_FAILED'].includes(code) || source.attempt_count >= 3;
-      await this.db.document_source_uploads.updateMany({
-        where: { id, processing_token: token, conversion_status: 'RUNNING' },
-        data: {
-          conversion_status: cancelled ? 'CANCELLED' : terminal ? 'FAILED' : 'QUEUED',
-          error_code: cancelled ? 'AUTHORIZATION_CHANGED' : code,
-          scan_status: code === 'SCAN_FAILED' ? 'FAILED' : undefined,
-          checked_at: code === 'SCAN_FAILED' ? new Date() : undefined,
-          processing_token: null,
-          lease_expires_at: null,
-          updated_at: new Date(),
-        },
+      await this.db.$transaction(async (tx) => {
+        const { count } = await tx.document_source_uploads.updateMany({
+          where: { id, processing_token: token, conversion_status: 'RUNNING' },
+          data: {
+            conversion_status: cancelled ? 'CANCELLED' : terminal ? 'FAILED' : 'QUEUED',
+            error_code: cancelled ? 'AUTHORIZATION_CHANGED' : code,
+            scan_status: code === 'SCAN_FAILED' ? 'FAILED' : undefined,
+            checked_at: code === 'SCAN_FAILED' ? new Date() : undefined,
+            processing_token: null,
+            lease_expires_at: null,
+            updated_at: new Date(),
+          },
+        });
+        // A cancelled source was superseded or lost its owner's authorization: nothing to tell.
+        if (count && terminal && !cancelled)
+          await notify(tx, {
+            userId: source.uploaded_by,
+            kind: 'SOURCE_FAILED',
+            eventKey: await sourceEvent(tx, id),
+            versionId: source.version_id,
+            detail: code,
+          });
       });
       if (!terminal) throw new Error('Source processing interrupted.');
     } finally {
@@ -225,21 +255,24 @@ export class SourceConversionProcessor {
   }
   async reconcile() {
     const now = new Date();
-    await this.db.document_source_uploads.updateMany({
-      where: {
-        attempt_count: { gte: 3 },
-        OR: [
-          { conversion_status: 'QUEUED' },
-          { conversion_status: 'RUNNING', lease_expires_at: { lt: now } },
-        ],
-      },
-      data: {
-        conversion_status: 'FAILED',
-        error_code: 'PROCESSOR_UNAVAILABLE',
-        processing_token: null,
-        lease_expires_at: null,
-        updated_at: now,
-      },
+    await this.db.$transaction(async (tx) => {
+      const exhausted = await tx.$queryRaw<
+        { id: bigint; version_id: bigint; uploaded_by: bigint }[]
+      >`
+        UPDATE hucescholar.document_source_uploads
+        SET conversion_status='FAILED', error_code='PROCESSOR_UNAVAILABLE',
+            processing_token=NULL, lease_expires_at=NULL, updated_at=${now}
+        WHERE attempt_count >= 3
+          AND (conversion_status='QUEUED' OR (conversion_status='RUNNING' AND lease_expires_at < ${now}))
+        RETURNING id, version_id, uploaded_by`;
+      for (const row of exhausted)
+        await notify(tx, {
+          userId: row.uploaded_by,
+          kind: 'SOURCE_FAILED',
+          eventKey: await sourceEvent(tx, row.id),
+          versionId: row.version_id,
+          detail: 'PROCESSOR_UNAVAILABLE',
+        });
     });
     let cursor: bigint | undefined;
     for (;;) {

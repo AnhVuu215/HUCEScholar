@@ -11,6 +11,7 @@ import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { LibraryService } from './library.service';
 import { LifecycleService } from './lifecycle.service';
+import { notify } from '../notifications/notify';
 import { CreateReportDto, ReportActionDto, ReportListDto } from './reports.dto';
 
 const fail = (code: string, message: string) => new ConflictException({ code, message });
@@ -218,6 +219,14 @@ export class ReportsService {
         },
       });
       await this.audit(tx, actorId, id, `REPORT_${body.action}`);
+      // The reporter sees the admin's result in the reader; the notice carries no free text.
+      if (body.action !== 'TAKE_REVIEW' && report.version_id)
+        await notify(tx, {
+          userId: report.reported_by,
+          kind: body.action === 'RESOLVE' ? 'REPORT_RESOLVED' : 'REPORT_DISMISSED',
+          eventKey: `report:${id}`,
+          versionId: report.version_id,
+        });
       return { item: await this.detail(tx, id) };
     });
   }

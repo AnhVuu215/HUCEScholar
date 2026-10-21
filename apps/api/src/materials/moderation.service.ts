@@ -13,6 +13,7 @@ import { academicId } from '../academic/academic.service';
 import { Prisma } from '../generated/prisma/client';
 import { PrivateStore } from '../files/private-store';
 import { MaterialsService } from './materials.service';
+import { notify, type NotificationKind } from '../notifications/notify';
 import { ModerationDecisionDto, ModerationListDto } from './moderation.dto';
 
 const selection = {
@@ -269,6 +270,13 @@ export class ModerationService {
         },
       });
       await this.materials.audit(tx, actorId, documentId, `MATERIAL_${body.outcome}`);
+      // The submitter reads the admin's reason on the draft itself; the notice only links there.
+      await notify(tx, {
+        userId: row.users_publication_requests_submitted_byTousers.id,
+        kind: `REVIEW_${body.outcome}` as NotificationKind,
+        eventKey: `request:${id}`,
+        versionId,
+      });
       return { item: this.serialize(await this.read(tx, id)) };
     });
   }
