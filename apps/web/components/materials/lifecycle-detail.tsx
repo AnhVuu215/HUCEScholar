@@ -8,7 +8,7 @@ import {
   transferRecipients,
   type MaterialLifecycle,
 } from '../../lib/lifecycle';
-import { publicationLabel } from '../../lib/materials';
+import { fileFailedLabel, publicationLabel } from '../../lib/materials';
 import { useReturnFocus } from '../../lib/use-return-focus';
 export function LifecycleDetail({
   id,
@@ -148,6 +148,8 @@ export function LifecycleDetail({
               <dt>Phiên bản mới nhất</dt>
               <dd>
                 {current.latest.versionNo} · {publicationLabel(current.latest)}
+                {current.latest.fileState === 'FAILED' &&
+                  ` · ${fileFailedLabel(current.latest.fileError)}`}
               </dd>
             </div>
             <div>

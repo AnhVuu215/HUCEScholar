@@ -47,6 +47,7 @@ const selection = {
           byte_size: true,
           page_count: true,
           scan_status: true,
+          check_error: true,
         },
       },
       version_courses: {
@@ -122,6 +123,7 @@ export class ModerationService {
       rightsValidUntil: v.rights_valid_until?.toISOString() ?? null,
       downloadAllowed: v.download_allowed,
       fileState: v.files?.scan_status ?? 'MISSING',
+      fileError: v.files?.check_error ?? null,
       pdf: v.files
         ? {
             name: v.files.original_name,

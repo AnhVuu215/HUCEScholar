@@ -8,7 +8,7 @@ import {
   type ReviewItem,
   type Outcome,
 } from '../../lib/moderation';
-import { materialTypes } from '../../lib/materials';
+import { fileFailedLabel, materialTypes } from '../../lib/materials';
 import { apiRequest, readProfile } from '../../lib/auth';
 import { useReturnFocus } from '../../lib/use-return-focus';
 // One ephemeral decision per tab, bound to the authenticated actor and snapshot.
@@ -210,14 +210,14 @@ export function ModerationDetail({
             {row.versionRevision}
           </p>
           <p>
-            <strong>{requestStatuses[row.status]}</strong> · PDF:{' '}
+            <strong>{requestStatuses[row.status]}</strong> ·{' '}
             {row.fileState === 'SAFE'
-              ? 'Đã qua kiểm tra kỹ thuật'
+              ? 'PDF: Đã qua kiểm tra kỹ thuật'
               : row.fileState === 'FAILED'
-                ? 'Không đạt kiểm tra'
+                ? fileFailedLabel(row.fileError)
                 : row.fileState === 'CHECKING'
-                  ? 'Đang kiểm tra'
-                  : 'Chưa có'}{' '}
+                  ? 'PDF: Đang kiểm tra'
+                  : 'PDF: Chưa có'}{' '}
             · {row.visibility === 'HIDDEN' ? 'Đang ẩn' : 'Hiển thị khi đủ quyền đọc'}
           </p>
           <p className="field-hint">

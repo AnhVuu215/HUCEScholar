@@ -7,6 +7,7 @@ type Version = {
   reviewStatus: string;
   publicationMethod: 'ADMIN_REVIEW' | 'LECTURER_SELF';
   fileState: string;
+  fileError?: string | null;
 };
 export type ManagedMaterial = {
   id: string;
@@ -59,7 +60,8 @@ const version = (v: unknown): v is Version =>
   ['DRAFT', 'SUBMITTED', 'CHANGES_REQUIRED', 'APPROVED', 'REJECTED'].includes(
     String(v.reviewStatus),
   ) &&
-  ['MISSING', 'CHECKING', 'SAFE', 'FAILED'].includes(String(v.fileState));
+  ['MISSING', 'CHECKING', 'SAFE', 'FAILED'].includes(String(v.fileState)) &&
+  (v.fileError == null || typeof v.fileError === 'string');
 function overview(v: unknown): v is ManagedMaterial {
   return (
     record(v) &&
