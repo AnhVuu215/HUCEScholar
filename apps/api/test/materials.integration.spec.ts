@@ -171,6 +171,9 @@ describe('private material drafts', () => {
           'DELETE FROM hucescholar.version_courses WHERE version_id IN (SELECT id FROM hucescholar.document_versions WHERE created_by=ANY($1::bigint[]))',
           [ids],
         );
+        await db.query('DELETE FROM hucescholar.reading_lists WHERE owner_id=ANY($1::bigint[])', [
+          ids,
+        ]);
         await db.query(
           'DELETE FROM hucescholar.notifications WHERE user_id=ANY($1::bigint[]) OR document_id IN (SELECT id FROM hucescholar.documents WHERE created_by=ANY($1::bigint[]))',
           [ids],
@@ -615,6 +618,112 @@ describe('private material drafts', () => {
       convert.mockRestore();
       restore();
     }
+  });
+  async function listWrite(name: string, courseId: string, data: object) {
+    const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+    return agents[name]
+      .put(`/api/v1/courses/${courseId}/reading-lists/mine`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send(data);
+  }
+  it('reading lists: assigned lecturers pin exact versions; readers see only published, readable items', async () => {
+    const first = await readingFixture();
+    const second = await readingFixture();
+    const course = courses[0];
+    const items = [
+      { section: 'Tuần 1', versionId: first.versionId, note: 'Đọc chương 1' },
+      { section: 'Tuần 2', versionId: second.versionId, note: '' },
+    ];
+    const draft = { title: 'Danh sách học kỳ 1', published: false, revision: 0, items };
+    expect((await listWrite('student', course, draft)).status).toBe(403);
+    expect((await listWrite('lecturer', courses[1], draft)).body.code).toBe('ASSIGNMENT_REQUIRED');
+    await agents.lecturer
+      .put(`/api/v1/courses/${course}/reading-lists/mine`)
+      .send(draft)
+      .expect(403);
+    expect(
+      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body,
+    ).toEqual({
+      item: null,
+    });
+    const created = await listWrite('lecturer', course, draft);
+    expect(created.status).toBe(200);
+    expect(created.body.item).toMatchObject({ revision: 1, published: false, title: draft.title });
+    const mine = (o: { owner: { id: string } }) => o.owner.id === users.lecturer;
+    const listed = async () =>
+      (await agents.student.get(`/api/v1/courses/${course}/reading-lists`).expect(200)).body;
+    expect((await listed()).items.filter(mine)).toEqual([]);
+    expect((await listWrite('lecturer', course, { ...draft, revision: 0 })).body.code).toBe(
+      'STALE_REVISION',
+    );
+    const shown = await listWrite('lecturer', course, { ...draft, published: true, revision: 1 });
+    expect(shown.status).toBe(200);
+    let list = (await listed()).items.find(mine);
+    expect(list.items).toMatchObject([
+      {
+        position: 1,
+        section: 'Tuần 1',
+        note: 'Đọc chương 1',
+        versionId: first.versionId,
+        material: { versionNo: 1, newerVersionId: null },
+      },
+      { position: 2, section: 'Tuần 2', versionId: second.versionId, material: expect.any(Object) },
+    ]);
+    // Duplicates, drafts and other courses' material cannot be pinned.
+    expect(
+      (await listWrite('lecturer', course, { ...draft, revision: 2, items: [items[0], items[0]] }))
+        .body.code,
+    ).toBe('DUPLICATE_ITEM');
+    const unpublished = await create('student');
+    const unavailable = await listWrite('lecturer', course, {
+      ...draft,
+      revision: 2,
+      items: [
+        {
+          section: '',
+          versionId: String(
+            (
+              await db.query('SELECT id FROM hucescholar.document_versions WHERE document_id=$1', [
+                unpublished.id,
+              ])
+            ).rows[0].id,
+          ),
+          note: '',
+        },
+      ],
+    });
+    expect(unavailable.body.code).toBe('ITEM_UNAVAILABLE');
+    // Hidden material stays in the list but is shown without its details.
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [second.id]);
+    list = (await listed()).items.find(mine);
+    expect(list.items[1]).toEqual({
+      position: 2,
+      section: 'Tuần 2',
+      note: '',
+      versionId: second.versionId,
+      material: null,
+    });
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
+      second.id,
+    ]);
+    // A revoked assignment withdraws the list from readers without deleting it.
+    await db.query(
+      'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2 WHERE lecturer_id=$1 AND course_id=$3 AND revoked_at IS NULL',
+      [users.lecturer, users.admin, course],
+    );
+    try {
+      expect((await listed()).items.filter(mine)).toEqual([]);
+      expect(
+        (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.code,
+      ).toBe('ASSIGNMENT_REQUIRED');
+    } finally {
+      await db.query(
+        'UPDATE hucescholar.lecturer_assignments SET revoked_at=NULL,revoked_by=NULL WHERE lecturer_id=$1 AND course_id=$2',
+        [users.lecturer, course],
+      );
+    }
+    expect((await listed()).items.filter(mine)).toHaveLength(1);
   });
   it('keeps a failure reason only on FAILED files', async () => {
     const item = await create('student');
