@@ -16,6 +16,20 @@ export const reviewStatuses = {
   APPROVED: 'Đã duyệt',
   REJECTED: 'Từ chối',
 } as const;
+const fileErrors: Record<string, string> = {
+  MALWARE: 'Trình quét phát hiện mã độc trong file. Không dùng file này; hãy chọn file khác.',
+  PASSWORD_PROTECTED:
+    'PDF đang đặt mật khẩu để mở. Hãy xuất lại PDF không có mật khẩu rồi tải lên.',
+  INVALID_PDF:
+    'File không phải PDF hợp lệ hoặc đã hỏng (có thể tải xuống chưa trọn). Hãy xuất lại PDF rồi tải lên.',
+  TOO_MANY_PAGES: 'PDF vượt quá 10.000 trang. Hãy tách thành nhiều tài liệu.',
+  CHECK_UNAVAILABLE:
+    'Dịch vụ kiểm tra file chưa phản hồi sau nhiều lần thử. Hãy tải file lên lại sau ít phút hoặc liên hệ quản trị viên.',
+};
+/** Why a PDF failed its check, in words an uploader can act on. */
+export function fileErrorMessage(code: string | null | undefined) {
+  return (code && fileErrors[code]) ?? 'Chọn file khác hoặc liên hệ quản trị viên.';
+}
 export function publicationLabel(item: { reviewStatus: string; publicationMethod: string }) {
   return item.reviewStatus === 'APPROVED' && item.publicationMethod === 'LECTURER_SELF'
     ? 'Đã công bố'
@@ -44,6 +58,7 @@ export interface MaterialDraft {
     byteSize: number;
     pageCount: number | null;
     hasTextLayer: boolean | null;
+    copyRestricted?: boolean;
   } | null;
   source?: {
     id: string;
@@ -64,6 +79,8 @@ export interface MaterialDraft {
   reviewStatus: string;
   publicationMethod: 'ADMIN_REVIEW' | 'LECTURER_SELF';
   fileState: 'MISSING' | 'CHECKING' | 'SAFE' | 'FAILED';
+  /** Why the PDF failed its check; null when unknown or not failed. */
+  fileError?: string | null;
   revision: number;
   updatedAt: string;
   courses: (CourseChoice & { active: boolean })[];
@@ -112,6 +129,7 @@ function isDraft(value: unknown): value is MaterialDraft {
       String(d.reviewStatus),
     ) &&
     ['MISSING', 'CHECKING', 'SAFE', 'FAILED'].includes(String(d.fileState)) &&
+    (d.fileError == null || typeof d.fileError === 'string') &&
     (d.source == null ||
       (typeof d.source === 'object' &&
         'id' in d.source &&
