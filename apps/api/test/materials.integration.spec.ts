@@ -171,6 +171,9 @@ describe('private material drafts', () => {
           'DELETE FROM hucescholar.version_courses WHERE version_id IN (SELECT id FROM hucescholar.document_versions WHERE created_by=ANY($1::bigint[]))',
           [ids],
         );
+        await db.query('DELETE FROM hucescholar.study_cards WHERE user_id=ANY($1::bigint[])', [
+          ids,
+        ]);
         await db.query('DELETE FROM hucescholar.reading_lists WHERE owner_id=ANY($1::bigint[])', [
           ids,
         ]);
@@ -724,6 +727,96 @@ describe('private material drafts', () => {
       );
     }
     expect((await listed()).items.filter(mine)).toHaveLength(1);
+  });
+  it('study cards are private, keep their source after the highlight is deleted, and follow read access', async () => {
+    const { path, id, versionId } = await readingFixture();
+    const highlight = (
+      await readingWrite('student', `${path}/highlights`, {
+        pageNumber: 2,
+        content: '',
+        color: '#FFF59D',
+        requestId: randomUUID(),
+        anchor: { ...highlightAnchor(), quote: 'Ứng suất là nội lực trên một đơn vị diện tích' },
+      })
+    ).body.item;
+    const create = {
+      annotationId: highlight.id,
+      question: 'Ứng suất là gì?',
+      answer: 'Nội lực / diện tích',
+      requestId: randomUUID(),
+    };
+    const first = await readingWrite('student', `${path}/study-cards`, create);
+    expect(first.status).toBe(201);
+    expect(first.body.item).toMatchObject({
+      versionId,
+      pageNumber: 2,
+      highlightId: highlight.id,
+      quote: 'Ứng suất là nội lực trên một đơn vị diện tích',
+      revision: 1,
+    });
+    // A retried request returns the same card; reusing its id for other content is refused.
+    expect((await readingWrite('student', `${path}/study-cards`, create)).body.item.id).toBe(
+      first.body.item.id,
+    );
+    expect(
+      (await readingWrite('student', `${path}/study-cards`, { ...create, answer: 'khác' })).body
+        .code,
+    ).toBe('STUDY_CARD_REQUEST_REUSED');
+    // Only from one's own highlight.
+    expect(
+      (await readingWrite('other', `${path}/study-cards`, { ...create, requestId: randomUUID() }))
+        .status,
+    ).toBe(404);
+    const card = first.body.item;
+    const cardPath = `/api/v1/study-cards/${card.id}`;
+    const mine = await agents.student.get(`/api/v1/study-cards?versionId=${versionId}`).expect(200);
+    expect(mine.body).toMatchObject({ total: 1, unavailable: 0, items: [{ id: card.id }] });
+    expect((await agents.other.get(`/api/v1/study-cards?versionId=${versionId}`)).body.total).toBe(
+      0,
+    );
+    expect(
+      (await readingWrite('other', cardPath, { question: 'x', answer: 'y', revision: 1 }, 'patch'))
+        .status,
+    ).toBe(404);
+    const edited = await readingWrite(
+      'student',
+      cardPath,
+      { question: 'Định nghĩa ứng suất?', answer: 'Nội lực trên đơn vị diện tích', revision: 1 },
+      'patch',
+    );
+    expect(edited.body.item).toMatchObject({ revision: 2, question: 'Định nghĩa ứng suất?' });
+    expect(
+      (
+        await readingWrite(
+          'student',
+          cardPath,
+          { question: 'a', answer: 'b', revision: 1 },
+          'patch',
+        )
+      ).body.code,
+    ).toBe('STUDY_CARD_CONFLICT');
+    // Deleting the highlight keeps the card and its copied quote.
+    expect(
+      (
+        await readingWrite(
+          'student',
+          `${path}/highlights/${highlight.id}`,
+          { revision: 1 },
+          'delete',
+        )
+      ).status,
+    ).toBe(204);
+    const kept = (await agents.student.get(`/api/v1/study-cards?versionId=${versionId}`)).body
+      .items[0];
+    expect(kept).toMatchObject({ highlightId: null, quote: card.quote, revision: 2 });
+    // Hidden material: the card is retained but neither listed nor editable.
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [id]);
+    expect(
+      (await agents.student.get(`/api/v1/study-cards?versionId=${versionId}`)).body,
+    ).toMatchObject({ total: 0, unavailable: 1, items: [] });
+    expect((await readingWrite('student', cardPath, { revision: 2 }, 'delete')).status).toBe(404);
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [id]);
+    expect((await readingWrite('student', cardPath, { revision: 2 }, 'delete')).status).toBe(204);
   });
   it('keeps a failure reason only on FAILED files', async () => {
     const item = await create('student');
