@@ -1,6 +1,6 @@
-# SEARCH-03 — Tìm học liệu theo nhiều từ
+# SEARCH-02 — Tìm học liệu theo nhiều từ
 
-Ngày 21/10/2026. Nhánh `codex/search-02-multiword`, xây trên `main` sau PR #15. Pilot local ([QA-01](2026-10-21-local-pilot.md)) cho thấy gõ "bai giang" kèm mã môn ra 0 kết quả, vì [SEARCH-01](2026-10-20-library-search.md) chỉ khớp một cụm liền mạch.
+Ngày 21/10/2026. Nhánh `codex/search-02-multiword`, xây trên `main` sau PR #17. Pilot local ([QA-01](2026-10-21-local-pilot.md)) cho thấy gõ "bai giang" kèm mã môn ra 0 kết quả, vì [SEARCH-01](2026-10-20-library-search.md) chỉ khớp một cụm liền mạch.
 
 ## Hành vi
 
@@ -32,3 +32,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 - `pnpm format:check`, `pnpm check` (lint, typecheck, 99 unit, build): đạt. Unit `search-fold` thêm ca tách mọi loại khoảng trắng, bỏ từ lặp, câu chỉ có khoảng trắng và giới hạn 10 từ.
 - `pnpm test:integration`: 188 passed, 1 skipped (ca worker thật opt-in). Ca tìm không dấu thêm: từ không liền nhau, đảo thứ tự, từ ở cả tiêu đề và tác giả; mã môn sai một ký tự hoặc thêm từ không có thì không khớp.
 - Browser `library-catalog` và `library-query`: 7/7 đạt.
+- Lượt lại sau khi gộp `main` (PR #17): `pnpm check` 101 unit đạt; `pnpm test:integration` 193 passed, 1 skipped; `pnpm test:e2e --workers=1` 160 passed, 6 skipped, 1 failed. Ca lỗi là `materials.spec.ts` "reader draft survives cancelled browser back and forward (legacy)": ô ghi chú chưa hiện sau `goBack` trong 5 giây. Ca này không liên quan tới tìm kiếm, từng lỗi tương tự ở lượt QA-01; chạy riêng lại 2/2 đạt. Cần xử lý riêng.
