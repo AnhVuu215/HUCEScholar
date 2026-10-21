@@ -11,14 +11,17 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { SessionGuard } from '../auth/session.guard';
 import { CsrfGuard } from '../auth/csrf.guard';
 import {
   CreateNoteDto,
   NotesQueryDto,
+  ExportNotesDto,
   ReadingRevisionDto,
   SaveProgressDto,
   UpdateNoteDto,
@@ -95,6 +98,26 @@ export class ReadingController {
     @Body() dto: ReadingRevisionDto,
   ) {
     return this.reading.remove(req.user, id, noteId, dto);
+  }
+  @Get('annotations/export') async exportNotes(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query() query: ExportNotesDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const body = await this.reading.exportNotes(req.user, id, query.format);
+    const markdown = query.format === 'markdown';
+    res.setHeader(
+      'Content-Type',
+      markdown ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8',
+    );
+    // ASCII file name: the title stays inside the file, not in a header.
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="ghi-chu-phien-ban-${id}.${markdown ? 'md' : 'txt'}"`,
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return body;
   }
   @Get('progress') progress(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.reading.progress(req.user, id);
