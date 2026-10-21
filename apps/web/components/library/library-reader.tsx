@@ -183,9 +183,11 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
         await libraryVersion(id, controller.signal);
         pdfPage = await pdf.getPage(page);
         if (controller.signal.aborted) return;
-        const natural = pdfPage.getViewport({ scale: 1, rotation });
+        // PDF.js treats `rotation` as absolute; add the page's own /Rotate so scans stay upright.
+        const turn = (pdfPage.rotate + rotation) % 360;
+        const natural = pdfPage.getViewport({ scale: 1, rotation: turn });
         const scale = zoom === 'fit' ? width / natural.width : Number(zoom);
-        const viewport = pdfPage.getViewport({ scale, rotation });
+        const viewport = pdfPage.getViewport({ scale, rotation: turn });
         // Bound canvas memory, including unusual page dimensions and high-DPI mobile screens.
         const ratio = Math.min(
           window.devicePixelRatio || 1,
