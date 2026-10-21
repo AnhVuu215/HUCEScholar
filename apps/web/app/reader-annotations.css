@@ -212,3 +212,15 @@
     margin-top: 0;
   }
 }
+/* EXPORT-01: owner's notes download. */
+.notebook-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+}
+.notebook-export > p {
+  flex-basis: 100%;
+  margin: 0;
+}

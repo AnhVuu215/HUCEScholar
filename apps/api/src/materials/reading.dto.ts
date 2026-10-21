@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -35,4 +36,7 @@ export class UpdateNoteDto extends ReadingRevisionDto {
 export class SaveProgressDto {
   @IsInt() @Min(1) @Max(2147483647) pageNumber!: number;
   @IsInt() @Min(0) @Max(2147483646) revision!: number;
+}
+export class ExportNotesDto {
+  @IsIn(['markdown', 'text']) format: 'markdown' | 'text' = 'markdown';
 }
