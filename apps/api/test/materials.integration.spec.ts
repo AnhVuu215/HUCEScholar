@@ -1757,6 +1757,32 @@ describe('private material drafts', () => {
     );
     const old = await agents.student.get(`/api/v1/library/versions/${item.versionId}`).expect(200);
     expect(old.body.item.current).toBe(false);
+    // VERSION-01: the earlier version points to the current one; the current one points nowhere.
+    expect(old.body.item.currentVersion).toEqual({
+      versionId: String(newer),
+      versionNo: 2,
+      title: old.body.item.title,
+    });
+    const now = await agents.student.get(`/api/v1/library/versions/${newer}`).expect(200);
+    expect(now.body.item.currentVersion).toBeNull();
+    expect(
+      list.body.items.every((v: { currentVersion: unknown }) => v.currentVersion === null),
+    ).toBe(true);
+    // A current version that is not readable (rights already expired) is not offered.
+    const expired = (
+      await db.query(
+        "INSERT INTO hucescholar.document_versions(document_id,version_no,file_id,created_by,title,authors,material_type,source_reference,rights_basis,rights_valid_until,review_status) SELECT document_id,3,file_id,created_by,title,authors,material_type,source_reference,rights_basis,now()-interval '1 day','APPROVED' FROM hucescholar.document_versions WHERE id=$1 RETURNING id",
+        [item.versionId],
+      )
+    ).rows[0].id;
+    await db.query('UPDATE hucescholar.documents SET current_version_id=$1 WHERE id=$2', [
+      expired,
+      item.id,
+    ]);
+    expect(
+      (await agents.student.get(`/api/v1/library/versions/${item.versionId}`).expect(200)).body.item
+        .currentVersion,
+    ).toBeNull();
     await db.query('UPDATE hucescholar.courses SET is_active=false WHERE id=$1', [courses[0]]);
     await agents.student.get(`/api/v1/library/versions/${item.versionId}/pdf`).expect(200);
     await db.query('UPDATE hucescholar.courses SET is_active=true WHERE id=$1', [courses[0]]);
@@ -1964,7 +1990,12 @@ describe('private material drafts', () => {
       (r: { versionId: string }) => r.versionId === item.versionId,
     );
     expect(saved.material.versionId).toBe(next.id);
-    expect(recent.material).toMatchObject({ versionId: item.versionId, current: false });
+    expect(recent.material).toMatchObject({
+      versionId: item.versionId,
+      current: false,
+      currentVersion: { versionId: String(next.id), versionNo: 2, title: 'New published snapshot' },
+    });
+    expect(saved.material.currentVersion).toBeNull();
     expect(recent.pageNumber).toBe(2);
     expect((await agents.other.get('/api/v1/personal-library/recent')).body.items).toEqual([]);
   });
