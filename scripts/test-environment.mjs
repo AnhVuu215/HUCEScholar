@@ -140,6 +140,11 @@ try {
     ['lifecycle-receiver', 'LECTURER'],
     ['upload3-admin', 'ADMIN'],
     ['upload3-student', 'STUDENT'],
+    ['rotation-admin', 'ADMIN'],
+    ['rotation-student', 'STUDENT'],
+    ['pilot-admin', 'ADMIN'],
+    ['pilot-lecturer', 'LECTURER'],
+    ['pilot-student', 'STUDENT'],
     ['lecturer', 'LECTURER'],
     ['student', 'STUDENT'],
   ];

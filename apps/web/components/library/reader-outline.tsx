@@ -119,7 +119,7 @@ function OutlineList({
   return (
     <section id="reader-outline-panel" className="reader-outline" aria-label="Mục lục nội bộ PDF">
       <p className="field-hint">
-        Chỉ mở trang trong PDF này. Tối đa250 mục; liên kết ngoài không được mở ở đây.
+        Chỉ mở trang trong PDF này. Tối đa 250 mục; liên kết ngoài không được mở ở đây.
       </p>
       {error && <p role="alert">{error}</p>}
       <ul>
