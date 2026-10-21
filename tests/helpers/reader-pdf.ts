@@ -1,12 +1,18 @@
 // Original, valid two-page PDF fixture. No third-party book or font assets.
 export function readerPdf(
-  options: { scan?: boolean; longText?: boolean; outline?: boolean; splitText?: boolean } = {},
+  options: {
+    scan?: boolean;
+    longText?: boolean;
+    outline?: boolean;
+    splitText?: boolean;
+    rotated?: boolean;
+  } = {},
 ): Buffer {
   const objects = [
     `<< /Type /Catalog /Pages 2 0 R ${options.outline ? '/Outlines 8 0 R' : ''} >>`,
     '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>',
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R ${options.splitText ? '/F2 << /Type /Font /Subtype /Type1 /BaseFont /Courier >>' : ''} >> >> /Contents 7 0 R >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ${options.rotated ? '/Rotate 90 ' : ''}/Resources << /Font << /F1 5 0 R ${options.splitText ? '/F2 << /Type /Font /Subtype /Type1 /BaseFont /Courier >>' : ''} >> >> /Contents 7 0 R >>`,
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
     ...['HUCEScholar reader fixture - page one', 'Second page - study material'].map(
       (text, index) => {
