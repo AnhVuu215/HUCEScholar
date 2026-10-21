@@ -11,7 +11,16 @@ export function foldVietnamese(value: string): string {
     .toLowerCase();
 }
 
-/** A LIKE pattern matching the folded text anywhere; user wildcards are literal. */
-export function foldedContains(value: string): string {
-  return `%${foldVietnamese(value).replace(/[\\%_]/g, '\\$&')}%`;
+export const MAX_SEARCH_TERMS = 10;
+
+/**
+ * One LIKE pattern per distinct folded word; a match must contain every word, in any order.
+ * User wildcards are literal (backslash is PostgreSQL's default LIKE escape). Words past
+ * MAX_SEARCH_TERMS are ignored: by then the query is already specific.
+ */
+export function foldedTerms(value: string): string[] {
+  const words = new Set(foldVietnamese(value).split(/\s+/).filter(Boolean));
+  return [...words]
+    .slice(0, MAX_SEARCH_TERMS)
+    .map((word) => `%${word.replace(/[\\%_]/g, '\\$&')}%`);
 }

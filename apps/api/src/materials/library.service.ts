@@ -15,7 +15,7 @@ import { PrivateStore, type ByteRange } from '../files/private-store';
 import { LibraryListDto } from './library.dto';
 import { DOCX_MIME } from '../files/receive-docx';
 import { MaterialsService } from './materials.service';
-import { foldedContains } from './search-fold';
+import { foldedTerms } from './search-fold';
 
 const selection = {
   id: true,
@@ -160,15 +160,16 @@ export class LibraryService {
     query: LibraryListDto,
   ): Promise<Prisma.document_versionsWhereInput> {
     // Accent-insensitive title/author match ("giao trinh" finds "Giáo trình") against text folded
-    // on write (version_search), limited to current approved versions; then narrows the regular
-    // Prisma filter by id.
-    const matches = query.search
+    // on write (version_search), limited to current approved versions; every word must appear,
+    // in any order. Then narrows the regular Prisma filter by id.
+    const terms = query.search ? foldedTerms(query.search) : [];
+    const matches = terms.length
       ? await tx.$queryRaw<{ id: bigint }[]>`
           SELECT v.id FROM hucescholar.document_versions v
           JOIN hucescholar.documents d ON d.current_version_id = v.id
           JOIN hucescholar.version_search s ON s.version_id = v.id
           WHERE v.review_status = 'APPROVED'
-            AND s.folded LIKE ${foldedContains(query.search)} ESCAPE ${'\\'}`
+            AND s.folded LIKE ALL (${terms}::text[])`
       : null;
     return {
       AND: [
