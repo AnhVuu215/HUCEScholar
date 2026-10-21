@@ -51,3 +51,17 @@ export async function searchAnnotations(
     throw new Error('Invalid annotation search response');
   return { items: body.items, nextCursor: body.nextCursor };
 }
+export type NotesExportFormat = 'markdown' | 'text';
+/** The owner's notes for one version as a file; the API re-checks read access each time. */
+export async function exportNotes(versionId: string, format: NotesExportFormat) {
+  const response = await apiRequest(
+    `/library/versions/${encodeURIComponent(versionId)}/annotations/export?format=${format}`,
+    {},
+    20_000,
+  );
+  const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1];
+  return {
+    blob: await response.blob(),
+    name: name ?? `ghi-chu.${format === 'text' ? 'txt' : 'md'}`,
+  };
+}
