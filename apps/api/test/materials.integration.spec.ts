@@ -1100,9 +1100,18 @@ describe('private material drafts', () => {
       `Giao Trình đường lối ${code}`,
       `nguyen thi an ${code}`,
       `  Đường  `.trim() + ` lối ${code}`,
+      // Words need not be adjacent or in order, and may span title and author.
+      `giao trinh ${code}`,
+      `${code} loi duong`,
+      `duong loi nguyen ${code}`,
     ])
       expect(await found(search)).toBe(true);
-    for (const search of [`giao_trinh ${code}`, `giao%trinh ${code}`, `giáo trình khác ${code}`])
+    for (const search of [
+      `giao_trinh ${code}`,
+      `giao%trinh ${code}`,
+      `giáo trình khác ${code}`,
+      `giao trinh ${code}x`,
+    ])
       expect(await found(search)).toBe(false);
     const letters = 'aàáạảãâầấậẩẫăằắặẳẵeèéẹẻẽêềếệểễiìíịỉĩoòóọỏõôồốộổỗơờớợởỡuùúụủũưừứựửữyỳýỵỷỹđ';
     const sample = letters + letters.toLocaleUpperCase('vi') + ' Hà Nội 123_%';
