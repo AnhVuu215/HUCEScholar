@@ -5,22 +5,29 @@ import { createConnection } from 'node:net';
 import { once } from 'node:events';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
 
+/** Why a file was rejected; stored in files.check_error, never the tool's own message. */
+export type FileCheckCode = 'MALWARE' | 'PASSWORD_PROTECTED' | 'INVALID_PDF' | 'TOO_MANY_PAGES';
+
 export class FileCheckError extends Error {
-  constructor(readonly retryable: boolean) {
+  constructor(
+    readonly retryable: boolean,
+    readonly code: FileCheckCode | null = null,
+  ) {
     super(retryable ? 'File check temporarily unavailable.' : 'File check rejected.');
   }
 }
 
+/**
+ * Accepts PDFs that open without a password. An owner-password PDF reports
+ * `Encrypted: yes (print:… copy:no …)`; copy:no is kept so the API can refuse text highlights.
+ */
 export function parsePdfInfo(output: string) {
   const pages = Number(/^Pages:\s+(\d+)\s*$/m.exec(output)?.[1]);
-  if (
-    !Number.isInteger(pages) ||
-    pages < 1 ||
-    pages > 10000 ||
-    !/^Encrypted:\s+no\s*$/m.test(output)
-  )
-    throw new Error('Invalid or encrypted PDF.');
-  return pages;
+  const encrypted = /^Encrypted:\s+(no|yes\b.*?)\s*$/m.exec(output)?.[1];
+  if (!Number.isInteger(pages) || pages < 1 || !encrypted)
+    throw new FileCheckError(false, 'INVALID_PDF');
+  if (pages > 10000) throw new FileCheckError(false, 'TOO_MANY_PAGES');
+  return { pageCount: pages, copyRestricted: /\bcopy:no\b/.test(encrypted) };
 }
 export function runTool(
   binary: string,
@@ -32,10 +39,12 @@ export function runTool(
     const child = spawn(binary, args, {
       shell: false,
       windowsHide: true,
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
     });
     let output = '';
+    // Only matched against Poppler's fixed C-locale wording; never stored or logged.
+    let errors = '';
     let hasText = false;
     let failed = false;
     const fail = () => {
@@ -51,13 +60,24 @@ export function runTool(
         if (output.length > 32768) fail();
       }
     });
+    child.stderr.on('data', (data: Buffer) => {
+      if (errors.length < 4096) errors += data.toString('utf8');
+    });
     child.on('error', () => {
       clearTimeout(timer);
       reject(new FileCheckError(true));
     });
     child.on('close', (code) => {
       clearTimeout(timer);
-      if (failed || code !== 0) reject(new Error('PDF parsing failed.'));
+      // Timeouts and oversized output stay retryable; a clean non-zero exit is the file's fault.
+      if (failed) reject(new Error('PDF parsing failed.'));
+      else if (code !== 0)
+        reject(
+          new FileCheckError(
+            false,
+            /Incorrect password/.test(errors) ? 'PASSWORD_PROTECTED' : 'INVALID_PDF',
+          ),
+        );
       else resolve(textOnly ? (hasText ? 'text' : '') : output);
     });
   });
@@ -85,7 +105,9 @@ export async function clamScan(
           reject(new FileCheckError(true));
         } else if (response.includes('\0')) {
           if (response === 'stream: OK\0') resolve();
-          else reject(new FileCheckError(!/^stream: .+ FOUND\0$/.test(response)));
+          else if (/^stream: .+ FOUND\0$/.test(response))
+            reject(new FileCheckError(false, 'MALWARE'));
+          else reject(new FileCheckError(true));
         }
       });
       socket.once('connect', () => {
@@ -111,8 +133,8 @@ export class PdfScanner {
   constructor(@Inject(FILE_CONFIG) private readonly config: FileConfiguration) {}
   async scan(path: string) {
     await clamScan(path, this.config.clamHost, this.config.clamPort);
-    const pageCount = parsePdfInfo(await runTool(this.config.pdfinfo, ['-isodates', path], 30_000));
+    const info = parsePdfInfo(await runTool(this.config.pdfinfo, ['-isodates', path], 30_000));
     const text = await runTool(this.config.pdftotext, ['-enc', 'UTF-8', path, '-'], 30_000, true);
-    return { pageCount, hasTextLayer: !!text };
+    return { ...info, hasTextLayer: !!text };
   }
 }

@@ -3,6 +3,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '../../lib/auth';
 import {
   currentDraft,
+  fileErrorMessage,
   materialError,
   uploadDraftPdf,
   type MaterialDraft,
@@ -102,9 +103,12 @@ export function DraftPdf({
         PDF được lưu riêng tư. Qua kiểm tra kỹ thuật chưa đồng nghĩa được duyệt hoặc công bố.
       </p>
       {current.fileState === 'FAILED' && (
+        <p className="field-hint">{fileErrorMessage(current.fileError)}</p>
+      )}
+      {current.fileState === 'SAFE' && current.pdf?.copyRestricted && (
         <p className="field-hint">
-          File lỗi, có mã hóa hoặc dịch vụ kiểm tra gián đoạn đều có thể dẫn tới trạng thái này.
-          Kiểm tra PDF rồi tải lại; quản trị viên kiểm tra worker nếu lỗi lặp lại.
+          PDF này cấm sao chép nội dung. Người đọc vẫn đọc và ghi chú theo trang được, nhưng không
+          tô sáng hay trích dẫn đoạn chữ.
         </p>
       )}
       {(error || uncertain) && (

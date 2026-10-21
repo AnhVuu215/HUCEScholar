@@ -16,6 +16,8 @@ export interface LibraryItem {
   downloadAllowed: boolean;
   pageCount: number;
   hasTextLayer: boolean;
+  /** The PDF opens freely but its author forbids copying: no text highlights or citations. */
+  copyRestricted: boolean;
   byteSize: number;
   sourceFile?: { name: string; byteSize: number; format: 'DOCX' } | null;
   courses: { id: string; code: string; name: string }[];
@@ -48,6 +50,7 @@ export function isLibraryItem(value: unknown): value is LibraryItem {
     ) &&
     typeof r.downloadAllowed === 'boolean' &&
     typeof r.hasTextLayer === 'boolean' &&
+    typeof r.copyRestricted === 'boolean' &&
     typeof r.current === 'boolean' &&
     (r.sourceFile == null ||
       (typeof r.sourceFile === 'object' &&

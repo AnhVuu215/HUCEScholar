@@ -63,6 +63,7 @@ export class ReadingService {
       version: bigint,
       pages: number | null,
       textLayer: boolean | null,
+      copyRestricted: boolean,
     ) => Promise<T>,
   ) {
     const owner = academicId(actor.id),
@@ -73,7 +74,8 @@ export class ReadingService {
       if (writing)
         await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:reading:${owner}`}, 0))`;
       const row = await this.library.access(tx, actor, version);
-      return action(tx, owner, version, row.files!.page_count, row.files!.has_text_layer);
+      const file = row.files!;
+      return action(tx, owner, version, file.page_count, file.has_text_layer, file.copy_restricted);
     });
   }
   notes(actor: Profile, id: string, query: NotesQueryDto) {
@@ -170,43 +172,54 @@ export class ReadingService {
     const highlight = 'anchor' in dto;
     const kind = highlight ? 'TEXT_HIGHLIGHT' : 'PAGE_NOTE';
     const anchor = highlight ? { ...dto.anchor, quote: dto.anchor.quote.trim() } : null;
-    return this.run(actor, id, true, async (tx, user_id, version_id, pages, textLayer) => {
-      pageWithin(dto.pageNumber, pages);
-      const existing = await tx.annotations.findUnique({
-        where: { user_id_request_id: { user_id, request_id: dto.requestId } },
-      });
-      if (existing) {
-        if (
-          existing.version_id !== version_id ||
-          existing.page_number !== dto.pageNumber ||
-          existing.kind !== kind ||
-          existing.content !== dto.content ||
-          (highlight &&
-            (existing.color !== dto.color || !isDeepStrictEqual(existing.anchor, anchor)))
-        )
-          throw new ConflictException({
-            code: 'NOTE_REQUEST_REUSED',
-            message: 'Yêu cầu ghi chú đã được dùng. Tải lại để đối soát.',
+    return this.run(
+      actor,
+      id,
+      true,
+      async (tx, user_id, version_id, pages, textLayer, copyRestricted) => {
+        pageWithin(dto.pageNumber, pages);
+        const existing = await tx.annotations.findUnique({
+          where: { user_id_request_id: { user_id, request_id: dto.requestId } },
+        });
+        if (existing) {
+          if (
+            existing.version_id !== version_id ||
+            existing.page_number !== dto.pageNumber ||
+            existing.kind !== kind ||
+            existing.content !== dto.content ||
+            (highlight &&
+              (existing.color !== dto.color || !isDeepStrictEqual(existing.anchor, anchor)))
+          )
+            throw new ConflictException({
+              code: 'NOTE_REQUEST_REUSED',
+              message: 'Yêu cầu ghi chú đã được dùng. Tải lại để đối soát.',
+            });
+          return { item: noteItem(existing) };
+        }
+        if (highlight && !textLayer)
+          throw new BadRequestException(
+            'Trang scan chưa hỗ trợ tô chữ. Hãy dùng ghi chú theo trang.',
+          );
+        // The quote copies text out of the PDF, which its author forbade.
+        if (highlight && copyRestricted)
+          throw new BadRequestException({
+            code: 'COPY_RESTRICTED',
+            message: 'PDF này không cho phép sao chép nội dung. Hãy dùng ghi chú theo trang.',
           });
-        return { item: noteItem(existing) };
-      }
-      if (highlight && !textLayer)
-        throw new BadRequestException(
-          'Trang scan chưa hỗ trợ tô chữ. Hãy dùng ghi chú theo trang.',
-        );
-      const item = await tx.annotations.create({
-        data: {
-          user_id,
-          version_id,
-          request_id: dto.requestId,
-          page_number: dto.pageNumber,
-          kind,
-          content: dto.content,
-          ...(highlight ? { anchor: anchor as Prisma.InputJsonValue, color: dto.color } : {}),
-        },
-      });
-      return { item: noteItem(item) };
-    });
+        const item = await tx.annotations.create({
+          data: {
+            user_id,
+            version_id,
+            request_id: dto.requestId,
+            page_number: dto.pageNumber,
+            kind,
+            content: dto.content,
+            ...(highlight ? { anchor: anchor as Prisma.InputJsonValue, color: dto.color } : {}),
+          },
+        });
+        return { item: noteItem(item) };
+      },
+    );
   }
   private async owned(
     tx: Prisma.TransactionClient,

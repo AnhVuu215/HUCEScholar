@@ -54,6 +54,8 @@ const selection = {
       byte_size: true,
       page_count: true,
       has_text_layer: true,
+      check_error: true,
+      copy_restricted: true,
     },
   },
   documents_document_versions_document_idTodocuments: { select: { kind: true } },
@@ -183,6 +185,7 @@ export class MaterialsService {
         reviewStatus: row.review_status,
         publicationMethod: row.publication_method,
         fileState: row.files?.scan_status ?? 'MISSING',
+        fileError: row.files?.check_error ?? null,
         source: row.source_upload
           ? {
               id: String(row.source_upload.id),
@@ -199,6 +202,7 @@ export class MaterialsService {
               byteSize: Number(row.files.byte_size),
               pageCount: row.files.page_count,
               hasTextLayer: row.files.has_text_layer,
+              copyRestricted: row.files.copy_restricted,
             }
           : null,
         revision: row.revision,
