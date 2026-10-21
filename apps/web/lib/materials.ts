@@ -26,6 +26,18 @@ const fileErrors: Record<string, string> = {
   CHECK_UNAVAILABLE:
     'Dịch vụ kiểm tra file chưa phản hồi sau nhiều lần thử. Hãy tải file lên lại sau ít phút hoặc liên hệ quản trị viên.',
 };
+const fileErrorLabels: Record<string, string> = {
+  MALWARE: 'phát hiện mã độc',
+  PASSWORD_PROTECTED: 'PDF có mật khẩu',
+  INVALID_PDF: 'PDF hỏng hoặc không hợp lệ',
+  TOO_MANY_PAGES: 'quá 10.000 trang',
+  CHECK_UNAVAILABLE: 'dịch vụ kiểm tra không phản hồi',
+};
+/** Short failure line for lists and admin screens; older files have no recorded reason. */
+export function fileFailedLabel(code: string | null | undefined) {
+  const reason = code && fileErrorLabels[code];
+  return reason ? `PDF không đạt kiểm tra: ${reason}` : 'PDF không đạt kiểm tra';
+}
 /** Why a PDF failed its check, in words an uploader can act on. */
 export function fileErrorMessage(code: string | null | undefined) {
   return (code && fileErrors[code]) ?? 'Chọn file khác hoặc liên hệ quản trị viên.';
