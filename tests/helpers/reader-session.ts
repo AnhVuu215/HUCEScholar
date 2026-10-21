@@ -54,6 +54,7 @@ export async function openReaderFixture(
     longText?: boolean;
     outline?: boolean;
     splitText?: boolean;
+    rotated?: boolean;
     panelOpen?: boolean;
   } = {},
 ) {

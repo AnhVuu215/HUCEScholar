@@ -138,6 +138,11 @@ try {
     ['lifecycle-admin', 'ADMIN'],
     ['lifecycle-lecturer', 'LECTURER'],
     ['lifecycle-receiver', 'LECTURER'],
+    ['rotation-admin', 'ADMIN'],
+    ['rotation-student', 'STUDENT'],
+    ['pilot-admin', 'ADMIN'],
+    ['pilot-lecturer', 'LECTURER'],
+    ['pilot-student', 'STUDENT'],
     ['lecturer', 'LECTURER'],
     ['student', 'STUDENT'],
   ];
