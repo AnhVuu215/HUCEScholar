@@ -961,6 +961,10 @@ for (const historyMode of ['native', 'legacy'] as const) {
     await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
     await page.locator(`a[href="${readerUrl}"]`).click();
     const editor = page.getByLabel('Nội dung ghi chú', { exact: true });
+    // Each return to the reader remounts it and refetches the version and PDF; under a full
+    // serial run that takes longer than the default 5 s, as on the first open.
+    const rendered = page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 1 / 2' });
+    await expect(rendered).toBeVisible({ timeout: 15_000 });
     await expect(editor).toBeVisible();
     const historyLength = await page.evaluate(() => history.length);
     await editor.fill('Bản soạn cần giữ khi quay lại');
@@ -998,6 +1002,7 @@ for (const historyMode of ['native', 'legacy'] as const) {
     await expect(page).toHaveURL('/workspace/library');
     await page.goBack();
     await expect(page).toHaveURL(readerUrl);
+    await expect(rendered).toBeVisible({ timeout: 15_000 });
     await expect(editor).toBeVisible();
     await editor.fill('Bản soạn cần giữ khi tiến tới');
     await page.evaluate(() => history.forward());
