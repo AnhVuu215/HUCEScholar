@@ -19,3 +19,5 @@ Lỗi `429` từng thấy ở ca này trong lượt QA-01 là chuyện khác: gi
 Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 
 - `tests/materials.spec.ts`: 21/21 đạt.
+- Sau khi gộp `main` (PR #18): `pnpm format:check`, `pnpm check` (101 unit) đạt; `pnpm test:e2e --workers=1`: 161 passed, 6 skipped (5,4 phút), gồm cả hai ca native/legacy.
+- Một lượt đạt không chứng minh hết chập chờn; nếu còn lỗi thì xem trace của lần đó.
