@@ -13,7 +13,8 @@ import { MaterialsService } from '../src/materials/materials.service';
 import { PrivateStore } from '../src/files/private-store';
 import { ScanQueue } from '../src/files/scan-queue';
 import { ScanProcessor } from '../src/files/scan-processor';
-import { clamScan, PdfScanner } from '../src/files/pdf-scanner';
+import { clamScan, FileCheckError, PdfScanner } from '../src/files/pdf-scanner';
+import { UnrecoverableError } from 'bullmq';
 import { createReadStream } from 'node:fs';
 import { get as httpGet } from 'node:http';
 import type { Readable } from 'node:stream';
@@ -397,7 +398,7 @@ describe('private material drafts', () => {
     expect((await upload('student', item.id, 2)).status).toBe(201);
     const scan = jest
       .spyOn(app.get(PdfScanner), 'scan')
-      .mockResolvedValue({ pageCount: 2, hasTextLayer: true });
+      .mockResolvedValue({ pageCount: 2, hasTextLayer: true, copyRestricted: false });
     try {
       const processor = app.get(ScanProcessor);
       await processor.process(first.id, false);
@@ -434,10 +435,48 @@ describe('private material drafts', () => {
       await expect(app.get(ScanProcessor).process(file.id, false)).rejects.toThrow();
       expect((await uploadedFile(item)).scan_status).toBe('CHECKING');
       await expect(app.get(ScanProcessor).process(file.id, true)).rejects.toThrow();
-      expect((await uploadedFile(item)).scan_status).toBe('FAILED');
+      expect(await uploadedFile(item)).toMatchObject({ scan_status: 'FAILED', check_error: null });
     } finally {
       scan.mockRestore();
     }
+  });
+  it.each([
+    ['PASSWORD_PROTECTED', new FileCheckError(false, 'PASSWORD_PROTECTED'), false],
+    ['MALWARE', new FileCheckError(false, 'MALWARE'), false],
+    ['CHECK_UNAVAILABLE', new FileCheckError(true), true],
+  ])('records %s as the failure reason the uploader sees', async (reason, error, final) => {
+    const item = await create('student');
+    await upload('student', item.id, 1);
+    const file = await uploadedFile(item);
+    const scan = jest.spyOn(app.get(PdfScanner), 'scan').mockRejectedValue(error);
+    try {
+      // File verdicts fail at once without retrying; outages only on the final attempt.
+      const attempt = app.get(ScanProcessor).process(file.id, final);
+      if (final) await expect(attempt).rejects.toThrow();
+      else await expect(attempt).rejects.toBeInstanceOf(UnrecoverableError);
+      expect(await uploadedFile(item)).toMatchObject({
+        scan_status: 'FAILED',
+        check_error: reason,
+      });
+      const draft = (await agents.student.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      expect(draft).toMatchObject({ fileState: 'FAILED', fileError: reason });
+    } finally {
+      scan.mockRestore();
+    }
+  });
+  it('keeps a failure reason only on FAILED files', async () => {
+    const item = await create('student');
+    await upload('student', item.id, 1);
+    const file = await uploadedFile(item);
+    await expect(
+      db.query("UPDATE hucescholar.files SET check_error='MALWARE' WHERE id=$1", [file.id]),
+    ).rejects.toMatchObject({ code: '23514' });
+    await expect(
+      db.query(
+        "UPDATE hucescholar.files SET scan_status='FAILED',check_error='OTHER' WHERE id=$1",
+        [file.id],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
   });
   it('rejects changed private bytes before scanning', async () => {
     const item = await create('student');
@@ -2525,6 +2564,43 @@ describe('private material drafts', () => {
     ).toBe(400);
   });
 
+  it('copy-restricted PDFs keep page notes but refuse text highlights, and the flag is immutable once SAFE', async () => {
+    const { path, versionId } = await readingFixture();
+    const fileOf = 'SELECT file_id FROM hucescholar.document_versions WHERE id=$1';
+    // The worker sets the flag together with SAFE; a SAFE row can no longer change it.
+    await expect(
+      db.query(`UPDATE hucescholar.files SET copy_restricted=true WHERE id=(${fileOf})`, [
+        versionId,
+      ]),
+    ).rejects.toMatchObject({ code: '23514' });
+    await db.query(`UPDATE hucescholar.files SET scan_status='CHECKING' WHERE id=(${fileOf})`, [
+      versionId,
+    ]);
+    await db.query(
+      `UPDATE hucescholar.files SET scan_status='SAFE',copy_restricted=true WHERE id=(${fileOf})`,
+      [versionId],
+    );
+    expect((await agents.student.get(path).expect(200)).body.item.copyRestricted).toBe(true);
+    const highlight = await readingWrite('student', `${path}/highlights`, {
+      pageNumber: 1,
+      content: '',
+      color: '#FFF59D',
+      anchor: highlightAnchor(),
+      requestId: randomUUID(),
+    });
+    expect(highlight.status).toBe(400);
+    expect(highlight.body.code).toBe('COPY_RESTRICTED');
+    expect(
+      (
+        await readingWrite('student', `${path}/notes`, {
+          pageNumber: 1,
+          content: 'Ghi chú trang vẫn được phép',
+          requestId: randomUUID(),
+        })
+      ).status,
+    ).toBe(201);
+  });
+
   it('reading notes are private to each role and cannot be accessed by another owner or admin', async () => {
     const { path } = await readingFixture();
     const note = await readingWrite('student', `${path}/notes`, {
@@ -3057,7 +3133,7 @@ describe('private material drafts', () => {
       });
     const pdf = jest
       .spyOn(app.get(PdfScanner), 'scan')
-      .mockResolvedValue({ pageCount: 2, hasTextLayer: true });
+      .mockResolvedValue({ pageCount: 2, hasTextLayer: true, copyRestricted: false });
     return () => {
       scan.mockRestore();
       convert.mockRestore();
@@ -3221,7 +3297,7 @@ describe('private material drafts', () => {
       else
         jest.spyOn(app.get(PdfScanner), 'scan').mockImplementation(async (path) => {
           await unavailable(path);
-          return { pageCount: 1, hasTextLayer: true };
+          return { pageCount: 1, hasTextLayer: true, copyRestricted: false };
         });
       try {
         await expect(app.get(SourceConversionProcessor).process(item.source.id)).rejects.toThrow();

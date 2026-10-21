@@ -44,15 +44,48 @@ describe('bounded PDF checks', () => {
       receivePdf(Readable.from([Buffer.from('bad')]), join(directory, 'bad.pdf'), 20),
     ).rejects.toMatchObject({ status: 400 });
   });
-  it('accepts positive page counts and rejects encrypted/malformed output', () => {
-    expect(parsePdfInfo('Pages: 2\nEncrypted: no\n')).toBe(2);
-    for (const output of [
-      'Pages: 0\nEncrypted: no',
-      'Pages: 1\nEncrypted: yes',
-      'syntax error',
-      'Pages: 1',
-    ])
-      expect(() => parsePdfInfo(output)).toThrow();
+  it('accepts PDFs that open without a password and flags copy:no', () => {
+    expect(parsePdfInfo('Pages: 2\nEncrypted: no\n')).toEqual({
+      pageCount: 2,
+      copyRestricted: false,
+    });
+    expect(
+      parsePdfInfo(
+        'Pages: 3\nEncrypted: yes (print:yes copy:no change:yes addNotes:yes algorithm:RC4)\n',
+      ),
+    ).toEqual({ pageCount: 3, copyRestricted: true });
+    expect(parsePdfInfo('Pages: 1\nEncrypted: yes (print:no copy:yes)\n')).toEqual({
+      pageCount: 1,
+      copyRestricted: false,
+    });
+  });
+  it('classifies malformed and oversized page counts as the file’s fault', () => {
+    for (const output of ['Pages: 0\nEncrypted: no', 'syntax error', 'Pages: 1'])
+      expect(() => parsePdfInfo(output)).toThrow(
+        expect.objectContaining({ retryable: false, code: 'INVALID_PDF' }),
+      );
+    expect(() => parsePdfInfo('Pages: 10001\nEncrypted: no')).toThrow(
+      expect.objectContaining({ retryable: false, code: 'TOO_MANY_PAGES' }),
+    );
+  });
+  it('tells a password-protected PDF apart from a broken one by exit plus stderr', async () => {
+    await expect(
+      runTool(
+        process.execPath,
+        ['-e', 'process.stderr.write("Command Line Error: Incorrect password\\n");process.exit(1)'],
+        5000,
+      ),
+    ).rejects.toMatchObject({ retryable: false, code: 'PASSWORD_PROTECTED' });
+    await expect(
+      runTool(
+        process.execPath,
+        [
+          '-e',
+          'process.stderr.write("Syntax Error: Couldn\'t read xref table\\n");process.exit(1)',
+        ],
+        5000,
+      ),
+    ).rejects.toMatchObject({ retryable: false, code: 'INVALID_PDF' });
   });
   it('bounds parser execution and output without invoking a shell', async () => {
     await expect(
@@ -85,7 +118,12 @@ describe('bounded PDF checks', () => {
       try {
         const scan = clamScan(path, '127.0.0.1', address.port, 1000);
         if (reply === 'stream: OK\0') await expect(scan).resolves.toBeUndefined();
-        else await expect(scan).rejects.toMatchObject({ retryable: !reply.includes(' FOUND') });
+        else
+          await expect(scan).rejects.toMatchObject(
+            reply.includes(' FOUND')
+              ? { retryable: false, code: 'MALWARE' }
+              : { retryable: true, code: null },
+          );
       } finally {
         await new Promise<void>((resolve) => server.close(() => resolve()));
       }

@@ -54,6 +54,8 @@ export async function openReaderFixture(
     longText?: boolean;
     outline?: boolean;
     splitText?: boolean;
+    copyRestricted?: boolean;
+    rotated?: boolean;
     panelOpen?: boolean;
   } = {},
 ) {
@@ -107,8 +109,8 @@ export async function openReaderFixture(
   await db.connect();
   try {
     const result = await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=2,has_text_layer=$3 WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND u.email=$2)",
-      [item.id, `e2e-${account}-student@example.test`, !options.scan],
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=2,has_text_layer=$3,copy_restricted=$4 WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND u.email=$2)",
+      [item.id, `e2e-${account}-student@example.test`, !options.scan, !!options.copyRestricted],
     );
     expect(result.rowCount).toBe(1);
   } finally {

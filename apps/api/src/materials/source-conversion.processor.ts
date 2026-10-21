@@ -151,6 +151,7 @@ export class SourceConversionProcessor {
             checked_at: new Date(),
             page_count: pdf.pageCount,
             has_text_layer: pdf.hasTextLayer,
+            copy_restricted: pdf.copyRestricted,
           },
         });
         await tx.document_source_uploads.update({
