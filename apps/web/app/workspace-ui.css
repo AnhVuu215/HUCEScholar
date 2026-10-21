@@ -488,3 +488,10 @@
   gap: 8px;
   margin-top: 8px;
 }
+
+/* AUTH-03: recovery forms on the auth layout. */
+.recovery-form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
