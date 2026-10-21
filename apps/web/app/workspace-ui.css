@@ -393,3 +393,63 @@
 .notification-items > li[data-read='false'] > p:first-child {
   font-weight: 600;
 }
+
+/* COURSE-01: reading lists. */
+.reading-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--paper);
+}
+.reading-list h3,
+.reading-section h4 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.reading-items,
+.reading-editor-items {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding-left: 1.4em;
+}
+.reading-items > li,
+.reading-editor-items > li {
+  overflow-wrap: anywhere;
+}
+.reading-note {
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+.reading-editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.reading-editor-items > li {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+}
+.reading-editor-actions,
+.reading-results > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+.reading-results {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.reading-results > li > span {
+  overflow-wrap: anywhere;
+}
