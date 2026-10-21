@@ -16,6 +16,8 @@ import { PersonalLibraryController } from './personal-library.controller';
 import { PersonalLibraryService } from './personal-library.service';
 import { AdminReportsController, VersionReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
+import { StudyCardsController } from './study-cards.controller';
+import { StudyCardsService } from './study-cards.service';
 @Module({
   imports: [AuthModule, FilesModule, MaterialDraftCoreModule],
   controllers: [
@@ -27,6 +29,7 @@ import { ReportsService } from './reports.service';
     PersonalLibraryController,
     VersionReportsController,
     AdminReportsController,
+    StudyCardsController,
   ],
   providers: [
     DraftPdfService,
@@ -36,6 +39,7 @@ import { ReportsService } from './reports.service';
     LifecycleService,
     PersonalLibraryService,
     ReportsService,
+    StudyCardsService,
   ],
 })
 export class MaterialsModule {}
