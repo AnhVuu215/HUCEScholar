@@ -453,3 +453,38 @@
 .reading-results > li > span {
   overflow-wrap: anywhere;
 }
+
+/* STUDY-01: review cards. */
+.study-cards {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+.study-card {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.study-card h3 {
+  margin: 0;
+}
+.study-card > form,
+.study-card > div[id] {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+.study-answer {
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+.study-card-maker {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
