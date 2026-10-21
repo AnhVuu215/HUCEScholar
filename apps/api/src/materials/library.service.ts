@@ -55,7 +55,8 @@ const selection = {
   },
 } satisfies Prisma.document_versionsSelect;
 type LibraryRow = Prisma.document_versionsGetPayload<{ select: typeof selection }>;
-const available = (): Prisma.document_versionsWhereInput => ({
+/** What any signed-in reader may open: approved, safe, visible and within its rights period. */
+export const available = (): Prisma.document_versionsWhereInput => ({
   review_status: 'APPROVED',
   files: { scan_status: 'SAFE' },
   documents_document_versions_document_idTodocuments: { visibility: 'VISIBLE' },

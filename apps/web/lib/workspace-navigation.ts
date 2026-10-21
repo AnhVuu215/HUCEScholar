@@ -9,7 +9,9 @@ export type WorkspaceSection =
   | 'reports'
   | 'library'
   | 'lifecycle'
-  | 'personal';
+  | 'personal'
+  | 'readingLists'
+  | 'readingEditor';
 export interface WorkspaceLink {
   section: WorkspaceSection;
   href: string;
@@ -25,6 +27,11 @@ export function workspaceNavigation(role: Role): WorkspaceGroup[] {
     label: 'Học tập',
     links: [
       { section: 'library', href: '/workspace/library', label: 'Kho học liệu' },
+      {
+        section: 'readingLists',
+        href: '/workspace/library/reading-lists',
+        label: 'Danh sách đọc',
+      },
       { section: 'personal', href: '/workspace/personal-library', label: 'Thư viện của tôi' },
     ],
   };
@@ -71,6 +78,11 @@ export function workspaceNavigation(role: Role): WorkspaceGroup[] {
                 section: 'assignments' as const,
                 href: '/workspace/lecturer/assignments',
                 label: 'Phân công của tôi',
+              },
+              {
+                section: 'readingEditor' as const,
+                href: '/workspace/lecturer/reading-lists',
+                label: 'Soạn danh sách đọc',
               },
             ]
           : []),

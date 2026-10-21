@@ -8,6 +8,7 @@ import { MaterialsModule } from './materials/materials.module';
 import { AccountModule } from './account/account.module';
 import { OpsModule } from './ops/ops.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ReadingListsModule } from './reading-lists/reading-lists.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     AccountModule,
     OpsModule,
     NotificationsModule,
+    ReadingListsModule,
   ],
   controllers: [HealthController],
 })

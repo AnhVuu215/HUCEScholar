@@ -1,0 +1,122 @@
+import { ApiError, apiRequest, csrfToken } from './auth';
+import { materialTypes } from './materials';
+
+export type ReadingItem = {
+  position: number;
+  section: string;
+  note: string;
+  versionId: string;
+  /** null when the viewer can no longer read this version; its title is then withheld. */
+  material: {
+    title: string;
+    authors: string;
+    versionNo: number;
+    materialType: keyof typeof materialTypes;
+    newerVersionId: string | null;
+  } | null;
+};
+export type ReadingList = {
+  id: string;
+  courseId: string;
+  title: string;
+  published: boolean;
+  revision: number;
+  updatedAt: string;
+  owner: { id: string; name: string };
+  items: ReadingItem[];
+};
+export type ReadingDraftItem = { section: string; versionId: string; note: string };
+
+const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
+const id = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
+function validItem(v: unknown): v is ReadingItem {
+  if (
+    !record(v) ||
+    !Number.isInteger(v.position) ||
+    typeof v.section !== 'string' ||
+    typeof v.note !== 'string' ||
+    !id(v.versionId)
+  )
+    return false;
+  if (v.material === null) return true;
+  const m = v.material;
+  return (
+    record(m) &&
+    typeof m.title === 'string' &&
+    typeof m.authors === 'string' &&
+    Number.isInteger(m.versionNo) &&
+    Object.hasOwn(materialTypes, String(m.materialType)) &&
+    (m.newerVersionId === null || id(m.newerVersionId))
+  );
+}
+function validList(v: unknown): v is ReadingList {
+  return (
+    record(v) &&
+    id(v.id) &&
+    id(v.courseId) &&
+    typeof v.title === 'string' &&
+    typeof v.published === 'boolean' &&
+    Number.isInteger(v.revision) &&
+    typeof v.updatedAt === 'string' &&
+    record(v.owner) &&
+    id(v.owner.id) &&
+    typeof v.owner.name === 'string' &&
+    Array.isArray(v.items) &&
+    v.items.every(validItem)
+  );
+}
+const path = (courseId: string) => `/courses/${encodeURIComponent(courseId)}/reading-lists`;
+
+export async function publishedReadingLists(courseId: string, signal: AbortSignal) {
+  const body: unknown = await (await apiRequest(path(courseId), { signal })).json();
+  if (
+    record(body) &&
+    record(body.course) &&
+    typeof body.course.code === 'string' &&
+    typeof body.course.name === 'string' &&
+    Array.isArray(body.items) &&
+    body.items.every(validList)
+  )
+    return body as { course: { id: string; code: string; name: string }; items: ReadingList[] };
+  throw new Error('Invalid reading lists.');
+}
+export async function myReadingList(courseId: string, signal: AbortSignal) {
+  const body: unknown = await (await apiRequest(`${path(courseId)}/mine`, { signal })).json();
+  if (record(body) && (body.item === null || validList(body.item))) return body.item;
+  throw new Error('Invalid reading list.');
+}
+export async function saveReadingList(
+  courseId: string,
+  data: { title: string; published: boolean; revision: number; items: ReadingDraftItem[] },
+) {
+  const token = await csrfToken();
+  const body: unknown = await (
+    await apiRequest(`${path(courseId)}/mine`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+      body: JSON.stringify(data),
+    })
+  ).json();
+  if (record(body) && validList(body.item)) return body.item;
+  throw new Error('Invalid reading list.');
+}
+export function readingListError(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 401) {
+      window.location.replace('/login');
+      return 'Phiên đăng nhập đã hết hạn.';
+    }
+    const codes: Record<string, string> = {
+      STALE_REVISION: 'Danh sách đã thay đổi ở lượt khác. Tải lại để đối chiếu trước khi lưu.',
+      DUPLICATE_ITEM: 'Mỗi phiên bản chỉ xuất hiện một lần trong danh sách.',
+      ITEM_UNAVAILABLE:
+        'Có tài liệu không thuộc môn này hoặc không còn đọc được. Bỏ mục đó rồi lưu lại.',
+      ASSIGNMENT_REQUIRED: 'Bạn không còn được phân công môn này.',
+    };
+    if (error.code && codes[error.code]) return codes[error.code];
+    if (error.status === 404) return 'Không tìm thấy môn học hoặc môn đã ngừng hoạt động.';
+    if (error.status === 403) return 'Bạn không có quyền với danh sách này.';
+    if (error.status === 400) return 'Kiểm tra tiêu đề, phần và ghi chú (tối đa 100 mục).';
+  }
+  return 'Chưa kết nối được máy chủ. Kiểm tra mạng rồi thử lại.';
+}
