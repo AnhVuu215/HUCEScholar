@@ -30,7 +30,9 @@ test('guide switches role by keyboard and explains the current reader honestly',
   );
   await page.getByText('Đã đọc và ghi chú trên PDF được chưa?', { exact: true }).click();
   await expect(
-    page.getByText('Đã có kho học liệu và trình đọc PDF cho tài khoản được cấp.', { exact: false }),
+    page.getByText('Đã có kho học liệu và trình đọc PDF cho tài khoản đã xác minh.', {
+      exact: false,
+    }),
   ).toBeVisible();
   await expect(
     page.getByText('tô sáng đoạn chữ trên PDF có lớp văn bản', { exact: false }),
