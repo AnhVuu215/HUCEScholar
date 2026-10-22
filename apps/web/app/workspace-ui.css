@@ -496,6 +496,23 @@
   margin-bottom: 16px;
 }
 
+/* VERSION-01: an earlier version points to the current one. */
+.version-notice {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--control-radius);
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.version-notice p {
+  margin: 0;
+}
+
 /* CAL-01: private study calendar. */
 .calendar-color-blue {
   --cal-bg: #e3eefb;
