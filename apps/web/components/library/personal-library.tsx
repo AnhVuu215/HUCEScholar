@@ -125,6 +125,17 @@ export function PersonalLibrary() {
                             Phiên bản {material.versionNo} ·{' '}
                             {material.current ? 'Bản công bố hiện hành' : 'Bản công bố trước'}
                           </p>
+                          {material.currentVersion && (
+                            <p className="field-hint">
+                              Đã có phiên bản {material.currentVersion.versionNo}; ghi chú của bạn
+                              vẫn ở phiên bản {material.versionNo}.{' '}
+                              <Link
+                                href={`/workspace/library/versions/${encodeURIComponent(material.currentVersion.versionId)}`}
+                              >
+                                Mở phiên bản {material.currentVersion.versionNo}
+                              </Link>
+                            </p>
+                          )}
                           {kind === 'recent' && <p>Đã đọc đến trang {entry.pageNumber}</p>}
                           <p className="field-hint">
                             {kind === 'saved' ? 'Đã lưu' : 'Đã đọc'} ·{' '}
