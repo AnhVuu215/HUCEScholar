@@ -655,11 +655,25 @@ model calendar_items {
   revision Int @default(1)
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
+  repeat_days Int? @db.SmallInt
+  repeat_until DateTime? @db.Date
+  repeat_utc_offset Int? @db.SmallInt
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document_versions document_versions? @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  calendar_item_skips calendar_item_skips[]
   @@unique([user_id, request_id], map: "ux_calendar_request")
   @@index([user_id, starts_at, id], map: "ix_calendar_owner_time")
   @@index([user_id, starts_at, id], map: "ix_calendar_open_tasks", where: raw("(((kind)::text = 'TASK'::text) AND (done_at IS NULL))"))
   @@index([version_id], map: "ix_calendar_version")
+  @@index([user_id, repeat_until], map: "ix_calendar_series", where: raw("(repeat_days IS NOT NULL)"))
+  @@schema("hucescholar")
+}
+
+model calendar_item_skips {
+  item_id BigInt
+  occurrence_start DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  calendar_items calendar_items @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  @@id([item_id, occurrence_start])
   @@schema("hucescholar")
 }

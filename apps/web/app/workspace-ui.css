@@ -954,6 +954,41 @@
   }
 }
 
+/* CAL-02: weekly repeat, drag and drop, shortcuts. */
+.calendar-shortcuts {
+  margin: 0;
+}
+.calendar-repeat {
+  display: grid;
+  gap: 8px;
+}
+.calendar-weekdays label {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-height: 32px;
+}
+.calendar-chip[draggable='true'],
+.calendar-session[draggable='true'],
+.calendar-task-list li[draggable='true'] {
+  cursor: grab;
+}
+.calendar-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.calendar-tasks.is-drop-target,
+.calendar-week-strip > .is-drop-target,
+.calendar-day-column.is-drop-target,
+.calendar-month-cell.is-drop-target {
+  outline: 2px dashed var(--focus);
+  outline-offset: -2px;
+}
+
 /* AUTH-04: role choice on the sign-up completion form. */
 .signup-roles {
   display: grid;

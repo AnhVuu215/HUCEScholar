@@ -989,6 +989,275 @@ describe('private material drafts', () => {
       }
     });
   });
+  describe('CAL-02 weekly repeat', () => {
+    const items = '/api/v1/calendar/items';
+    // Monday 1 March 2027, 07:00–08:30 in Hanoi (UTC+7); away from the CAL-01 dates.
+    const monday = '2027-03-01T00:00:00.000Z';
+    const series = (overrides: object = {}, repeat: object = {}) => ({
+      kind: 'EVENT',
+      title: 'Học nhóm Cơ học',
+      details: '',
+      startsAt: monday,
+      endsAt: '2027-03-01T01:30:00.000Z',
+      allDay: false,
+      color: 'orange',
+      versionId: null,
+      pageNumber: null,
+      repeat: { weekdays: [1, 3], until: '2027-03-17', utcOffset: 420, ...repeat },
+      requestId: randomUUID(),
+      ...overrides,
+    });
+    const edit = (overrides: object, revision: number, repeat: object = {}) => {
+      const body: Record<string, unknown> = { ...series(overrides, repeat), revision };
+      delete body.requestId;
+      return body;
+    };
+    /** Occurrences of one item between 1 and 22 March 2027, by start time. */
+    const sessions = async (id: string) =>
+      (
+        await agents.student.get(
+          `${items}?from=${encodeURIComponent(monday)}&to=${encodeURIComponent('2027-03-22T00:00:00.000Z')}`,
+        )
+      ).body.items.filter((i: { id: string }) => i.id === id);
+    const starts = async (id: string) =>
+      (await sessions(id)).map((i: { startsAt: string }) => i.startsAt);
+    const action = (id: string, name: string, body: object) =>
+      readingWrite('student', `${items}/${id}/${name}`, body);
+
+    it('lists each weekly session by local weekday and validates the series in the API and the database', async () => {
+      const created = await readingWrite('student', items, series());
+      expect(created.status).toBe(201);
+      expect(created.body.item).toMatchObject({
+        startsAt: monday,
+        occurrenceStart: null,
+        repeat: {
+          weekdays: [1, 3],
+          until: '2027-03-17',
+          startsAt: monday,
+          endsAt: '2027-03-01T01:30:00.000Z',
+        },
+      });
+      const found = await sessions(created.body.item.id);
+      expect(found.map((i: { startsAt: string }) => i.startsAt)).toEqual([
+        '2027-03-01T00:00:00.000Z',
+        '2027-03-03T00:00:00.000Z',
+        '2027-03-08T00:00:00.000Z',
+        '2027-03-10T00:00:00.000Z',
+        '2027-03-15T00:00:00.000Z',
+        '2027-03-17T00:00:00.000Z',
+      ]);
+      expect(found[1]).toMatchObject({
+        endsAt: '2027-03-03T01:30:00.000Z',
+        occurrenceStart: '2027-03-03T00:00:00.000Z',
+        repeat: { startsAt: monday },
+      });
+      // A window that starts mid-series still finds the sessions inside it, and only those.
+      const window = await agents.student.get(
+        `${items}?from=${encodeURIComponent('2027-03-09T00:00:00.000Z')}&to=${encodeURIComponent('2027-03-11T00:00:00.000Z')}`,
+      );
+      expect(
+        window.body.items
+          .filter((i: { id: string }) => i.id === created.body.item.id)
+          .map((i: { startsAt: string }) => i.startsAt),
+      ).toEqual(['2027-03-10T00:00:00.000Z']);
+      // Another account sees nothing of the series.
+      expect(
+        (
+          await agents.other.get(
+            `${items}?from=${encodeURIComponent(monday)}&to=${encodeURIComponent('2027-03-22T00:00:00.000Z')}`,
+          )
+        ).body.items,
+      ).toEqual([]);
+      for (const body of [
+        series({ kind: 'TASK', endsAt: null }),
+        series({}, { weekdays: [3] }),
+        series({}, { until: '2027-02-28' }),
+        series({}, { until: '2028-03-02' }),
+        series({}, { until: '2027-02-30' }),
+        series({}, { until: '17/03/2027' }),
+        series({}, { weekdays: [] }),
+        series({}, { weekdays: [0, 1] }),
+        series({}, { weekdays: [1, 8] }),
+        series({}, { weekdays: [1, 1] }),
+        series({}, { utcOffset: 900 }),
+        series({}, { every: 2 }),
+      ])
+        expect((await readingWrite('student', items, body)).status).toBe(400);
+      // Hanoi Monday 06:30 is Sunday 23:30 UTC: the weekday follows the saved offset.
+      expect(
+        (
+          await readingWrite(
+            'student',
+            items,
+            series({ startsAt: '2027-02-28T23:30:00.000Z', endsAt: '2027-03-01T00:30:00.000Z' }),
+          )
+        ).status,
+      ).toBe(201);
+      expect(
+        (
+          await readingWrite(
+            'student',
+            items,
+            series(
+              { startsAt: '2027-02-28T23:30:00.000Z', endsAt: '2027-03-01T00:30:00.000Z' },
+              { utcOffset: 0 },
+            ),
+          )
+        ).status,
+      ).toBe(400);
+      expect(
+        (await readingWrite('student', items, series({}, { until: '2028-03-01' }))).status,
+      ).toBe(201);
+      await expect(
+        db.query(
+          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'TASK','x',$2,1,'2027-03-17',420)",
+          [users.student, monday],
+        ),
+      ).rejects.toThrow(/ck_calendar_repeat_shape/);
+      await expect(
+        db.query(
+          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,4,'2027-03-17',420)",
+          [users.student, monday, '2027-03-01T01:00:00.000Z'],
+        ),
+      ).rejects.toThrow(/ck_calendar_repeat_start/);
+      await expect(
+        db.query(
+          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,1,'2028-03-02',420)",
+          [users.student, monday, '2027-03-01T01:00:00.000Z'],
+        ),
+      ).rejects.toThrow(/ck_calendar_repeat_start/);
+    });
+
+    it('skips and detaches one session atomically; whole-series timing edits clear the skips', async () => {
+      const id = (await readingWrite('student', items, series())).body.item.id;
+      const wednesday = '2027-03-03T00:00:00.000Z';
+      const skip = await action(id, 'skip', { revision: 1, occurrenceStart: wednesday });
+      expect(skip.status).toBe(204);
+      // Skipping again changes nothing, even with the old revision.
+      expect((await action(id, 'skip', { revision: 1, occurrenceStart: wednesday })).status).toBe(
+        204,
+      );
+      expect(await starts(id)).not.toContain(wednesday);
+      expect((await sessions(id))[0].revision).toBe(2);
+      for (const occurrenceStart of ['2027-03-02T00:00:00.000Z', '2027-03-08T00:30:00.000Z'])
+        expect((await action(id, 'skip', { revision: 2, occurrenceStart })).status).toBe(400);
+      const stale = await action(id, 'skip', {
+        revision: 1,
+        occurrenceStart: '2027-03-10T00:00:00.000Z',
+      });
+      expect(stale.status).toBe(409);
+      expect(stale.body.code).toBe('CALENDAR_CONFLICT');
+      expect(
+        (
+          await readingWrite('other', `${items}/${id}/skip`, {
+            revision: 2,
+            occurrenceStart: '2027-03-10T00:00:00.000Z',
+          })
+        ).status,
+      ).toBe(404);
+      const single = (await readingWrite('student', items, series({ repeat: null }))).body.item;
+      expect(
+        (await action(single.id, 'skip', { revision: 1, occurrenceStart: monday })).status,
+      ).toBe(400);
+
+      // "Chỉ buổi này": the 8 March session moves to Tuesday 9 March as its own item.
+      const requestId = randomUUID();
+      const moved = {
+        ...series({
+          title: 'Buổi bù',
+          startsAt: '2027-03-09T02:00:00.000Z',
+          endsAt: '2027-03-09T03:00:00.000Z',
+          repeat: null,
+          requestId,
+        }),
+        revision: 2,
+        occurrenceStart: '2027-03-08T00:00:00.000Z',
+      };
+      const detached = await action(id, 'detach', moved);
+      expect(detached.status).toBe(201);
+      expect(detached.body.item).toMatchObject({
+        title: 'Buổi bù',
+        startsAt: '2027-03-09T02:00:00.000Z',
+        repeat: null,
+        occurrenceStart: null,
+        revision: 1,
+      });
+      expect(detached.body.item.id).not.toBe(id);
+      // A retry returns the same item instead of detaching twice.
+      expect((await action(id, 'detach', moved)).body.item.id).toBe(detached.body.item.id);
+      expect(await starts(id)).toEqual([
+        '2027-03-01T00:00:00.000Z',
+        '2027-03-10T00:00:00.000Z',
+        '2027-03-15T00:00:00.000Z',
+        '2027-03-17T00:00:00.000Z',
+      ]);
+      expect(await starts(detached.body.item.id)).toEqual(['2027-03-09T02:00:00.000Z']);
+      expect((await sessions(id))[0].revision).toBe(3);
+      for (const body of [
+        {
+          ...moved,
+          requestId: randomUUID(),
+          repeat: { weekdays: [2], until: '2027-03-17', utcOffset: 420 },
+        },
+        {
+          ...moved,
+          requestId: randomUUID(),
+          revision: 3,
+          occurrenceStart: '2027-03-11T00:00:00.000Z',
+        },
+      ])
+        expect((await action(id, 'detach', body)).status).toBe(400);
+      expect(
+        (
+          await action(id, 'detach', {
+            ...moved,
+            requestId: randomUUID(),
+            revision: 3,
+            occurrenceStart: wednesday,
+          })
+        ).status,
+      ).toBe(409);
+
+      // Renaming the series keeps its skips; changing its last date clears them.
+      const renamed = await readingWrite(
+        'student',
+        `${items}/${id}`,
+        edit({ title: 'Đổi tên' }, 3),
+        'patch',
+      );
+      expect(renamed.status).toBe(200);
+      expect(await starts(id)).not.toContain(wednesday);
+      const longer = await readingWrite(
+        'student',
+        `${items}/${id}`,
+        edit({ title: 'Đổi tên' }, 4, { until: '2027-03-22' }),
+        'patch',
+      );
+      expect(longer.status).toBe(200);
+      expect(await starts(id)).toEqual([
+        '2027-03-01T00:00:00.000Z',
+        '2027-03-03T00:00:00.000Z',
+        '2027-03-08T00:00:00.000Z',
+        '2027-03-10T00:00:00.000Z',
+        '2027-03-15T00:00:00.000Z',
+        '2027-03-17T00:00:00.000Z',
+      ]);
+      // The detached session stays its own item; deleting the series removes its skips.
+      expect(await starts(detached.body.item.id)).toHaveLength(1);
+      await action(id, 'skip', { revision: 5, occurrenceStart: wednesday });
+      expect(
+        (await readingWrite('student', `${items}/${id}`, { revision: 6 }, 'delete')).status,
+      ).toBe(204);
+      expect(
+        (
+          await db.query(
+            'SELECT count(*)::int n FROM hucescholar.calendar_item_skips WHERE item_id=$1',
+            [id],
+          )
+        ).rows[0].n,
+      ).toBe(0);
+    });
+  });
   it('study cards are private, keep their source after the highlight is deleted, and follow read access', async () => {
     const { path, id, versionId } = await readingFixture();
     const highlight = (
