@@ -193,4 +193,19 @@ describe('account recovery by email (AUTH-03)', () => {
       statuses.push((await post(browser, 'password-recovery', { email: email('missing') })).status);
     expect(statuses).toEqual([202, 202, 202, 202, 202, 429]);
   });
+
+  it('limits completion per link, not for everyone at once', async () => {
+    const browser = request.agent(app.getHttpServer());
+    const attempt = (token: string) =>
+      post(browser, 'password-recovery/complete', { token, newPassword });
+    // Different links from one address are judged separately (the address cap is 20).
+    for (let i = 0; i < 6; i++)
+      expect((await attempt(randomBytes(32).toString('base64url'))).body.code).toBe(
+        'RESET_TOKEN_INVALID',
+      );
+    const guessed = randomBytes(32).toString('base64url');
+    const statuses = [];
+    for (let i = 0; i < 6; i++) statuses.push((await attempt(guessed)).status);
+    expect(statuses).toEqual([400, 400, 400, 400, 400, 429]);
+  });
 });
