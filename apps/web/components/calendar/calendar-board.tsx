@@ -203,15 +203,24 @@ export function CalendarBoard() {
     setNotice('');
     setEditor((v) => ({ item: null, draft, seq: (v?.seq ?? 0) + 1 }));
   }
+  /** Ticks show at once; a failed request reloads to put the box back as the server has it. */
+  function mark(id: string, done: boolean) {
+    const apply = <T extends { items: CalendarItem[] }>(v: T | null) =>
+      v && { ...v, items: v.items.map((i) => (i.id === id ? { ...i, done } : i)) };
+    setRange(apply);
+    setTasks(apply);
+  }
   async function toggle(item: CalendarItem, done: boolean) {
     setBusy(true);
     setError('');
+    mark(item.id, done);
     try {
       await setCalendarDone(item, done);
       setNotice(done ? `Đã xong: ${item.title}` : `Mở lại: ${item.title}`);
       reload();
     } catch (failure) {
       setError(calendarError(failure));
+      reload();
     } finally {
       setBusy(false);
     }
