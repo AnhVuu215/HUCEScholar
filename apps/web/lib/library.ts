@@ -21,6 +21,8 @@ export interface LibraryItem {
   byteSize: number;
   sourceFile?: { name: string; byteSize: number; format: 'DOCX' } | null;
   courses: { id: string; code: string; name: string }[];
+  /** Set only on an earlier version whose document's current version is readable. */
+  currentVersion?: { versionId: string; versionNo: number; title: string } | null;
 }
 export interface LibraryList {
   items: LibraryItem[];
@@ -61,6 +63,17 @@ export function isLibraryItem(value: unknown): value is LibraryItem {
         'byteSize' in r.sourceFile &&
         Number.isSafeInteger(r.sourceFile.byteSize))) &&
     (r.rightsValidUntil === null || typeof r.rightsValidUntil === 'string') &&
+    (r.currentVersion == null ||
+      (r.current === false &&
+        typeof r.currentVersion === 'object' &&
+        'versionId' in r.currentVersion &&
+        typeof r.currentVersion.versionId === 'string' &&
+        /^[1-9]\d*$/.test(r.currentVersion.versionId) &&
+        r.currentVersion.versionId !== r.versionId &&
+        'versionNo' in r.currentVersion &&
+        Number.isSafeInteger(r.currentVersion.versionNo) &&
+        'title' in r.currentVersion &&
+        typeof r.currentVersion.title === 'string')) &&
     Array.isArray(r.courses) &&
     r.courses.every(
       (c) =>

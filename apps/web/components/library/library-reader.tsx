@@ -20,6 +20,7 @@ import { useReadingProgress } from './use-reading-progress';
 import { SaveMaterial } from './save-material';
 import { ReaderReport } from './reader-report';
 import { ScheduleReading } from '../calendar/schedule-reading';
+import { CurrentVersionNotice } from './current-version-notice';
 import { ReaderHighlights } from './reader-highlights';
 import type { HighlightSurface } from '../../lib/highlight-geometry';
 import { SelectField } from '../ui/select-field';
@@ -408,6 +409,12 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                     {item.authors || 'Chưa ghi tác giả'} · Phiên bản {item.versionNo}
                     {!item.current ? ' · Bản công bố trước' : ''}
                   </p>
+                  {item.currentVersion && (
+                    <CurrentVersionNotice
+                      versionNo={item.versionNo}
+                      current={item.currentVersion}
+                    />
+                  )}
                   <SaveMaterial key={item.documentId} documentId={item.documentId} />
                   <ReaderReport key={item.versionId} versionId={item.versionId} />
                   <ScheduleReading
