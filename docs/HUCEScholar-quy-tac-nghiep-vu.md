@@ -12,7 +12,7 @@ Người đề xuất đã chốt các phương án A01–A06 sau khi rà soát 
 
 | Mã | Chính sách MVP đã chốt |
 |---|---|
-| A01 | Admin cấp hoặc xác minh tài khoản từ danh sách hợp lệ; chưa tự đăng ký, chưa SSO. |
+| A01 | Admin cấp hoặc xác minh tài khoản. Từ 22/10/2026 (AUTH-04), sinh viên và giảng viên tự đăng ký qua liên kết gửi email, tự chọn role, không cần admin duyệt; ADMIN chỉ do admin cấp. Giảng viên tự đăng ký chỉ đăng học liệu cho môn admin đã phân công. Chưa SSO. |
 | A02 | Giảng viên tự công bố PDF SAFE của mình; không cần admin duyệt hoặc khai báo căn cứ quyền. Nguồn tham khảo tùy chọn. |
 | A03 | Tài khoản đã xác minh xem được học liệu đã công bố theo quyền tài liệu; chưa giới hạn theo lớp hoặc môn đăng ký. |
 | A04 | Sinh viên gửi tài liệu bổ sung có duyệt; không sửa giáo trình giảng viên. |

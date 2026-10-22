@@ -1,5 +1,5 @@
 import { IsString, MaxLength, MinLength, ValidateBy } from 'class-validator';
-const utf16Bound = () =>
+export const utf16Bound = () =>
   ValidateBy({
     name: 'utf16Bound',
     validator: {

@@ -42,12 +42,13 @@ export default function LoginPage() {
         <div className="auth-box">
           <h1>Đăng nhập</h1>
           <p className="auth-description">
-            Chào bạn trở lại. Sử dụng tài khoản đã được cấp và xác minh để vào không gian của mình.
+            Chào bạn trở lại. Đăng nhập bằng tài khoản đã xác minh để vào không gian của mình.
           </p>
           <LoginForm />
           <p className="account-help">
-            <Link href="/forgot-password">Quên mật khẩu?</Link> Đặt lại qua email. Chưa có tài khoản
-            hoặc tài khoản bị khóa? Liên hệ quản trị viên học liệu.
+            Chưa có tài khoản? <Link href="/signup">Đăng ký</Link> bằng email.{' '}
+            <Link href="/forgot-password">Quên mật khẩu?</Link> Đặt lại qua email. Tài khoản bị
+            khóa? Liên hệ quản trị viên học liệu.
           </p>
           <Link className="project-link" href="/project">
             Xem tiến độ dự án

@@ -35,7 +35,7 @@ export default function Page() {
         <div className="auth-box">
           <h1>Quên mật khẩu</h1>
           <p className="auth-description">
-            Nhập email đã được cấp. Nếu email thuộc một tài khoản đang hoạt động, bạn sẽ nhận thư
+            Nhập email của tài khoản. Nếu email thuộc một tài khoản đang hoạt động, bạn sẽ nhận thư
             hướng dẫn. Tài khoản bị khóa hoặc chưa xác minh cần liên hệ quản trị viên.
           </p>
           <RecoveryRequestForm />
