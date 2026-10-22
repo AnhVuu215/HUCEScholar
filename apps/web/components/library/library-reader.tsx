@@ -19,6 +19,7 @@ import { quadBounds } from '../../lib/highlight-geometry';
 import { useReadingProgress } from './use-reading-progress';
 import { SaveMaterial } from './save-material';
 import { ReaderReport } from './reader-report';
+import { ScheduleReading } from '../calendar/schedule-reading';
 import { CurrentVersionNotice } from './current-version-notice';
 import { ReaderHighlights } from './reader-highlights';
 import type { HighlightSurface } from '../../lib/highlight-geometry';
@@ -416,6 +417,13 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                   )}
                   <SaveMaterial key={item.documentId} documentId={item.documentId} />
                   <ReaderReport key={item.versionId} versionId={item.versionId} />
+                  <ScheduleReading
+                    key={`schedule-${item.versionId}`}
+                    versionId={item.versionId}
+                    pageNumber={page}
+                    title={item.title}
+                    disabled={invalidLink}
+                  />
                   <div className="reader-toolbar" aria-label="Điều khiển đọc PDF">
                     <button
                       className="secondary-button"
