@@ -34,7 +34,7 @@ Các FK dùng RESTRICT để tránh xóa dây chuyền file, phiên bản và d�
 
 ## users
 
-Tài khoản nội bộ; một role chính cho MVP, chưa có SSO hoặc tự đăng ký.
+Tài khoản nội bộ; một role chính cho MVP, chưa có SSO. Sinh viên và giảng viên có thể tự đăng ký qua `signup_tokens` (AUTH-04); khi đó `verified_at` là lúc xác nhận email và `verified_by` NULL.
 
 | Trường | Kiểu | Khóa | Null | Ý nghĩa |
 |---|---|---|---|---|
@@ -87,6 +87,21 @@ Token đặt lại mật khẩu một lần; không thay đổi trạng thái kh
 Ràng buộc: `CHECK (expires_at > created_at)`; `CHECK (used_at IS NULL OR used_at >= created_at)`
 
 - `user_id` → `users.id`
+
+## signup_tokens
+
+Migration `202610220002_signup_tokens` (AUTH-04). Token tự đăng ký một lần gửi tới email; tài khoản chỉ được tạo khi dùng token, nên không có tài khoản chờ xác nhận.
+
+| Trường | Kiểu | Khóa | Null | Ý nghĩa |
+|---|---|---|---|---|
+| id | bigint | PK | Không | Khóa chính do database cấp |
+| email | varchar(254) | — | Không | Email nhận liên kết, lowercase sau trim |
+| token_hash | varchar(128) | UNIQUE | Không | Hash token; không lưu token gốc |
+| created_at | timestamptz | — | Không | Thời điểm tạo, lưu theo UTC |
+| expires_at | timestamptz | — | Không | Hết hạn sau 24 giờ |
+| used_at | timestamptz | — | Có | Đã dùng, hoặc bị thay bởi liên kết mới hơn |
+
+Ràng buộc: `ck_signup_email`, `ck_signup_expiry (expires_at > created_at)`, `ck_signup_used (used_at IS NULL OR used_at >= created_at)`; index `ix_signup_email(email)`.
 
 ## faculties
 
