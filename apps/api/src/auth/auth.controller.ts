@@ -1,13 +1,14 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsString, MaxLength, MinLength } from 'class-validator';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { CsrfGuard } from './csrf.guard';
 import { AuthenticatedRequest } from './auth.types';
 import { AllowPendingPasswordChange, SessionGuard } from './session.guard';
-import { ChangePasswordDto, ResetPasswordDto } from './change-password.dto';
+import { ChangePasswordDto, ResetPasswordDto, utf16Bound } from './change-password.dto';
 import { RecoveryService } from './recovery.service';
+import { SignupService, type SignupRole } from './signup.service';
 
 class RecoveryRequestDto {
   @Transform(({ value }: { value: unknown }) =>
@@ -16,6 +17,18 @@ class RecoveryRequestDto {
   @IsEmail()
   @MaxLength(254)
   email!: string;
+}
+
+class SignupCompleteDto {
+  @IsString() @MinLength(1) @MaxLength(64) token!: string;
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(150)
+  displayName!: string;
+  /** Admin accounts are only ever issued by an administrator. */
+  @IsIn(['STUDENT', 'LECTURER']) role!: SignupRole;
+  @IsString() @MinLength(16) @utf16Bound() password!: string;
 }
 
 class LoginDto {
@@ -34,6 +47,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly csrf: CsrfGuard,
     private readonly recovery: RecoveryService,
+    private readonly signup: SignupService,
   ) {}
   @Get('csrf') csrfToken(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     return { csrfToken: this.csrf.issue(request, response) };
@@ -61,6 +75,26 @@ export class AuthController {
   @HttpCode(204)
   async completeRecovery(@Body() body: ResetPasswordDto, @Req() request: Request) {
     await this.recovery.complete(body.token, body.newPassword, request.ip ?? '');
+  }
+  /** AUTH-04 step 1. Same 202 whether or not the address already has an account. */
+  @Post('signup')
+  @HttpCode(202)
+  async requestSignup(@Body() body: RecoveryRequestDto, @Req() request: Request) {
+    await this.signup.request(body.email, request.ip ?? '');
+    return {
+      message:
+        'Đã nhận yêu cầu. Thư xác nhận sẽ đến email này trong vài phút; liên kết hết hạn sau 24 giờ.',
+    };
+  }
+  /** AUTH-04 step 2, from the mailed link: creates the account; the user then signs in. */
+  @Post('signup/complete')
+  @HttpCode(204)
+  async completeSignup(@Body() body: SignupCompleteDto, @Req() request: Request) {
+    await this.signup.complete(
+      body.token,
+      { displayName: body.displayName, role: body.role, password: body.password },
+      request.ip ?? '',
+    );
   }
   @Get('me')
   @UseGuards(SessionGuard)

@@ -512,3 +512,36 @@
 .version-notice p {
   margin: 0;
 }
+
+/* AUTH-04: role choice on the sign-up completion form. */
+.signup-roles {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.signup-roles legend {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.signup-roles label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--paper);
+  cursor: pointer;
+}
+.signup-roles label:has(input:checked) {
+  border-color: var(--accent);
+}
+.signup-roles label > span {
+  display: grid;
+  gap: 2px;
+}
+.signup-roles input {
+  margin-top: 4px;
+}

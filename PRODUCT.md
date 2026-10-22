@@ -38,7 +38,7 @@ Tập trung trải nghiệm tìm học liệu, đọc tài liệu điện tử v
 
 ## Capabilities and Constraints
 
-- Ba role ADMIN, LECTURER, STUDENT; tài khoản do admin cấp/xác minh, không tự đăng ký hoặc SSO trong MVP.
+- Ba role ADMIN, LECTURER, STUDENT. Quyết định 22/10/2026 (AUTH-04): sinh viên và giảng viên tự đăng ký bằng email, chọn role sau khi mở liên kết xác nhận, không cần admin duyệt. Tài khoản ADMIN chỉ do admin cấp. Admin vẫn cấp được mọi role. Chưa có SSO.
 - Quyết định mới14/10/2026: giảng viên tự công bố PDF sau khi quét SAFE, không cần admin duyệt. Nguồn tham khảo tùy chọn, không có ô căn cứ quyền bắt buộc. Tài liệu sinh viên vẫn qua kiểm duyệt; admin không biên soạn thay giáo trình.
 - Tài liệu sinh viên bổ sung tách biệt với giáo trình giảng viên. Chưa hạn chế đọc theo lớp đăng ký.
 - Đọc/tải phụ thuộc quyền nguồn, file an toàn, phiên bản được duyệt và tài liệu không bị ẩn.
