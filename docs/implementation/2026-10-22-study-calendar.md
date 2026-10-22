@@ -45,13 +45,18 @@ Máy local lượt này (Windows) **không có Node 24 và Docker** (Node trên 
 - 107 unit test API (17 suite)
 - `nest build` và `next build` (có route `/workspace/calendar`)
 
-**Chưa chạy:**
+**Integration và browser chạy trên CI** (GitHub Actions, PR #29, commit gộp `89fa030` sau khi gộp `main` có VERSION-01): `format:check`, `check`, `test:integration` và `test:e2e` đều đạt; e2e 169 passed, 8 skipped (4,2 phút).
 
-- Integration (`materials.integration.spec.ts`: 4 ca CAL-01 mới; `schema.integration.spec.ts` với số đếm mới). Ca CAL-01 phủ: tạo idempotent, giao khoảng, riêng tư với người khác và admin, CSRF, giới hạn khoảng; kiểm DTO và CHECK; việc chưa có ngày, đặt hoàn thành không tăng revision, thứ tự quá hạn, xung đột revision; gắn tài liệu theo trang, ẩn tài liệu thì giấu tiêu đề, giữ liên kết khi sửa trường khác và qua `keepSource`.
+- Integration (`materials.integration.spec.ts`: 4 ca CAL-01; `schema.integration.spec.ts` với số đếm mới). Ca CAL-01 phủ: tạo idempotent, giao khoảng, riêng tư với người khác và admin, CSRF, giới hạn khoảng; kiểm DTO và CHECK; việc chưa có ngày, đặt hoàn thành không tăng revision, thứ tự quá hạn, xung đột revision; gắn tài liệu theo trang, ẩn tài liệu thì giấu tiêu đề, giữ liên kết khi sửa trường khác và qua `keepSource`.
 - Browser `tests/cal-01.spec.ts`: lên lịch đọc từ reader → Lịch biểu có link đúng trang; thêm nhanh và tick việc; tạo, đổi tên, xóa lịch học trong chế độ Tuần; chế độ Tháng; không tràn ngang ở 1440/390/320px. `workspace-ui.spec.ts` nay đếm admin 11, giảng viên 8, sinh viên 6.
-- Chưa xem giao diện trên trình duyệt thật.
 
-Cần chạy `pnpm test:setup`, `pnpm test:integration` và `pnpm test:e2e` trên máy có Node 24.19 và Docker trước khi gộp.
+CI tìm ra và đã sửa trên nhánh:
+
+- Bước dọn của `materials.integration.spec.ts` chưa xóa `calendar_items`; FK RESTRICT làm xóa phiên bản lỗi, client DB không được đóng và Jest treo tới khi job hết 15 phút.
+- Ô "Hoàn thành" chỉ đổi khi tải lại xong; nay tick hiện ngay, lỗi thì tải lại trạng thái máy chủ.
+- Test e2e trùng tên với dữ liệu của lượt thử trước khi Playwright chạy lại; nay dùng tên riêng mỗi lượt.
+
+Chưa xem giao diện bằng mắt trên trình duyệt thật ngoài các kiểm tra tự động trên.
 
 ## Chưa làm
 
