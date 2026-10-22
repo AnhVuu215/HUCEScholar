@@ -12,7 +12,8 @@ export type WorkspaceSection =
   | 'personal'
   | 'readingLists'
   | 'readingEditor'
-  | 'study';
+  | 'study'
+  | 'calendar';
 export interface WorkspaceLink {
   section: WorkspaceSection;
   href: string;
@@ -35,6 +36,7 @@ export function workspaceNavigation(role: Role): WorkspaceGroup[] {
       },
       { section: 'personal', href: '/workspace/personal-library', label: 'Thư viện của tôi' },
       { section: 'study', href: '/workspace/study', label: 'Thẻ ôn tập' },
+      { section: 'calendar', href: '/workspace/calendar', label: 'Lịch học' },
     ],
   };
   if (role === 'ADMIN')

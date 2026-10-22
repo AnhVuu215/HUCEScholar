@@ -39,9 +39,9 @@ test('library controls align and keep readable targets', async ({ page }) => {
 });
 
 for (const [role, count] of [
-  ['admin', 10],
-  ['lecturer', 7],
-  ['student', 5],
+  ['admin', 11],
+  ['lecturer', 8],
+  ['student', 6],
 ] as const) {
   test(`${role}: grouped navigation and account disclosure preserve destinations`, async ({
     page,
