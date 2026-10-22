@@ -1,6 +1,6 @@
 import { expect, test, type Page } from './helpers/test';
 import { randomUUID } from 'node:crypto';
-import { readerLogin } from './helpers/reader-session';
+import { readerHeaders, readerLogin } from './helpers/reader-session';
 
 const labels = ['Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7', 'CN'];
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -26,6 +26,25 @@ test('weekly sessions repeat, one session changes alone, and drag and drop moves
   const [wednesday, thursday, friday, following] = [2, 3, 4, 7].map((n) => plus(monday, n));
 
   await readerLogin(page, 'student', 'cal2');
+  // This account is only for this test: clear what an earlier attempt left, so overlapping
+  // leftovers do not change the layout the drags below aim at.
+  const headers = await readerHeaders(page);
+  const span = new URLSearchParams({
+    from: plus(monday, -7).toISOString(),
+    to: plus(monday, 21).toISOString(),
+  });
+  const leftovers = new Map<string, number>();
+  for (const url of [`/api/v1/calendar/items?${span}`, '/api/v1/calendar/tasks?limit=100'])
+    for (const item of (await (await page.request.get(url)).json()).items)
+      leftovers.set(item.id, item.revision);
+  for (const [id, revision] of leftovers)
+    expect(
+      (
+        await page.request.delete(`/api/v1/calendar/items/${id}`, { headers, data: { revision } })
+      ).status(),
+    ).toBe(204);
+  // Tall enough that drop points down to 11:00 on the hour grid are on screen.
+  await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto('/workspace/calendar');
   await expect(page.getByRole('heading', { level: 2, name: /–/ })).toBeVisible();
 
@@ -84,6 +103,14 @@ test('weekly sessions repeat, one session changes alone, and drag and drop moves
   ).toBeVisible();
   await expect(block(thursday, `${session} (bù)`)).toContainText('9:00–10:00');
   await expect(block(wednesday, `${session} (bù)`)).toHaveCount(0);
+  // Dragging its bottom edge to 11:00 keeps the start and makes it two hours.
+  await block(thursday, `${session} (bù)`)
+    .locator('.calendar-resize')
+    .dragTo(column(page, thursday), { targetPosition: { x: 20, y: 11 * HOUR_PX } });
+  await expect(
+    page.getByRole('status').filter({ hasText: `Đã đổi giờ: ${session} (bù)` }),
+  ).toBeVisible();
+  await expect(block(thursday, `${session} (bù)`)).toContainText('9:00–11:00');
 
   // An undated task dragged onto Friday 10:00 gets that due time.
   const tasks = page.getByRole('complementary', { name: 'Việc cần làm' });
@@ -104,6 +131,15 @@ test('weekly sessions repeat, one session changes alone, and drag and drop moves
   await expect(entry).toContainText(`Hạn ${label(friday)} 10:00`);
   await expect(page.locator('.calendar-week-strip .calendar-chip', { hasText: task })).toHaveCount(
     1,
+  );
+  // Dropping it back on the panel from the calendar clears the date again.
+  await page
+    .locator('.calendar-week-strip .calendar-chip', { hasText: task })
+    .dragTo(tasks.getByRole('heading', { name: 'Việc cần làm' }));
+  await expect(page.getByRole('status').filter({ hasText: `Đã bỏ ngày: ${task}` })).toBeVisible();
+  await expect(entry).toContainText('Chưa có ngày');
+  await expect(page.locator('.calendar-week-strip .calendar-chip', { hasText: task })).toHaveCount(
+    0,
   );
 
   // The week after still has the series; "Cả chuỗi" shows its first session and deletes it all.

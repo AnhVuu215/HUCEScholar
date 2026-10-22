@@ -392,3 +392,23 @@ export function droppedTimes(
     ? null
     : next;
 }
+/**
+ * New end of a timed session whose bottom edge is dragged to `minutes` on `day`: at least one
+ * step after the start, at most 14 days long. Null when nothing changes or it would be too long.
+ */
+export function resizedTimes(
+  item: CalendarItem,
+  day: Date,
+  minutes: number,
+): Pick<CalendarFields, 'startsAt' | 'endsAt' | 'allDay'> | null {
+  if (item.kind !== 'EVENT' || item.allDay || !item.startsAt) return null;
+  const start = new Date(item.startsAt);
+  const snapped = Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
+  let end = new Date(day);
+  end.setMinutes(Math.min(Math.max(snapped, 0), 24 * 60));
+  if (end <= start) end = new Date(start.getTime() + SNAP_MINUTES * 60_000);
+  if (end.getTime() - start.getTime() > 14 * DAY_MS) return null;
+  return end.toISOString() === item.endsAt
+    ? null
+    : { startsAt: item.startsAt, endsAt: end.toISOString(), allDay: false };
+}

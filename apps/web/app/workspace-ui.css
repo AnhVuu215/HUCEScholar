@@ -973,6 +973,15 @@
 .calendar-task-list li[draggable='true'] {
   cursor: grab;
 }
+.calendar-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.calendar-tasks.is-drop-target,
 .calendar-week-strip > .is-drop-target,
 .calendar-day-column.is-drop-target,
 .calendar-month-cell.is-drop-target {

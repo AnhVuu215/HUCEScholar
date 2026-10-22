@@ -8,6 +8,7 @@ import {
   createCalendarItem,
   detachOccurrence,
   droppedTimes,
+  resizedTimes,
   formatDay,
   formatLongDay,
   formatTime,
@@ -27,6 +28,7 @@ import {
   weekdayLabels,
   whenLabel,
   DAY_MS,
+  type CalendarFields,
   type CalendarItem,
   type CalendarRange,
   type CalendarTasks,
@@ -75,11 +77,21 @@ function sessionStart(anchor: Date, now: Date) {
 }
 /** CAL-02 shortcuts; ignored while typing or inside a form, and with Ctrl/Alt/⌘. */
 const SHORTCUT_HINT =
-  'Phím tắt: T hôm nay · W tuần · M tháng · A lịch biểu · ← → chuyển khoảng · N thêm lịch học. Kéo thả bằng chuột để dời lịch học hoặc đặt hạn cho việc.';
+  'Phím tắt: T hôm nay · W tuần · M tháng · A lịch biểu · ← → chuyển khoảng · N thêm lịch học. Kéo thả bằng chuột: dời lịch học, kéo cạnh dưới để đổi thời lượng, kéo việc lên lịch để đặt hạn hoặc về panel để bỏ ngày.';
 const titleOf = (item: CalendarItem) =>
   `${item.title} · ${whenLabel(item)}${item.repeat ? ` · ${repeatLabel(item.repeat)}` : ''}`;
-/** What is being dragged and, for a session on the hour grid, how far below its start it was held. */
-type Drag = { item: CalendarItem; grabMinutes: number };
+/**
+ * What is being dragged. `move`: the whole item, held `grabMinutes` below its start on the hour
+ * grid. `resize`: the bottom edge of a timed session.
+ */
+type Drag = {
+  item: CalendarItem;
+  grabMinutes: number;
+  mode: 'move' | 'resize';
+  /** Dropping a task back where it came from must not clear its date. */
+  fromPanel: boolean;
+};
+type Times = Pick<CalendarFields, 'startsAt' | 'endsAt' | 'allDay'>;
 /** Timed events split per day; all-day events and tasks go to the strip above the hours. */
 const timed = (item: CalendarItem) => item.kind === 'EVENT' && !item.allDay;
 /** Side-by-side lanes for overlapping sessions within one day, like Google Calendar. */
@@ -190,7 +202,8 @@ export function CalendarBoard() {
   const [now, setNow] = useState(() => new Date());
   const hours = useRef<HTMLDivElement>(null);
   const dragging = useRef<Drag | null>(null);
-  const [dropTarget, setDropTarget] = useState<number | null>(null);
+  /** Day (ms) or 'tasks' under the pointer while dragging, for the dashed outline. */
+  const [dropTarget, setDropTarget] = useState<number | 'tasks' | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const { from, to } = useMemo(() => bounds(view, anchor), [view, anchor]);
   const loaded = range !== null;
@@ -278,8 +291,16 @@ export function CalendarBoard() {
       setBusy(false);
     }
   }
-  function startDrag(event: DragEvent, item: CalendarItem, grabMinutes = 0) {
-    dragging.current = { item, grabMinutes };
+  function startDrag(
+    event: DragEvent,
+    item: CalendarItem,
+    grabMinutes = 0,
+    mode: Drag['mode'] = 'move',
+    fromPanel = false,
+  ) {
+    // A resize handle sits inside a draggable session; only the handle starts this drag.
+    event.stopPropagation();
+    dragging.current = { item, grabMinutes, mode, fromPanel };
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', item.title);
   }
@@ -291,27 +312,51 @@ export function CalendarBoard() {
   function dropZone(day: Date, grid: boolean) {
     return {
       onDragOver(event: DragEvent<HTMLElement>) {
-        if (!dragging.current) return;
+        // A bottom edge only lands on the hour grid.
+        if (!dragging.current || (dragging.current.mode === 'resize' && !grid)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
         if (dropTarget !== day.getTime()) setDropTarget(day.getTime());
       },
       onDrop(event: DragEvent<HTMLElement>) {
         event.preventDefault();
+        event.stopPropagation();
         const held = dragging.current;
         endDrag();
         if (!held) return;
-        const minutes = grid
-          ? ((event.clientY - event.currentTarget.getBoundingClientRect().top) / HOUR_PX) * 60 -
-            held.grabMinutes
-          : null;
-        void move(held.item, day, minutes);
+        const pointer =
+          ((event.clientY - event.currentTarget.getBoundingClientRect().top) / HOUR_PX) * 60;
+        if (held.mode === 'resize') {
+          if (grid) void save(held.item, resizedTimes(held.item, day, pointer), 'Đã đổi giờ');
+        } else
+          void save(
+            held.item,
+            droppedTimes(held.item, day, grid ? pointer - held.grabMinutes : null),
+            'Đã dời',
+          );
       },
     };
   }
+  /** The task panel takes a dated task back and clears its date. */
+  const unschedule = {
+    onDragOver(event: DragEvent<HTMLElement>) {
+      const held = dragging.current;
+      if (!held || held.mode !== 'move' || held.fromPanel) return;
+      if (held.item.kind !== 'TASK' || !held.item.startsAt) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      if (dropTarget !== 'tasks') setDropTarget('tasks');
+    },
+    onDrop(event: DragEvent<HTMLElement>) {
+      event.preventDefault();
+      const held = dragging.current;
+      endDrag();
+      if (held && !held.fromPanel && held.item.kind === 'TASK' && held.item.startsAt)
+        void save(held.item, { startsAt: null, endsAt: null, allDay: false }, 'Đã bỏ ngày');
+    },
+  };
   /** Saves a drop. One session of a series leaves it, like "Chỉ buổi này". */
-  async function move(item: CalendarItem, day: Date, minutes: number | null) {
-    const times = droppedTimes(item, day, minutes);
+  async function save(item: CalendarItem, times: Times | null, verb: string) {
     if (!times) return;
     const { fields, keepSource } = itemFields(item);
     setBusy(true);
@@ -320,7 +365,7 @@ export function CalendarBoard() {
       if (item.occurrenceStart)
         await detachOccurrence(item, { ...fields, ...times }, crypto.randomUUID(), keepSource);
       else await updateCalendarItem(item, { ...fields, ...times }, keepSource);
-      setNotice(`Đã dời: ${item.title}${item.occurrenceStart ? ' (chỉ buổi này)' : ''}`);
+      setNotice(`${verb}: ${item.title}${item.occurrenceStart ? ' (chỉ buổi này)' : ''}`);
     } catch (failure) {
       setError(calendarError(failure));
     } finally {
@@ -548,6 +593,17 @@ export function CalendarBoard() {
                       </strong>
                       <span>{whenLabel(s.item).split(' · ')[1] ?? whenLabel(s.item)}</span>
                       {s.item.material && <span>Trang {s.item.material.pageNumber}</span>}
+                      {/* Only the segment that holds the real end can stretch it. */}
+                      {s.end === itemSpan(s.item).end.getTime() && (
+                        <span
+                          className="calendar-resize"
+                          aria-hidden="true"
+                          title="Kéo để đổi giờ kết thúc"
+                          draggable={!busy}
+                          onClick={(e) => e.stopPropagation()}
+                          onDragStart={(e) => startDrag(e, s.item, 0, 'resize')}
+                        />
+                      )}
                     </button>
                   ))}
                   {sameDay(day, today) && (
@@ -652,7 +708,11 @@ export function CalendarBoard() {
           </div>
         )}
       </section>
-      <aside className="calendar-tasks" aria-labelledby="calendar-tasks-title">
+      <aside
+        className={`calendar-tasks${dropTarget === 'tasks' ? ' is-drop-target' : ''}`}
+        aria-labelledby="calendar-tasks-title"
+        {...unschedule}
+      >
         <h2 id="calendar-tasks-title">Việc cần làm</h2>
         <form className="calendar-quick" onSubmit={quickAdd}>
           <label htmlFor="calendar-quick">Thêm việc nhanh</label>
@@ -683,7 +743,7 @@ export function CalendarBoard() {
                 key={task.id}
                 className={`calendar-color-${task.color}`}
                 draggable={!busy}
-                onDragStart={(e) => startDrag(e, task)}
+                onDragStart={(e) => startDrag(e, task, 0, 'move', true)}
               >
                 <TaskCheck item={task} toggle={toggle} busy={busy} />
                 <div>
