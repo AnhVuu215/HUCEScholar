@@ -106,7 +106,9 @@ export class RecoveryService {
   }
 
   async complete(token: string, newPassword: string, ip: string) {
-    await this.limiter.checkRecovery(ip, 'complete');
+    // Per address and per link. A shared 'complete' key let five attempts anywhere block
+    // every password reset for 15 minutes.
+    await this.limiter.checkRecovery(ip, `complete:${token}`);
     if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw invalid();
     try {
       const hash = await argon2.hash(newPassword, passwordOptions);

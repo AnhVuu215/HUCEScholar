@@ -62,7 +62,7 @@ Migration `202610220002_signup_tokens` (SQL thuần), bảng `signup_tokens`:
 
 Migration cũng sửa comment của `users` và `users.verified_at`.
 
-Test schema trên nhánh này: 31 bảng, 63 FK, 93 CHECK, 10 partial index. Khi gộp cùng CAL-01 (PR #29) cần cộng cả hai: 32 bảng, 65 FK, 101 CHECK, 11 partial index.
+Test schema sau khi gộp `main` có CAL-01 (PR #29): 32 bảng, 65 FK, 101 CHECK, 11 partial index.
 
 ## Kiểm chứng
 
@@ -84,4 +84,4 @@ Máy local lượt này không có Node 24 và Docker. Đã chạy bằng Node 2
 - CAPTCHA hoặc chặn email dùng một lần; hiện chỉ có giới hạn tần suất.
 - Dọn token đã hết hạn định kỳ.
 - Admin lọc riêng tài khoản tự đăng ký; hiện phân biệt qua audit `ACCOUNT_SELF_REGISTERED`.
-- Ghi nhận khác: AUTH-03 giới hạn bước hoàn tất đặt lại mật khẩu bằng khóa chung `'complete'` (`recovery.service.ts`), nên toàn hệ thống chỉ được 5 lần mỗi 15 phút. AUTH-04 dùng khóa theo từng link. AUTH-03 chưa sửa trong lượt này.
+- AUTH-03 từng giới hạn bước hoàn tất đặt lại mật khẩu bằng một khóa chung cho mọi người; đã sửa sang khóa theo từng link ở PR #30, cùng cách AUTH-04 dùng.

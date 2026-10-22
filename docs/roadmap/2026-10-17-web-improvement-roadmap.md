@@ -16,6 +16,8 @@ QA-01 có [pilot local tự động](../implementation/2026-10-21-local-pilot.md
 
 ## Cập nhật 22/10
 
+CAL-01 có [lịch học và việc cần làm riêng](../implementation/2026-10-22-study-calendar.md): ba chế độ Tuần/Tháng/Lịch biểu, panel việc cần làm, buổi học mở đúng trang tài liệu và nút "Lên lịch đọc" trong reader. Lộ trình CAL-02…05 ở [thiết kế](../superpowers/specs/2026-10-22-study-calendar.md).
+
 AUTH-04 mở [tự đăng ký bằng email](../implementation/2026-10-22-self-signup.md) cho sinh viên và giảng viên theo quyết định của chủ dự án; tài khoản Admin vẫn chỉ do admin cấp.
 
 ## Bổ sung yêu cầu V2 ngày 17/10

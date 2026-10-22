@@ -201,6 +201,7 @@ model document_versions {
   version_courses                                              version_courses[]
   reading_list_items reading_list_items[]
   study_cards study_cards[]
+  calendar_items calendar_items[]
 
   @@unique([document_id, id])
   @@unique([document_id, version_no])
@@ -498,6 +499,7 @@ model users {
   visibility_events                                             visibility_events[]
   reading_lists reading_lists[]
   study_cards study_cards[]
+  calendar_items calendar_items[]
 
   @@schema("hucescholar")
 }
@@ -632,5 +634,32 @@ model signup_tokens {
   expires_at DateTime @db.Timestamptz(6)
   used_at DateTime? @db.Timestamptz(6)
   @@index([email], map: "ix_signup_email")
+  @@schema("hucescholar")
+}
+
+/// CAL-01. CHECK constraints and the open-task partial index live in the SQL migration.
+model calendar_items {
+  id BigInt @id @default(autoincrement())
+  request_id String @db.Uuid
+  user_id BigInt
+  kind String @db.VarChar(8)
+  title String @db.VarChar(200)
+  details String @default("") @db.VarChar(2000)
+  starts_at DateTime? @db.Timestamptz(6)
+  ends_at DateTime? @db.Timestamptz(6)
+  all_day Boolean @default(false)
+  done_at DateTime? @db.Timestamptz(6)
+  color String @default("blue") @db.VarChar(8)
+  version_id BigInt?
+  page_number Int?
+  revision Int @default(1)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  document_versions document_versions? @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@unique([user_id, request_id], map: "ux_calendar_request")
+  @@index([user_id, starts_at, id], map: "ix_calendar_owner_time")
+  @@index([user_id, starts_at, id], map: "ix_calendar_open_tasks", where: raw("(((kind)::text = 'TASK'::text) AND (done_at IS NULL))"))
+  @@index([version_id], map: "ix_calendar_version")
   @@schema("hucescholar")
 }
