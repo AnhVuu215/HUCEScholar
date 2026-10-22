@@ -174,6 +174,9 @@ describe('private material drafts', () => {
         await db.query('DELETE FROM hucescholar.study_cards WHERE user_id=ANY($1::bigint[])', [
           ids,
         ]);
+        await db.query('DELETE FROM hucescholar.calendar_items WHERE user_id=ANY($1::bigint[])', [
+          ids,
+        ]);
         await db.query('DELETE FROM hucescholar.reading_lists WHERE owner_id=ANY($1::bigint[])', [
           ids,
         ]);
