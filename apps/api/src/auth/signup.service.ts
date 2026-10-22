@@ -65,6 +65,9 @@ export class SignupService {
   private async deliver(email: string) {
     const token = randomBytes(32).toString('base64url');
     const existing = await this.db.$transaction(async (tx) => {
+      // No user row exists yet to lock; serialize requests for one address so that a newer link
+      // always invalidates an older one even when two deliveries overlap.
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:signup:${email}`}, 0))`;
       const found = await tx.users.findUnique({ where: { email }, select: { status: true } });
       if (found) return found;
       // Only the newest link works.
@@ -129,6 +132,7 @@ export class SignupService {
           FOR UPDATE`;
         if (!rows.length) throw invalid();
         const email = rows[0].email;
+        await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:signup:${email}`}, 0))`;
         await tx.$executeRaw`UPDATE hucescholar.signup_tokens SET used_at=greatest(clock_timestamp(), created_at) WHERE email=${email} AND used_at IS NULL`;
         if (await tx.users.findUnique({ where: { email }, select: { id: true } })) throw taken();
         const user = await tx.users.create({
