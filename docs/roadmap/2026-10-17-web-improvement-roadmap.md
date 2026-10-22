@@ -18,6 +18,8 @@ QA-01 có [pilot local tự động](../implementation/2026-10-21-local-pilot.md
 
 CAL-01 có [lịch học và việc cần làm riêng](../implementation/2026-10-22-study-calendar.md): ba chế độ Tuần/Tháng/Lịch biểu, panel việc cần làm, buổi học mở đúng trang tài liệu và nút "Lên lịch đọc" trong reader. Lộ trình CAL-02…05 ở [thiết kế](../superpowers/specs/2026-10-22-study-calendar.md).
 
+AUTH-04 mở [tự đăng ký bằng email](../implementation/2026-10-22-self-signup.md) cho sinh viên và giảng viên theo quyết định của chủ dự án; tài khoản Admin vẫn chỉ do admin cấp.
+
 ## Bổ sung yêu cầu V2 ngày 17/10
 
 Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.
@@ -37,7 +39,7 @@ Các ràng buộc giữ nguyên:
 - Sinh viên đóng góp tài liệu qua kiểm duyệt; quyền vẫn do API quyết định.
 - Ghi chú và vùng tô riêng theo người/phiên bản/trang; không tự chia sẻ, gửi sang AI hoặc chuyển sang PDF mới.
 - PDF/DOCX giảng viên tối đa25MiB; Word được chuyển PDF, giữ nguồn gốc theo quyền. PPTX/video/DOC và DOCX sinh viên chưa thuộc phạm vi.
-- Không tự đăng ký, SSO, thu thập danh sách lớp thật hoặc kết nối thư viện trường.
+- Không SSO, thu thập danh sách lớp thật hoặc kết nối thư viện trường. Tự đăng ký sinh viên/giảng viên đã mở từ 22/10 (AUTH-04).
 
 ## 2. Hiện trạng và bằng chứng
 

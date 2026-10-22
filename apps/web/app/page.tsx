@@ -309,8 +309,8 @@ export default function HomePage() {
           <div className="landing-section-heading guide-heading">
             <h2 id="guide-heading">Bắt đầu cùng HUCEScholar.</h2>
             <p>
-              Chọn vai trò của bạn để xem những bước đầu tiên. Chỉ cần tài khoản đã được cấp và một
-              trình duyệt.
+              Chọn vai trò của bạn để xem những bước đầu tiên. Chỉ cần một tài khoản và một trình
+              duyệt.
             </p>
           </div>
           <RoleGuide />
@@ -328,18 +328,19 @@ export default function HomePage() {
             <details>
               <summary>Làm thế nào để có tài khoản?</summary>
               <p>
-                Liên hệ quản trị viên của dự án để được cấp và xác minh tài khoản. HUCEScholar chưa
-                mở đăng ký tự do hoặc đăng nhập bằng tài khoản trường.
+                Sinh viên và giảng viên tự <Link href="/signup">đăng ký</Link> bằng email: mở liên
+                kết xác nhận trong thư, chọn vai trò và đặt mật khẩu. Quản trị viên vẫn cấp được tài
+                khoản cho mọi vai trò. Chưa có đăng nhập bằng tài khoản trường.
               </p>
             </details>
             <details>
               <summary>Đã đọc và ghi chú trên PDF được chưa?</summary>
               <p>
-                Đã có kho học liệu và trình đọc PDF cho tài khoản được cấp. Bạn có thể ghi chú riêng
-                theo trang, tô sáng đoạn chữ trên PDF có lớp văn bản và mở lại trang đã đọc sau khi
-                lưu thành công. PDF scan vẫn dùng được ghi chú theo trang. Tài liệu phải đã công bố,
-                an toàn và đang hiển thị; tải bản gốc cần được cho phép riêng. PDF và ghi chú vẫn
-                cần kết nối mạng.
+                Đã có kho học liệu và trình đọc PDF cho tài khoản đã xác minh. Bạn có thể ghi chú
+                riêng theo trang, tô sáng đoạn chữ trên PDF có lớp văn bản và mở lại trang đã đọc
+                sau khi lưu thành công. PDF scan vẫn dùng được ghi chú theo trang. Tài liệu phải đã
+                công bố, an toàn và đang hiển thị; tải bản gốc cần được cho phép riêng. PDF và ghi
+                chú vẫn cần kết nối mạng.
               </p>
             </details>
             <details>
