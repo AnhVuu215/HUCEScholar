@@ -1,10 +1,15 @@
 import { expect, test } from './helpers/test';
+import { randomUUID } from 'node:crypto';
 import { openReaderFixture } from './helpers/reader-session';
 
 test('reading is scheduled from the reader and the calendar manages sessions and tasks', async ({
   page,
 }) => {
   test.setTimeout(90_000);
+  // Unique names keep a retry from matching what an earlier attempt left behind.
+  const run = randomUUID().slice(0, 8);
+  const task = `Nộp báo cáo ${run}`;
+  const session = `Ôn tập nhóm ${run}`;
   const fixture = await openReaderFixture(page, 'cal1');
   await page.getByRole('button', { name: 'Lên lịch đọc', exact: true }).click();
   const schedule = page.getByRole('form', { name: 'Lên lịch đọc' });
@@ -25,37 +30,38 @@ test('reading is scheduled from the reader and the calendar manages sessions and
     'aria-pressed',
     'true',
   );
-  await expect(page.getByRole('button', { name: /^Đọc: / })).toBeVisible();
-  await expect(page.getByRole('link', { name: /· trang 1$/ })).toHaveAttribute(
-    'href',
-    `${fixture.route}?page=1`,
-  );
+  const reading = page
+    .locator('.calendar-agenda li')
+    .filter({ has: page.locator(`a[href="${fixture.route}?page=1"]`) });
+  await expect(reading).toHaveCount(1);
+  await expect(reading.getByRole('button', { name: /^Đọc: / })).toBeVisible();
+  await expect(reading.getByRole('link', { name: /· trang 1$/ })).toBeVisible();
 
   // Quick add makes an undated task; ticking it removes it from the open list.
   const tasks = page.getByRole('complementary', { name: 'Việc cần làm' });
-  await tasks.getByLabel('Thêm việc nhanh', { exact: true }).fill('Nộp báo cáo thí nghiệm');
+  await tasks.getByLabel('Thêm việc nhanh', { exact: true }).fill(task);
   await tasks.getByRole('button', { name: 'Thêm', exact: true }).click();
-  await expect(tasks.getByText('Chưa có ngày')).toBeVisible();
-  await tasks.getByRole('checkbox', { name: 'Hoàn thành: Nộp báo cáo thí nghiệm' }).check();
-  await expect(page.getByRole('status').filter({ hasText: 'Đã xong' })).toBeVisible();
-  await expect(tasks.getByRole('button', { name: 'Nộp báo cáo thí nghiệm' })).toHaveCount(0);
+  await expect(tasks.getByRole('button', { name: task, exact: true })).toBeVisible();
+  await tasks.getByRole('checkbox', { name: `Hoàn thành: ${task}` }).check();
+  await expect(page.getByRole('status').filter({ hasText: `Đã xong: ${task}` })).toBeVisible();
+  await expect(tasks.getByRole('button', { name: task, exact: true })).toHaveCount(0);
 
   // A session made from the toolbar shows in the week grid; edit then delete it.
   await page.getByRole('button', { name: 'Tuần', exact: true }).click();
   await page.getByRole('button', { name: 'Thêm lịch học', exact: true }).click();
   const editor = page.getByRole('form', { name: 'Thêm lịch học' });
   await expect(editor.getByLabel('Tiêu đề', { exact: true })).toBeFocused();
-  await editor.getByLabel('Tiêu đề', { exact: true }).fill('Ôn tập nhóm');
+  await editor.getByLabel('Tiêu đề', { exact: true }).fill(session);
   await editor.getByRole('radio', { name: 'Tím' }).check();
   await editor.getByRole('button', { name: 'Lưu', exact: true }).click();
-  const session = page.locator('.calendar-session', { hasText: 'Ôn tập nhóm' });
-  await expect(session).toBeVisible();
-  await expect(session).toHaveClass(/calendar-color-purple/);
-  await session.click();
+  const block = page.locator('.calendar-session', { hasText: session });
+  await expect(block).toBeVisible();
+  await expect(block).toHaveClass(/calendar-color-purple/);
+  await block.click();
   const edit = page.getByRole('form', { name: 'Sửa lịch học' });
-  await edit.getByLabel('Tiêu đề', { exact: true }).fill('Ôn tập nhóm (đổi giờ)');
+  await edit.getByLabel('Tiêu đề', { exact: true }).fill(`${session} (đổi tên)`);
   await edit.getByRole('button', { name: 'Lưu', exact: true }).click();
-  const renamed = page.locator('.calendar-session', { hasText: 'Ôn tập nhóm (đổi giờ)' });
+  const renamed = page.locator('.calendar-session', { hasText: `${session} (đổi tên)` });
   await expect(renamed).toBeVisible();
   await renamed.click();
   await page.getByRole('button', { name: 'Xóa', exact: true }).click();
