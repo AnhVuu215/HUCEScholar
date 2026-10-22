@@ -74,7 +74,7 @@ Không có kiểu "buổi này và các buổi sau". Muốn dừng chuỗi từ 
 
 ### Kéo thả
 
-- Dùng kéo thả của trình duyệt (chuột, bàn di). **Không có trên màn hình cảm ứng.** Form sửa vẫn là cách làm được với bàn phím và cảm ứng.
+- **Chỉ làm cho bản web dùng chuột hoặc bàn di**, theo quyết định của chủ dự án: làm xong bản web trước. Kéo thả trên màn hình cảm ứng không nằm trong CAL-02. Form sửa vẫn làm được mọi việc bằng bàn phím.
 - **Lịch học trên lưới giờ:**
   - kéo sang giờ hoặc ngày khác, giữ thời lượng, bước 15 phút
   - thả vào dải "Cả ngày" hoặc ô của chế độ Tháng: giữ giờ, đổi ngày
@@ -84,7 +84,8 @@ Không có kiểu "buổi này và các buổi sau". Muốn dừng chuỗi từ 
   - thả vào dải "Cả ngày" hoặc ô tháng: đổi ngày, giữ giờ hạn nếu có, còn không thì hạn cả ngày
   - việc chưa có ngày kéo lên lịch như vậy
 - Kéo một buổi của chuỗi chỉ dời buổi đó (tách), như "Chỉ buổi này".
-- **Chưa có:** kéo cạnh dưới để đổi thời lượng; kéo ngược về panel để bỏ ngày.
+- **Kéo cạnh dưới** của lịch học trên lưới giờ để đổi giờ kết thúc (bước 15 phút, ít nhất 15 phút, tối đa 14 ngày). Với lịch qua đêm, chỉ khúc chứa giờ kết thúc mới có cạnh kéo.
+- **Kéo việc có hạn từ lịch về panel** "Việc cần làm" để bỏ ngày. Kéo trong panel rồi thả lại panel thì không đổi gì.
 
 ### Phím tắt
 
