@@ -11,6 +11,15 @@ export const colorLabels: Record<CalendarColor, string> = {
   gray: 'Xám',
 };
 export type CalendarKind = 'EVENT' | 'TASK';
+/** CAL-02 weekly repeat as the API returns it; times are those of the first session. */
+export type CalendarRepeat = {
+  weekdays: number[];
+  until: string;
+  startsAt: string;
+  endsAt: string;
+};
+/** What the form sends: ISO weekdays (1 = Monday), last local date, the device's UTC offset. */
+export type CalendarRepeatInput = { weekdays: number[]; until: string; utcOffset: number };
 export type CalendarItem = {
   id: string;
   kind: CalendarKind;
@@ -25,6 +34,9 @@ export type CalendarItem = {
   /** Present only while the owner can still read the linked version. */
   material: { versionId: string; pageNumber: number; title: string } | null;
   materialUnavailable: boolean;
+  repeat: CalendarRepeat | null;
+  /** Original start of this occurrence of a repeating session; null for a single item. */
+  occurrenceStart: string | null;
   revision: number;
   updatedAt: string;
 };
@@ -38,6 +50,7 @@ export type CalendarFields = {
   color: CalendarColor;
   versionId: string | null;
   pageNumber: number | null;
+  repeat?: CalendarRepeatInput | null;
 };
 export type CalendarRange = { items: CalendarItem[]; truncated: boolean };
 export type CalendarTasks = { items: CalendarItem[]; total: number; page: number; limit: number };
@@ -45,6 +58,17 @@ export type CalendarTasks = { items: CalendarItem[]; total: number; page: number
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
 const id = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 const time = (v: unknown) => v === null || (typeof v === 'string' && !Number.isNaN(Date.parse(v)));
+const repeat = (v: unknown) =>
+  v === null ||
+  (record(v) &&
+    Array.isArray(v.weekdays) &&
+    v.weekdays.every((d) => Number.isInteger(d) && d >= 1 && d <= 7) &&
+    typeof v.until === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(v.until) &&
+    typeof v.startsAt === 'string' &&
+    time(v.startsAt) &&
+    typeof v.endsAt === 'string' &&
+    time(v.endsAt));
 function valid(v: unknown): v is CalendarItem {
   return (
     record(v) &&
@@ -63,6 +87,8 @@ function valid(v: unknown): v is CalendarItem {
         Number.isInteger(v.material.pageNumber) &&
         typeof v.material.title === 'string')) &&
     typeof v.materialUnavailable === 'boolean' &&
+    repeat(v.repeat) &&
+    time(v.occurrenceStart) &&
     Number.isInteger(v.revision) &&
     typeof v.updatedAt === 'string'
   );
@@ -124,6 +150,33 @@ export async function updateCalendarItem(
     ).json(),
   );
 }
+/** "Xóa buổi này": removes one occurrence from its series. */
+export async function skipOccurrence(current: CalendarItem) {
+  await send(`/calendar/items/${encodeURIComponent(current.id)}/skip`, 'POST', {
+    revision: current.revision,
+    occurrenceStart: current.occurrenceStart,
+  });
+}
+/** "Chỉ buổi này": the occurrence leaves its series as a single item with these fields. */
+export async function detachOccurrence(
+  current: CalendarItem,
+  fields: CalendarFields,
+  requestId: string,
+  keepSource = false,
+) {
+  return item(
+    await (
+      await send(`/calendar/items/${encodeURIComponent(current.id)}/detach`, 'POST', {
+        ...fields,
+        ...(keepSource ? { versionId: null, pageNumber: null, keepSource } : {}),
+        repeat: null,
+        requestId,
+        revision: current.revision,
+        occurrenceStart: current.occurrenceStart,
+      })
+    ).json(),
+  );
+}
 export async function setCalendarDone(current: CalendarItem, done: boolean) {
   return item(
     await (
@@ -149,7 +202,7 @@ export function calendarError(error: unknown) {
     if (error.status === 404)
       return 'Mục lịch hoặc tài liệu liên kết không còn khả dụng. Tải lại rồi thử lại.';
     if (error.status === 400)
-      return 'Kiểm tra lại: tiêu đề 1–200 ký tự, giờ kết thúc sau giờ bắt đầu, tối đa 14 ngày.';
+      return 'Kiểm tra lại: tiêu đề 1–200 ký tự, giờ kết thúc sau giờ bắt đầu, tối đa 14 ngày; lặp lại tối đa 366 ngày và gồm thứ của ngày bắt đầu.';
   }
   return 'Chưa xác nhận được với máy chủ. Nội dung vẫn còn trong ô; thử lại.';
 }
@@ -235,4 +288,107 @@ export function overdue(item: CalendarItem, now: Date) {
 }
 export function readerHref(material: { versionId: string; pageNumber: number }) {
   return `/workspace/library/versions/${material.versionId}?page=${material.pageNumber}`;
+}
+
+/** Stable key for one rendered occurrence; a series shares its id across sessions. */
+export function itemKey(item: CalendarItem) {
+  return item.occurrenceStart ? `${item.id}@${item.occurrenceStart}` : item.id;
+}
+/** ISO weekday (1 = Monday … 7 = Sunday) of a local date. */
+export function isoWeekday(date: Date) {
+  return ((date.getDay() + 6) % 7) + 1;
+}
+/** The device's offset in minutes east of UTC, as the API expects for a series. */
+export function utcOffset(date: Date) {
+  return -date.getTimezoneOffset();
+}
+export function repeatLabel(repeat: CalendarRepeat) {
+  const [y, m, d] = repeat.until.split('-').map(Number);
+  const days = repeat.weekdays.map((w) => weekdayLabels[w - 1]).join(', ');
+  return `Lặp hằng tuần: ${days} · đến ${d}/${m}/${y}`;
+}
+/**
+ * An item's own fields, for a move that changes only its time. A withheld link has no ids in the
+ * browser, so the caller sends keepSource instead.
+ */
+export function itemFields(item: CalendarItem): { fields: CalendarFields; keepSource: boolean } {
+  return {
+    fields: {
+      kind: item.kind,
+      title: item.title,
+      details: item.details,
+      startsAt: item.startsAt,
+      endsAt: item.endsAt,
+      allDay: item.allDay,
+      color: item.color,
+      versionId: item.material?.versionId ?? null,
+      pageNumber: item.material?.pageNumber ?? null,
+      repeat: null,
+    },
+    keepSource: item.materialUnavailable,
+  };
+}
+export const SNAP_MINUTES = 15;
+/**
+ * Where a dragged item lands. `minutes` is the slot on the hour grid (already corrected for where
+ * the block was grabbed); null means a day without a time (all-day strip, month cell).
+ */
+export function droppedTimes(
+  item: CalendarItem,
+  day: Date,
+  minutes: number | null,
+): Pick<CalendarFields, 'startsAt' | 'endsAt' | 'allDay'> | null {
+  const at = (m: number) => {
+    const snapped = Math.round(m / SNAP_MINUTES) * SNAP_MINUTES;
+    const clamped = Math.min(Math.max(snapped, 0), 24 * 60 - SNAP_MINUTES);
+    const value = new Date(day);
+    value.setMinutes(clamped);
+    return value;
+  };
+  const start = item.startsAt ? new Date(item.startsAt) : null;
+  let next: Pick<CalendarFields, 'startsAt' | 'endsAt' | 'allDay'>;
+  if (item.kind === 'TASK') {
+    if (minutes !== null)
+      next = { startsAt: at(minutes).toISOString(), endsAt: null, allDay: false };
+    else if (start && !item.allDay) {
+      const due = new Date(day);
+      due.setHours(start.getHours(), start.getMinutes());
+      next = { startsAt: due.toISOString(), endsAt: null, allDay: false };
+    } else next = { startsAt: day.toISOString(), endsAt: null, allDay: true };
+  } else {
+    const end = new Date(item.endsAt!);
+    if (item.allDay && minutes !== null) {
+      const from = at(minutes);
+      next = {
+        startsAt: from.toISOString(),
+        endsAt: new Date(from.getTime() + 3_600_000).toISOString(),
+        allDay: false,
+      };
+    } else if (item.allDay) {
+      // Whole local days, so the span stays midnight to midnight.
+      const shift = Math.round((day.getTime() - startOfDay(start!).getTime()) / DAY_MS);
+      next = {
+        startsAt: addDays(start!, shift).toISOString(),
+        endsAt: addDays(end, shift).toISOString(),
+        allDay: true,
+      };
+    } else {
+      let from: Date;
+      if (minutes !== null) from = at(minutes);
+      else {
+        from = new Date(day);
+        from.setHours(start!.getHours(), start!.getMinutes());
+      }
+      next = {
+        startsAt: from.toISOString(),
+        endsAt: new Date(from.getTime() + end.getTime() - start!.getTime()).toISOString(),
+        allDay: false,
+      };
+    }
+  }
+  return next.startsAt === item.startsAt &&
+    next.endsAt === item.endsAt &&
+    next.allDay === item.allDay
+    ? null
+    : next;
 }

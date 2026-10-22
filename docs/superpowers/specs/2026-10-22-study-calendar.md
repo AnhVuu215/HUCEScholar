@@ -1,6 +1,6 @@
 # CAL — Lịch học và việc cần làm
 
-Trạng thái: thiết kế ngày 22/10/2026. CAL-01 đã triển khai trên nhánh `codex/cal-01-personal-calendar`, xem [mốc CAL-01](../../implementation/2026-10-22-study-calendar.md); CAL-02 trở đi là đề xuất, chưa làm.
+Trạng thái: thiết kế ngày 22/10/2026. CAL-01 đã vào `main` (PR #29), xem [mốc CAL-01](../../implementation/2026-10-22-study-calendar.md). Thiết kế CAL-02 chốt ở [mục riêng](#cal-02--lặp-lại-kéo-thả-phím-tắt), kết quả ở [mốc CAL-02](../../implementation/2026-10-22-calendar-repeat-drag.md); CAL-03 trở đi là đề xuất, chưa làm.
 
 ## Mục tiêu
 
@@ -39,10 +39,83 @@ Chủ dự án muốn tiếp tục bằng lựa chọn khuyến nghị và ghi l
 | Mã         | Phạm vi                                                                                                                                           | Phụ thuộc                      |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | **CAL-01** | Bảng `calendar_items`; API CRUD có revision; Tuần/Tháng/Lịch biểu; panel việc cần làm và thêm nhanh; gắn học liệu/trang; "Lên lịch đọc" từ reader | —                              |
-| CAL-02     | Lặp lại hằng tuần (tập con RRULE: theo thứ, đến ngày); kéo thả đổi giờ và kéo việc chưa có ngày lên lịch; phím tắt                                | CAL-01                         |
+| **CAL-02** | Lặp lại hằng tuần (tập con RRULE: theo thứ, đến ngày); kéo thả đổi giờ và kéo việc chưa có ngày lên lịch; phím tắt                                | CAL-01                         |
 | CAL-03     | Nhắc trước giờ học bằng thông báo trong ứng dụng (NOTIFY-01); email tùy chọn qua mailer AUTH-03                                                   | CAL-01, worker hẹn giờ         |
 | CAL-04     | Hiện hạn danh sách đọc và mục "Cần xem lại" trong lịch; tạo buổi ôn từ mục "Cần xem lại"                                                          | CAL-01, COURSE-01, LEARN-02    |
 | CAL-05     | Xuất `.ics` hoặc link đăng ký riêng (token, thu hồi được) để xem trong Google Calendar                                                            | Đồng ý chia sẻ ra ngoài; HTTPS |
+
+## CAL-02 — lặp lại, kéo thả, phím tắt
+
+Chủ dự án chọn làm CAL-02 theo lựa chọn khuyến nghị. Các quyết định dưới đây đổi được ở lát sau.
+
+### Lặp lại hằng tuần
+
+- **Chỉ lịch học (`EVENT`) mới lặp.** Việc cần làm không lặp trong CAL-02.
+- Tập con RRULE: `FREQ=WEEKLY`, mỗi tuần, chọn một hoặc nhiều thứ, **bắt buộc có "đến ngày"**, tối đa 366 ngày sau ngày bắt đầu (một năm học). Không có "mỗi 2 tuần", "sau N lần" hay lặp theo tháng.
+- Ngày bắt đầu phải thuộc các thứ đã chọn, để buổi đầu luôn là buổi đầu của chuỗi. Form tự đánh dấu thứ của ngày bắt đầu.
+- **Thứ và "đến ngày" tính theo độ lệch giờ của máy lúc lưu** (`utcOffset`, phút). Các buổi cách buổi đầu đúng bội số 24 giờ. Việt Nam không đổi giờ mùa hè nên giờ học không lệch; ở vùng có giờ mùa hè, buổi sau mốc đổi giờ lệch 1 giờ. Đây là giới hạn đã biết, cùng loại với giới hạn của sự kiện cả ngày.
+- API trả **từng buổi** trong khoảng xem. Mỗi buổi giữ `id` của chuỗi và có thêm:
+  - `occurrenceStart`: giờ bắt đầu gốc của buổi
+  - `repeat`: thứ, đến ngày, giờ bắt đầu/kết thúc của buổi đầu
+- Mục không lặp có `repeat: null`, `occurrenceStart: null`.
+
+### Sửa và xóa một buổi trong chuỗi
+
+Mở một buổi của chuỗi, form hỏi **Áp dụng cho**:
+
+- **Chỉ buổi này** (mặc định):
+  - Lưu sẽ **tách** buổi đó thành một mục riêng không lặp. Cùng một transaction, API đánh dấu bỏ buổi gốc và tạo mục mới.
+  - Xóa chỉ **bỏ** buổi đó.
+- **Cả chuỗi:** form hiện ngày giờ của buổi đầu. Lưu sửa cả chuỗi; xóa xóa cả chuỗi.
+  - Nếu đổi giờ, thứ hoặc "đến ngày", danh sách buổi đã bỏ bị xóa vì có thể không còn khớp.
+  - Buổi đã tách vẫn là mục riêng, không bị ảnh hưởng.
+
+Không có kiểu "buổi này và các buổi sau". Muốn dừng chuỗi từ một ngày thì sửa "đến ngày" của cả chuỗi.
+
+### Kéo thả
+
+- Dùng kéo thả của trình duyệt (chuột, bàn di). **Không có trên màn hình cảm ứng.** Form sửa vẫn là cách làm được với bàn phím và cảm ứng.
+- **Lịch học trên lưới giờ:**
+  - kéo sang giờ hoặc ngày khác, giữ thời lượng, bước 15 phút
+  - thả vào dải "Cả ngày" hoặc ô của chế độ Tháng: giữ giờ, đổi ngày
+  - lịch cả ngày thả vào lưới giờ thành lịch học 1 giờ
+- **Việc cần làm** (từ panel hoặc trên lịch):
+  - thả vào lưới giờ: hạn đúng giờ đó
+  - thả vào dải "Cả ngày" hoặc ô tháng: đổi ngày, giữ giờ hạn nếu có, còn không thì hạn cả ngày
+  - việc chưa có ngày kéo lên lịch như vậy
+- Kéo một buổi của chuỗi chỉ dời buổi đó (tách), như "Chỉ buổi này".
+- **Chưa có:** kéo cạnh dưới để đổi thời lượng; kéo ngược về panel để bỏ ngày.
+
+### Phím tắt
+
+| Phím           | Tác dụng                    |
+| -------------- | --------------------------- |
+| `T`            | Hôm nay                     |
+| `W`, `M`, `A`  | Tuần, Tháng, Lịch biểu      |
+| `←`, `→`       | Khoảng trước, khoảng sau    |
+| `N`            | Thêm lịch học               |
+
+Phím tắt:
+
+- bị bỏ qua khi đang gõ trong ô nhập hoặc trong form, và khi giữ Ctrl/Alt/⌘
+- được khai báo bằng `aria-keyshortcuts` trên nút tương ứng, và ghi dưới thanh công cụ
+
+### API bổ sung
+
+| Endpoint                              | Ghi chú                                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `POST`/`PATCH /calendar/items`        | Thêm `repeat: { weekdays: [1–7], until: "YYYY-MM-DD", utcOffset } \| null`; thiếu là `null`. 1 = thứ Hai      |
+| `POST /calendar/items/:id/skip`       | `{ revision, occurrenceStart }` → 204. Buổi phải có thật trong chuỗi; bỏ lại buổi đã bỏ là không đổi gì       |
+| `POST /calendar/items/:id/detach`     | `{ revision, occurrenceStart, requestId, …trường như POST, repeat: null }` → 201 mục mới; `keepSource` như PATCH |
+
+Bỏ buổi và tách buổi đều tăng `revision` của chuỗi.
+
+Schema:
+
+- `calendar_items` thêm `repeat_days` (bitmask 7 bit), `repeat_until` (ngày), `repeat_utc_offset` (phút)
+- CHECK: đủ cả ba hoặc không có; chỉ `EVENT`; ngày bắt đầu thuộc thứ đã chọn; "đến ngày" trong 366 ngày
+- partial index cho chuỗi lặp
+- bảng `calendar_item_skips` (khóa chính mục + giờ buổi, FK CASCADE)
 
 ## Hợp đồng API của CAL-01
 
@@ -65,6 +138,6 @@ Ràng buộc nằm cả trong DTO lẫn CHECK của PostgreSQL:
 - phiên bản và số trang đi cùng nhau; trang ≥ 1 và không quá số trang của phiên bản
 - màu thuộc bảng 6 màu
 
-## Ngoài phạm vi CAL-01
+## Ngoài phạm vi CAL-01 và CAL-02
 
-Lặp lại, nhắc, kéo thả, chia sẻ/mời người khác, lịch lớp do giảng viên công bố, đồng bộ hoặc xuất ra lịch ngoài, nhiều lịch con. Không cache lịch trong service worker (AGENTS.md).
+Nhắc, chia sẻ/mời người khác, lịch lớp do giảng viên công bố, đồng bộ hoặc xuất ra lịch ngoài, nhiều lịch con. Không cache lịch trong service worker (AGENTS.md).
