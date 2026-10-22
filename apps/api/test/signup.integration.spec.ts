@@ -123,6 +123,8 @@ describe('self-service sign-up confirmed by email (AUTH-04)', () => {
     const first = await post(browser, 'signup', { email: email('NEW').toUpperCase() });
     expect(first.status).toBe(202);
     expect(first.body).toEqual(generic);
+    // Let the first delivery finish so the mail order matches the link order.
+    expect(await mails(email('new'))).toHaveLength(1);
     expect((await post(browser, 'signup', { email: email('new') })).status).toBe(202);
     // No account exists until the link is used.
     expect(
@@ -133,6 +135,17 @@ describe('self-service sign-up confirmed by email (AUTH-04)', () => {
     expect(sent[0].subject).toBe('Xác nhận đăng ký HUCEScholar');
     expect(sent[1].text).toContain(`${origin}/signup/complete#token=`);
     const [older, newest] = sent.map((m) => tokenOf(m.text));
+    // Overlapping requests for one address still leave a single usable link.
+    await Promise.all([1, 2].map(() => post(browser, 'signup', { email: email('pair') })));
+    expect(await mails(email('pair'))).toHaveLength(2);
+    expect(
+      (
+        await db.query(
+          'SELECT 1 FROM hucescholar.signup_tokens WHERE email=$1 AND used_at IS NULL',
+          [email('pair')],
+        )
+      ).rowCount,
+    ).toBe(1);
     const stored = await db.query(
       'SELECT token_hash FROM hucescholar.signup_tokens WHERE email=$1',
       [email('new')],
