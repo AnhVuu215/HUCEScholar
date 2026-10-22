@@ -10,8 +10,20 @@ import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { available } from '../materials/library.service';
 import {
+  formatDate,
+  isOccurrence,
+  maskWeekdays,
+  occurrencesIn,
+  parseDate,
+  seriesProblem,
+  weekdayMask,
+  type Series,
+} from './calendar-repeat';
+import {
+  CalendarDetachDto,
   CalendarDoneDto,
   CalendarFieldsDto,
+  CalendarOccurrenceDto,
   CalendarRangeDto,
   CalendarRevisionDto,
   CalendarTasksDto,
@@ -46,6 +58,15 @@ function normalize(body: CalendarFieldsDto) {
   }
   if ((body.versionId === null) !== (body.pageNumber === null))
     throw invalid('Chọn cả tài liệu và số trang, hoặc bỏ cả hai.');
+  let repeat: Pick<Series, 'days' | 'until' | 'offset'> | null = null;
+  if (body.repeat) {
+    if (body.kind !== 'EVENT') throw invalid('Chỉ lịch học mới lặp lại.');
+    const until = parseDate(body.repeat.until);
+    if (!until) throw invalid('Ngày kết thúc lặp chưa hợp lệ.');
+    repeat = { days: weekdayMask(body.repeat.weekdays), until, offset: body.repeat.utcOffset };
+    const problem = seriesProblem({ ...repeat, start: startsAt!, end: endsAt! });
+    if (problem) throw invalid(problem);
+  }
   return {
     kind: body.kind,
     title: body.title,
@@ -56,6 +77,9 @@ function normalize(body: CalendarFieldsDto) {
     color: body.color,
     version_id: body.versionId === null ? null : academicId(body.versionId),
     page_number: body.pageNumber,
+    repeat_days: repeat?.days ?? null,
+    repeat_until: repeat?.until ?? null,
+    repeat_utc_offset: repeat?.offset ?? null,
   };
 }
 type Fields = ReturnType<typeof normalize>;
@@ -68,10 +92,31 @@ const sameFields = (row: calendar_items, fields: Fields) =>
   row.all_day === fields.all_day &&
   row.color === fields.color &&
   row.version_id === fields.version_id &&
-  row.page_number === fields.page_number;
+  row.page_number === fields.page_number &&
+  sameRepeat(row, fields);
+const sameRepeat = (row: calendar_items, fields: Fields) =>
+  row.repeat_days === fields.repeat_days &&
+  row.repeat_until?.getTime() === fields.repeat_until?.getTime() &&
+  row.repeat_utc_offset === fields.repeat_utc_offset;
+/** Skips name original start times, so they no longer match once the timing changes. */
+const sameTiming = (row: calendar_items, fields: Fields) =>
+  row.starts_at?.getTime() === fields.starts_at?.getTime() &&
+  row.ends_at?.getTime() === fields.ends_at?.getTime() &&
+  sameRepeat(row, fields);
+function series(row: calendar_items): Series | null {
+  return row.repeat_days === null || !row.starts_at || !row.ends_at || !row.repeat_until
+    ? null
+    : {
+        start: row.starts_at,
+        end: row.ends_at,
+        days: row.repeat_days,
+        until: row.repeat_until,
+        offset: row.repeat_utc_offset ?? 0,
+      };
+}
 
 /**
- * CAL-01. A private calendar: only the owner reads or writes. Linked material is shown only while
+ * CAL-01/02. A private calendar: only the owner reads or writes. Linked material is shown only while
  * the owner can read that version; otherwise the item stays but the link is withheld.
  */
 @Injectable()
@@ -111,6 +156,17 @@ export class CalendarService {
             ? { versionId: String(r.version_id), pageNumber: r.page_number, title: source.title }
             : null,
         materialUnavailable: r.version_id !== null && !source,
+        repeat:
+          r.repeat_days !== null && r.repeat_until
+            ? {
+                weekdays: maskWeekdays(r.repeat_days),
+                until: formatDate(r.repeat_until),
+                startsAt: r.starts_at!.toISOString(),
+                endsAt: r.ends_at!.toISOString(),
+              }
+            : null,
+        /** Original start of this occurrence of a series; null for a single item. */
+        occurrenceStart: null as string | null,
         revision: r.revision,
         updatedAt: r.updated_at.toISOString(),
       };
@@ -136,18 +192,53 @@ export class CalendarService {
       throw invalid(`Khoảng xem phải dài từ vài phút tới ${MAX_RANGE_DAYS} ngày.`);
     return this.db.$transaction(
       async (tx) => {
-        const rows = await tx.calendar_items.findMany({
+        const single = await tx.calendar_items.findMany({
           where: {
             user_id,
+            repeat_days: null,
             starts_at: { lt: to },
             OR: [{ ends_at: { gt: from } }, { ends_at: null, starts_at: { gte: from } }],
           },
           orderBy: [{ starts_at: 'asc' }, { id: 'asc' }],
           take: MAX_RANGE_ITEMS + 1,
         });
+        // A series can still reach the window when its last date is up to one event length
+        // (≤ 14 days) plus a day of UTC offset before it.
+        const repeating = await tx.calendar_items.findMany({
+          where: {
+            user_id,
+            repeat_days: { not: null },
+            starts_at: { lt: to },
+            repeat_until: { gte: new Date(from.getTime() - (MAX_EVENT_DAYS + 1) * DAY) },
+          },
+          include: { calendar_item_skips: { select: { occurrence_start: true } } },
+        });
+        const occurrences = repeating.flatMap((row) =>
+          occurrencesIn(
+            series(row)!,
+            from,
+            to,
+            new Set(row.calendar_item_skips.map((s) => s.occurrence_start.getTime())),
+          ).map((o) => ({ id: String(row.id), ...o })),
+        );
+        const plain = await this.serialize(tx, single);
+        const byId = new Map((await this.serialize(tx, repeating)).map((item) => [item.id, item]));
+        const items = [
+          ...plain,
+          ...occurrences.map(({ id, start, end }) => ({
+            ...byId.get(id)!,
+            startsAt: start.toISOString(),
+            endsAt: end.toISOString(),
+            occurrenceStart: start.toISOString(),
+          })),
+        ].sort(
+          (a, b) =>
+            Date.parse(a.startsAt!) - Date.parse(b.startsAt!) ||
+            Number(BigInt(a.id) - BigInt(b.id)),
+        );
         return {
-          items: await this.serialize(tx, rows.slice(0, MAX_RANGE_ITEMS)),
-          truncated: rows.length > MAX_RANGE_ITEMS,
+          items: items.slice(0, MAX_RANGE_ITEMS),
+          truncated: items.length > MAX_RANGE_ITEMS,
         };
       },
       { isolationLevel: 'RepeatableRead' },
@@ -226,6 +317,8 @@ export class CalendarService {
       // An unchanged link is kept even if the material became unreadable; a new one is checked.
       if (row.version_id !== fields.version_id || row.page_number !== fields.page_number)
         await this.checkSource(tx, fields);
+      if (!sameTiming(row, fields))
+        await tx.calendar_item_skips.deleteMany({ where: { item_id: row.id } });
       const updated = await tx.calendar_items.update({
         where: { id: row.id },
         data: {
@@ -252,6 +345,75 @@ export class CalendarService {
               data: { done_at: body.done ? new Date() : null },
             });
       return { item: (await this.serialize(tx, [updated]))[0] };
+    });
+  }
+  /** A real occurrence of an owned series, and whether it was already skipped. */
+  private async occurrence(
+    tx: Prisma.TransactionClient,
+    row: calendar_items,
+    occurrenceStart: string,
+  ) {
+    const plan = series(row);
+    const at = new Date(occurrenceStart);
+    if (!plan) throw invalid('Mục lịch này không lặp lại.');
+    if (!isOccurrence(plan, at)) throw invalid('Chuỗi lịch không có buổi này.');
+    const skipped = await tx.calendar_item_skips.findUnique({
+      where: { item_id_occurrence_start: { item_id: row.id, occurrence_start: at } },
+    });
+    return { at, skipped: skipped !== null };
+  }
+  private async addSkip(tx: Prisma.TransactionClient, row: calendar_items, at: Date) {
+    await tx.calendar_item_skips.create({ data: { item_id: row.id, occurrence_start: at } });
+    await tx.calendar_items.update({
+      where: { id: row.id },
+      data: { revision: { increment: 1 }, updated_at: new Date() },
+    });
+  }
+  /** "Xóa buổi này". Skipping an occurrence that is already skipped changes nothing. */
+  async skip(actor: Profile, rawId: string, body: CalendarOccurrenceDto) {
+    await this.db.$transaction(async (tx) => {
+      const row = await this.owned(tx, actor, rawId);
+      const { at, skipped } = await this.occurrence(tx, row, body.occurrenceStart);
+      if (skipped) return;
+      if (row.revision !== body.revision) throw stale();
+      await this.addSkip(tx, row, at);
+    });
+  }
+  /** "Chỉ buổi này": skip the occurrence and create a single item in one transaction. */
+  async detach(actor: Profile, rawId: string, body: CalendarDetachDto) {
+    const fields = normalize(body);
+    if (fields.repeat_days !== null) throw invalid('Buổi tách ra không lặp lại.');
+    if (body.keepSource && fields.version_id !== null)
+      throw invalid('Giữ liên kết cũ thì không gửi tài liệu mới.');
+    return this.db.$transaction(async (tx) => {
+      const row = await this.owned(tx, actor, rawId);
+      if (body.keepSource) {
+        fields.version_id = row.version_id;
+        fields.page_number = row.page_number;
+      }
+      // A retried detach returns the item the first attempt made.
+      const existing = await tx.calendar_items.findUnique({
+        where: { user_id_request_id: { user_id: row.user_id, request_id: body.requestId } },
+      });
+      if (existing) {
+        if (!sameFields(existing, fields))
+          throw new ConflictException({
+            code: 'CALENDAR_REQUEST_REUSED',
+            message: 'Yêu cầu tạo mục lịch đã được dùng. Tải lại để đối soát.',
+          });
+        return { item: (await this.serialize(tx, [existing]))[0] };
+      }
+      if (row.revision !== body.revision) throw stale();
+      const { at, skipped } = await this.occurrence(tx, row, body.occurrenceStart);
+      if (skipped) throw stale();
+      // The series' own link is kept even if it became unreadable; a new one is checked.
+      if (row.version_id !== fields.version_id || row.page_number !== fields.page_number)
+        await this.checkSource(tx, fields);
+      await this.addSkip(tx, row, at);
+      const created = await tx.calendar_items.create({
+        data: { ...fields, user_id: row.user_id, request_id: body.requestId },
+      });
+      return { item: (await this.serialize(tx, [created]))[0] };
     });
   }
   async remove(actor: Profile, rawId: string, body: CalendarRevisionDto) {

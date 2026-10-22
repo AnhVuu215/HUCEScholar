@@ -1,23 +1,29 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import {
   addDays,
   calendarError,
   calendarRange,
   createCalendarItem,
+  detachOccurrence,
+  droppedTimes,
   formatDay,
   formatLongDay,
   formatTime,
+  itemFields,
+  itemKey,
   itemSpan,
   onDay,
   openTasks,
   overdue,
   readerHref,
+  repeatLabel,
   sameDay,
   setCalendarDone,
   startOfDay,
   startOfWeek,
+  updateCalendarItem,
   weekdayLabels,
   whenLabel,
   DAY_MS,
@@ -28,10 +34,10 @@ import {
 import { CalendarEditor, type CalendarDraft } from './calendar-editor';
 
 type View = 'week' | 'month' | 'agenda';
-const views: [View, string][] = [
-  ['week', 'Tuần'],
-  ['month', 'Tháng'],
-  ['agenda', 'Lịch biểu'],
+const views: [View, string, string][] = [
+  ['week', 'Tuần', 'W'],
+  ['month', 'Tháng', 'M'],
+  ['agenda', 'Lịch biểu', 'A'],
 ];
 const AGENDA_DAYS = 30;
 const HOUR_PX = 48;
@@ -61,6 +67,19 @@ function shift(view: View, anchor: Date, step: number) {
   if (view === 'month') return new Date(anchor.getFullYear(), anchor.getMonth() + step, 1);
   return addDays(anchor, step * 7);
 }
+/** A new session: the next whole hour today, or 8:00 on another day in view. */
+function sessionStart(anchor: Date, now: Date) {
+  const start = new Date(anchor);
+  start.setHours(sameDay(anchor, now) ? Math.min(now.getHours() + 1, 23) : 8);
+  return start;
+}
+/** CAL-02 shortcuts; ignored while typing or inside a form, and with Ctrl/Alt/⌘. */
+const SHORTCUT_HINT =
+  'Phím tắt: T hôm nay · W tuần · M tháng · A lịch biểu · ← → chuyển khoảng · N thêm lịch học. Kéo thả bằng chuột để dời lịch học hoặc đặt hạn cho việc.';
+const titleOf = (item: CalendarItem) =>
+  `${item.title} · ${whenLabel(item)}${item.repeat ? ` · ${repeatLabel(item.repeat)}` : ''}`;
+/** What is being dragged and, for a session on the hour grid, how far below its start it was held. */
+type Drag = { item: CalendarItem; grabMinutes: number };
 /** Timed events split per day; all-day events and tasks go to the strip above the hours. */
 const timed = (item: CalendarItem) => item.kind === 'EVENT' && !item.allDay;
 /** Side-by-side lanes for overlapping sessions within one day, like Google Calendar. */
@@ -125,19 +144,25 @@ function Chip({
   open,
   toggle,
   busy,
+  drag,
   showTime = true,
 }: {
   item: CalendarItem;
   open: (item: CalendarItem) => void;
   toggle: (item: CalendarItem, done: boolean) => void;
   busy: boolean;
+  drag: (event: DragEvent, item: CalendarItem) => void;
   showTime?: boolean;
 }) {
   const start = item.startsAt ? new Date(item.startsAt) : null;
   return (
-    <div className={`calendar-chip calendar-color-${item.color}${item.done ? ' is-done' : ''}`}>
+    <div
+      className={`calendar-chip calendar-color-${item.color}${item.done ? ' is-done' : ''}`}
+      draggable={!busy}
+      onDragStart={(e) => drag(e, item)}
+    >
       {item.kind === 'TASK' && <TaskCheck item={item} toggle={toggle} busy={busy} />}
-      <button type="button" onClick={() => open(item)} title={`${item.title} · ${whenLabel(item)}`}>
+      <button type="button" onClick={() => open(item)} title={titleOf(item)}>
         {showTime && start && !item.allDay && <span>{formatTime(start)} </span>}
         {item.title}
       </button>
@@ -164,6 +189,8 @@ export function CalendarBoard() {
   const [quickId, setQuickId] = useState(() => crypto.randomUUID());
   const [now, setNow] = useState(() => new Date());
   const hours = useRef<HTMLDivElement>(null);
+  const dragging = useRef<Drag | null>(null);
+  const [dropTarget, setDropTarget] = useState<number | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const { from, to } = useMemo(() => bounds(view, anchor), [view, anchor]);
   const loaded = range !== null;
@@ -193,6 +220,32 @@ export function CalendarBoard() {
   useEffect(() => {
     if (editor) editorRef.current?.scrollIntoView({ block: 'nearest' });
   }, [editor]);
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.isComposing) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, form, [contenteditable="true"]')) return;
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      if (key === 't') setAnchor(startOfDay(new Date()));
+      else if (key === 'w') setView('week');
+      else if (key === 'm') setView('month');
+      else if (key === 'a') setView('agenda');
+      else if (key === 'ArrowLeft') setAnchor((v) => shift(view, v, -1));
+      else if (key === 'ArrowRight') setAnchor((v) => shift(view, v, 1));
+      else if (key === 'n') {
+        setNotice('');
+        setEditor((v) => ({
+          item: null,
+          draft: { kind: 'EVENT', start: sessionStart(anchor, new Date()) },
+          seq: (v?.seq ?? 0) + 1,
+        }));
+      } else return;
+      event.preventDefault();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [view, anchor]);
 
   const reload = () => setAttempt((v) => v + 1);
   function open(item: CalendarItem) {
@@ -223,6 +276,56 @@ export function CalendarBoard() {
       reload();
     } finally {
       setBusy(false);
+    }
+  }
+  function startDrag(event: DragEvent, item: CalendarItem, grabMinutes = 0) {
+    dragging.current = { item, grabMinutes };
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', item.title);
+  }
+  function endDrag() {
+    dragging.current = null;
+    setDropTarget(null);
+  }
+  /** Drop target for a day; on the hour grid the pointer height picks the time. */
+  function dropZone(day: Date, grid: boolean) {
+    return {
+      onDragOver(event: DragEvent<HTMLElement>) {
+        if (!dragging.current) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        if (dropTarget !== day.getTime()) setDropTarget(day.getTime());
+      },
+      onDrop(event: DragEvent<HTMLElement>) {
+        event.preventDefault();
+        const held = dragging.current;
+        endDrag();
+        if (!held) return;
+        const minutes = grid
+          ? ((event.clientY - event.currentTarget.getBoundingClientRect().top) / HOUR_PX) * 60 -
+            held.grabMinutes
+          : null;
+        void move(held.item, day, minutes);
+      },
+    };
+  }
+  /** Saves a drop. One session of a series leaves it, like "Chỉ buổi này". */
+  async function move(item: CalendarItem, day: Date, minutes: number | null) {
+    const times = droppedTimes(item, day, minutes);
+    if (!times) return;
+    const { fields, keepSource } = itemFields(item);
+    setBusy(true);
+    setError('');
+    try {
+      if (item.occurrenceStart)
+        await detachOccurrence(item, { ...fields, ...times }, crypto.randomUUID(), keepSource);
+      else await updateCalendarItem(item, { ...fields, ...times }, keepSource);
+      setNotice(`Đã dời: ${item.title}${item.occurrenceStart ? ' (chỉ buổi này)' : ''}`);
+    } catch (failure) {
+      setError(calendarError(failure));
+    } finally {
+      setBusy(false);
+      reload();
     }
   }
   async function quickAdd(event: FormEvent) {
@@ -263,16 +366,26 @@ export function CalendarBoard() {
   const items = range?.items ?? [];
   const today = startOfDay(now);
   const chip = (item: CalendarItem, showTime = true) => (
-    <Chip key={item.id} item={item} open={open} toggle={toggle} busy={busy} showTime={showTime} />
+    <Chip
+      key={itemKey(item)}
+      item={item}
+      open={open}
+      toggle={toggle}
+      busy={busy}
+      drag={startDrag}
+      showTime={showTime}
+    />
   );
+  const dropClass = (day: Date) => (dropTarget === day.getTime() ? ' is-drop-target' : '');
 
   return (
-    <div className="calendar-layout">
+    <div className="calendar-layout" onDragEnd={endDrag}>
       <section className="calendar-main" aria-labelledby="calendar-heading">
         <div className="calendar-toolbar">
           <button
             type="button"
             className="secondary-button"
+            aria-keyshortcuts="T"
             onClick={() => setAnchor(startOfDay(new Date()))}
           >
             Hôm nay
@@ -281,6 +394,7 @@ export function CalendarBoard() {
             type="button"
             className="secondary-button calendar-step"
             aria-label="Khoảng trước"
+            aria-keyshortcuts="ArrowLeft"
             onClick={() => setAnchor((v) => shift(view, v, -1))}
           >
             ‹
@@ -289,6 +403,7 @@ export function CalendarBoard() {
             type="button"
             className="secondary-button calendar-step"
             aria-label="Khoảng sau"
+            aria-keyshortcuts="ArrowRight"
             onClick={() => setAnchor((v) => shift(view, v, 1))}
           >
             ›
@@ -297,12 +412,13 @@ export function CalendarBoard() {
             {heading(view, anchor)}
           </h2>
           <div className="calendar-views" role="group" aria-label="Chế độ xem">
-            {views.map(([value, label]) => (
+            {views.map(([value, label, shortcut]) => (
               <button
                 key={value}
                 type="button"
                 className="secondary-button"
                 aria-pressed={view === value}
+                aria-keyshortcuts={shortcut}
                 onClick={() => setView(value)}
               >
                 {label}
@@ -312,16 +428,13 @@ export function CalendarBoard() {
           <button
             type="button"
             className="primary-button"
-            onClick={() => {
-              // Today: the next whole hour. Another day in view: 8:00 that day.
-              const start = new Date(anchor);
-              start.setHours(sameDay(anchor, today) ? Math.min(now.getHours() + 1, 23) : 8);
-              create({ kind: 'EVENT', start });
-            }}
+            aria-keyshortcuts="N"
+            onClick={() => create({ kind: 'EVENT', start: sessionStart(anchor, new Date()) })}
           >
             Thêm lịch học
           </button>
         </div>
+        <p className="field-hint calendar-shortcuts">{SHORTCUT_HINT}</p>
         {notice && (
           <p role="status" className="field-hint">
             {notice}
@@ -376,7 +489,11 @@ export function CalendarBoard() {
             <div className="calendar-week-strip">
               <span>Cả ngày</span>
               {days.map((day) => (
-                <div key={day.getTime()}>
+                <div
+                  key={day.getTime()}
+                  className={dropClass(day).trim() || undefined}
+                  {...dropZone(day, false)}
+                >
                   {items.filter((i) => !timed(i) && onDay(i, day)).map((i) => chip(i))}
                 </div>
               ))}
@@ -390,8 +507,9 @@ export function CalendarBoard() {
               {days.map((day) => (
                 <div
                   key={day.getTime()}
-                  className="calendar-day-column"
+                  className={`calendar-day-column${dropClass(day)}`}
                   aria-label={formatDay(day)}
+                  {...dropZone(day, true)}
                   onClick={(e) => {
                     if (e.target !== e.currentTarget) return;
                     const minutes = (e.nativeEvent.offsetY / HOUR_PX) * 60;
@@ -402,9 +520,20 @@ export function CalendarBoard() {
                 >
                   {lanes(items, day).map((s) => (
                     <button
-                      key={s.item.id}
+                      key={itemKey(s.item)}
                       type="button"
                       className={`calendar-session calendar-color-${s.item.color}`}
+                      title={titleOf(s.item)}
+                      draggable={!busy}
+                      onDragStart={(e) =>
+                        startDrag(
+                          e,
+                          s.item,
+                          ((e.clientY - e.currentTarget.getBoundingClientRect().top) / HOUR_PX) *
+                            60 +
+                            (s.start - itemSpan(s.item).start.getTime()) / 60_000,
+                        )
+                      }
                       style={{
                         top: ((s.start - day.getTime()) / 3_600_000) * HOUR_PX,
                         height: Math.max(((s.end - s.start) / 3_600_000) * HOUR_PX - 2, 20),
@@ -413,7 +542,10 @@ export function CalendarBoard() {
                       }}
                       onClick={() => open(s.item)}
                     >
-                      <strong>{s.item.title}</strong>
+                      <strong>
+                        {s.item.repeat && <span aria-hidden="true">↻ </span>}
+                        {s.item.title}
+                      </strong>
                       <span>{whenLabel(s.item).split(' · ')[1] ?? whenLabel(s.item)}</span>
                       {s.item.material && <span>Trang {s.item.material.pageNumber}</span>}
                     </button>
@@ -442,7 +574,8 @@ export function CalendarBoard() {
               return (
                 <div
                   key={day.getTime()}
-                  className={`calendar-month-cell${outside ? ' is-outside' : ''}${sameDay(day, today) ? ' is-today' : ''}`}
+                  className={`calendar-month-cell${outside ? ' is-outside' : ''}${sameDay(day, today) ? ' is-today' : ''}${dropClass(day)}`}
+                  {...dropZone(day, false)}
                 >
                   <button
                     type="button"
@@ -491,7 +624,7 @@ export function CalendarBoard() {
                     <ul>
                       {list.map((i) => (
                         <li
-                          key={i.id}
+                          key={itemKey(i)}
                           className={`calendar-color-${i.color}${i.done ? ' is-done' : ''}`}
                         >
                           {i.kind === 'TASK' && <TaskCheck item={i} toggle={toggle} busy={busy} />}
@@ -499,6 +632,7 @@ export function CalendarBoard() {
                             {i.title}
                           </button>
                           <span className="field-hint">{whenLabel(i)}</span>
+                          {i.repeat && <span className="field-hint">{repeatLabel(i.repeat)}</span>}
                           {i.material ? (
                             <Link href={readerHref(i.material)}>
                               Mở {i.material.title} · trang {i.material.pageNumber}
@@ -534,7 +668,9 @@ export function CalendarBoard() {
               Thêm
             </button>
           </div>
-          <p className="field-hint">Việc mới chưa có ngày; mở việc để đặt hạn.</p>
+          <p className="field-hint">
+            Việc mới chưa có ngày; mở việc hoặc kéo việc lên lịch để đặt hạn.
+          </p>
         </form>
         {!tasks ? (
           !error && <p role="status">Đang tải việc cần làm…</p>
@@ -543,7 +679,12 @@ export function CalendarBoard() {
         ) : (
           <ul className="calendar-task-list">
             {tasks.items.map((task) => (
-              <li key={task.id} className={`calendar-color-${task.color}`}>
+              <li
+                key={task.id}
+                className={`calendar-color-${task.color}`}
+                draggable={!busy}
+                onDragStart={(e) => startDrag(e, task)}
+              >
                 <TaskCheck item={task} toggle={toggle} busy={busy} />
                 <div>
                   <button type="button" className="text-button" onClick={() => open(task)}>

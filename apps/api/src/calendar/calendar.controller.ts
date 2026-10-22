@@ -15,7 +15,9 @@ import {
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { SessionGuard } from '../auth/session.guard';
 import {
+  CalendarDetachDto,
   CalendarDoneDto,
+  CalendarOccurrenceDto,
   CalendarRangeDto,
   CalendarRevisionDto,
   CalendarTasksDto,
@@ -50,6 +52,20 @@ export class CalendarController {
     @Body() body: CalendarDoneDto,
   ) {
     return this.calendar.setDone(req.user, itemId, body);
+  }
+  @Post('items/:itemId/skip') @HttpCode(204) skip(
+    @Req() req: AuthenticatedRequest,
+    @Param('itemId') itemId: string,
+    @Body() body: CalendarOccurrenceDto,
+  ) {
+    return this.calendar.skip(req.user, itemId, body);
+  }
+  @Post('items/:itemId/detach') detach(
+    @Req() req: AuthenticatedRequest,
+    @Param('itemId') itemId: string,
+    @Body() body: CalendarDetachDto,
+  ) {
+    return this.calendar.detach(req.user, itemId, body);
   }
   @Delete('items/:itemId') @HttpCode(204) remove(
     @Req() req: AuthenticatedRequest,
