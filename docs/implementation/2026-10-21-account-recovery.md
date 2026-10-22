@@ -18,7 +18,7 @@ Ngày 21/10/2026. Nhánh `codex/auth-03-account-recovery`, xây trên `main` sau
 - Token sai, hết hạn hoặc đã dùng đều trả cùng `400 RESET_TOKEN_INVALID`.
 - Giới hạn qua Redis:
   - yêu cầu: 5 lần / 15 phút cho mỗi email, 20 lần / 15 phút cho mỗi IP
-  - hoàn tất: 5 lần / 15 phút cho mỗi IP
+  - hoàn tất: 5 lần / 15 phút cho mỗi liên kết, 20 lần / 15 phút cho mỗi IP. Sửa ngày 22/10: bản đầu dùng một khóa chung `'complete'` cho mọi người, nên toàn hệ thống chỉ được 5 lần hoàn tất mỗi 15 phút.
 - Mỗi yêu cầu cho một tài khoản thật ghi audit `ACCOUNT_RECOVERY_REQUESTED`.
 - Admin cấp lại mật khẩu tạm (luồng cũ) vẫn vô hiệu mọi token khôi phục, như trước.
 
