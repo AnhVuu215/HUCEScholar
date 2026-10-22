@@ -148,6 +148,8 @@ try {
     ['recover-student', 'STUDENT'],
     ['study-admin', 'ADMIN'],
     ['study-student', 'STUDENT'],
+    ['cal1-admin', 'ADMIN'],
+    ['cal1-student', 'STUDENT'],
     ['course1-admin', 'ADMIN'],
     ['course1-lecturer', 'LECTURER'],
     ['course1-student', 'STUDENT'],

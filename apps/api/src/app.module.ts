@@ -9,6 +9,7 @@ import { AccountModule } from './account/account.module';
 import { OpsModule } from './ops/ops.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReadingListsModule } from './reading-lists/reading-lists.module';
+import { CalendarModule } from './calendar/calendar.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ReadingListsModule } from './reading-lists/reading-lists.module';
     OpsModule,
     NotificationsModule,
     ReadingListsModule,
+    CalendarModule,
   ],
   controllers: [HealthController],
 })
