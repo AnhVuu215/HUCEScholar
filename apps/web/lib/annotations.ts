@@ -7,6 +7,7 @@ export type AnnotationFilters = {
   query?: string;
   kind?: AnnotationItem['kind'];
   color?: HighlightColor;
+  reviewLater?: true;
 };
 export async function searchAnnotations(
   versionId: string,
@@ -50,6 +51,34 @@ export async function searchAnnotations(
   )
     throw new Error('Invalid annotation search response');
   return { items: body.items, nextCursor: body.nextCursor };
+}
+/** Sets the owner's private "Cần xem lại" mark; the content revision does not change. */
+export async function setReviewLater(
+  versionId: string,
+  item: AnnotationItem,
+  reviewLater: boolean,
+): Promise<AnnotationItem> {
+  const token = await csrfToken();
+  const body: unknown = await (
+    await apiRequest(
+      `/library/versions/${encodeURIComponent(versionId)}/annotations/${encodeURIComponent(item.id)}/review-later`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+        body: JSON.stringify({ reviewLater }),
+      },
+    )
+  ).json();
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    !('item' in body) ||
+    !(isNote(body.item) || isHighlight(body.item)) ||
+    body.item.id !== item.id ||
+    body.item.reviewLater !== reviewLater
+  )
+    throw new Error('Invalid review mark response');
+  return body.item;
 }
 export type NotesExportFormat = 'markdown' | 'text';
 /** The owner's notes for one version as a file; the API re-checks read access each time. */
