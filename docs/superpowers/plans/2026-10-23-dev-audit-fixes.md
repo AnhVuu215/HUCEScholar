@@ -85,6 +85,15 @@ Mỗi bước là một nhánh `codex/…` và một PR nhỏ, chạy đủ lint
 - Reader hiện "File PDF của phiên bản này không còn trên máy chủ. Báo cho người tải lên hoặc quản trị viên." và nút "Báo cáo tài liệu" (REPORT-01), thay cho "Kiểm tra kết nối".
 - Script dev `pnpm --filter api doctor:files`: liệt kê file `SAFE` mà object không còn, chỉ đọc, không tự xóa.
 - Dữ liệu dev hiện tại: 2 tài liệu đã công bố bị mất PDF. Chủ dự án quyết định tải lại PDF cho 2 phiên bản đó hoặc ẩn chúng. Không tự sửa DB.
+- **Đã làm** (nhánh `codex/missing-object`):
+  - Mã trả về là **410** chứ không phải 404 như dự kiến: 404 đã mang nghĩa "không có quyền / không còn khả dụng", và pdf.js chỉ cho web biết mã HTTP. Ai không có quyền đọc vẫn nhận 404 như cũ.
+  - `PrivateStore` ném `MissingObjectError` (local `ENOENT`, S3 `NoSuchKey`). Reader, xem trước bản nháp, PDF kiểm duyệt và tải Word gốc trả 410 `FILE_MISSING`, log `Private object missing for file <id>.`
+  - Worker quét gặp file mất thì ghi FAILED ngay (`UnrecoverableError`), không thử lại 30 phút.
+  - Reader báo "File PDF của phiên bản này không còn trên máy chủ…", ẩn "Thử mở lại PDF" và hiện "Báo cáo vấn đề với tài liệu".
+  - `pnpm --filter @hucescholar/api doctor:files` (sau `build`): chỉ đọc; in id file/phiên bản/tài liệu, trạng thái và tiêu đề; thoát mã 2 khi có object mất.
+  - Trên database dev: file 1 (phiên bản 1 “PDF demo — giảng viên tự công bố”) và file 2 (phiên bản 2 “Toán rời rạc ứng dụng trong tin học - 1”) đã mất PDF.
+  - Kiểm chứng local: `pnpm check` (123 unit, gồm `private-store.spec.ts`); integration 219 đạt, 1 bỏ qua; e2e 174 đạt, 8 bỏ qua (ca mới `file-missing.spec.ts`), chạy lại `file-missing` + `upload-03` sau khi gộp bước 3: 4/4.
+
 
 ### Bước 5 — Sửa giao diện nhỏ (P2, #6–#9) · `codex/ui-audit-fixes`
 
