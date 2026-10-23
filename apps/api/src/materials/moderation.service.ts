@@ -11,7 +11,7 @@ import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
 import { academicId } from '../academic/academic.service';
 import { Prisma } from '../generated/prisma/client';
-import { PrivateStore } from '../files/private-store';
+import { PrivateStore, MissingObjectError, fileMissing } from '../files/private-store';
 import { MaterialsService } from './materials.service';
 import { notify, type NotificationKind } from '../notifications/notify';
 import { ModerationDecisionDto, ModerationListDto } from './moderation.dto';
@@ -305,7 +305,8 @@ export class ModerationService {
         disposition: 'inline; filename="review.pdf"',
         length: Number(file.byte_size),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof MissingObjectError) throw fileMissing(file.id);
       throw new ServiceUnavailableException('Chưa mở được PDF. Thử lại sau.');
     }
   }

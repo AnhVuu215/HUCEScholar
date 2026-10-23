@@ -8,7 +8,7 @@ import type {
   RenderTask,
   TextLayer,
 } from 'pdfjs-dist';
-import { libraryVersion, libraryError, type LibraryItem } from '../../lib/library';
+import { libraryVersion, libraryError, pdfMissing, type LibraryItem } from '../../lib/library';
 import { ReaderNotes } from './reader-notes';
 import { ReaderNotebook } from './reader-notebook';
 import { ReaderFind } from './reader-find';
@@ -60,6 +60,7 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
   const [item, setItem] = useState<LibraryItem | null>(null),
     [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState(''),
+    [missing, setMissing] = useState(false),
     [attempt, setAttempt] = useState(0),
     [zoom, setZoom] = useState('fit'),
     [rotation, setRotation] = useState(0),
@@ -159,7 +160,10 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
         const document = await task.promise;
         if (!controller.signal.aborted) setPdf(document);
       } catch (e) {
-        if (!controller.signal.aborted) setError(libraryError(e));
+        if (!controller.signal.aborted) {
+          setMissing(pdfMissing(e));
+          setError(libraryError(e));
+        }
       }
     })();
     return () => {
@@ -265,6 +269,7 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
   }
   function retry() {
     setError('');
+    setMissing(false);
     setPdf(null);
     setRendered('');
     setAttempt((n) => n + 1);
@@ -392,12 +397,17 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
       <div className="reader-layout" data-panel-open={panel.open}>
         <div className="reader-document">
           {error ? (
-            <div role="alert">
-              <p>{error}</p>
-              <button className="primary-button" onClick={retry}>
-                Thử mở lại PDF
-              </button>
-            </div>
+            <>
+              <div role="alert">
+                <p>{error}</p>
+                {!missing && (
+                  <button className="primary-button" onClick={retry}>
+                    Thử mở lại PDF
+                  </button>
+                )}
+              </div>
+              {missing && <ReaderReport key={`report-${id}`} versionId={id} />}
+            </>
           ) : (
             <>
               {!item ? (

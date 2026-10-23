@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
-import { PrivateStore } from './private-store';
+import { MissingObjectError, PrivateStore } from './private-store';
 import { FileCheckCode, FileCheckError, PdfScanner } from './pdf-scanner';
 import { receivePdf } from './receive-pdf';
 import { ScanQueue } from './scan-queue';
@@ -57,6 +57,11 @@ export class ScanProcessor {
       if (error instanceof FileCheckError && !error.retryable) {
         await this.fail(rawId, error.code);
         throw new UnrecoverableError('PDF safety check failed.');
+      }
+      // Bytes that are gone will not come back either; the owner has to upload again.
+      if (error instanceof MissingObjectError) {
+        await this.fail(rawId);
+        throw new UnrecoverableError('PDF object missing.');
       }
       if (finalAttempt)
         await this.fail(rawId, error instanceof FileCheckError ? 'CHECK_UNAVAILABLE' : null);

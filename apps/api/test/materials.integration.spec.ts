@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { randomBytes, randomUUID } from 'node:crypto';
-import type { INestApplication } from '@nestjs/common';
+import { Logger, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import { Client } from 'pg';
@@ -11,6 +11,7 @@ import { configureApplication } from '../src/configure-application';
 import { foldVietnamese } from '../src/materials/search-fold';
 import { MaterialsService } from '../src/materials/materials.service';
 import { PrivateStore } from '../src/files/private-store';
+import { FILE_CONFIG, type FileConfiguration } from '../src/files/files.config';
 import { ScanQueue } from '../src/files/scan-queue';
 import { ScanProcessor } from '../src/files/scan-processor';
 import { clamScan, FileCheckError, PdfScanner } from '../src/files/pdf-scanner';
@@ -19,7 +20,7 @@ import { createReadStream } from 'node:fs';
 import { get as httpGet } from 'node:http';
 import type { Readable } from 'node:stream';
 import { DatabaseService } from '../src/database/database.module';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DOCX_MIME } from '../src/files/receive-docx';
 import { DocxTools, SourceConversionProcessor } from '../src/materials/source-conversion.processor';
@@ -2507,7 +2508,8 @@ describe('private material drafts', () => {
     await db.query('UPDATE hucescholar.courses SET is_active=true WHERE id=$1', [courses[0]]);
     const file = await uploadedFile(item);
     await app.get(PrivateStore).remove(file.object_key);
-    await agents.student.get(`/api/v1/library/versions/${item.versionId}/pdf`).expect(503);
+    // Gone bytes are not a connection problem: 410 FILE_MISSING, not 503.
+    await agents.student.get(`/api/v1/library/versions/${item.versionId}/pdf`).expect(410);
   });
   it('closes the private source stream when the reader cancels its HTTP response', async () => {
     const item = await create('student');
@@ -2593,6 +2595,55 @@ describe('private material drafts', () => {
       .set('X-CSRF-Token', csrf)
       .send(body);
   }
+  it('says a PDF whose bytes are gone is missing (410), not a connection problem', async () => {
+    const root = app.get<FileConfiguration>(FILE_CONFIG).root;
+    const objectOf = async (versionId: string) =>
+      join(
+        root,
+        (
+          await db.query(
+            'SELECT f.object_key FROM hucescholar.files f JOIN hucescholar.document_versions v ON v.file_id=f.id WHERE v.id=$1',
+            [versionId],
+          )
+        ).rows[0].object_key,
+      );
+    const warn = jest.spyOn(Logger, 'warn').mockImplementation(() => undefined);
+    try {
+      // Reader of a published version.
+      const published = await readingFixture();
+      await rm(await objectOf(published.versionId));
+      const reader = await agents.student.get(`${published.path}/pdf`);
+      expect(reader.status).toBe(410);
+      expect(reader.body).toMatchObject({ code: 'FILE_MISSING' });
+      expect(JSON.stringify(reader.body)).not.toMatch(/quarantine|\.pdf|[A-Z]:\\/);
+      await agents.student.get(`${published.path}/pdf`).set('Range', 'bytes=0-4').expect(410);
+      // Admin review of a pending request.
+      const pending = await submitted('student', 1);
+      await rm(await objectOf(pending.versionId));
+      // A version the reader may not open stays 404: missing bytes reveal nothing about it.
+      await agents.other.get(`/api/v1/library/versions/${pending.versionId}/pdf`).expect(404);
+      const review = await agents.admin.get(
+        `/api/v1/admin/publication-requests/${pending.requestId}/pdf`,
+      );
+      expect(review.status).toBe(410);
+      expect(review.body.code).toBe('FILE_MISSING');
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(/^Private object missing for file \d+\.$/),
+        'Files',
+      );
+      // A scan of missing bytes stops at once instead of retrying for half an hour.
+      const draft = await create('student');
+      await upload('student', draft.id, 1);
+      const file = await uploadedFile(draft);
+      await rm(join(root, file.object_key));
+      await expect(app.get(ScanProcessor).process(file.id, false)).rejects.toBeInstanceOf(
+        UnrecoverableError,
+      );
+      expect(await uploadedFile(draft)).toMatchObject({ scan_status: 'FAILED', check_error: null });
+    } finally {
+      warn.mockRestore();
+    }
+  });
   it.each(['student', 'lecturer', 'admin'])(
     'personal library is private and save/remove is idempotent for %s',
     async (role) => {
