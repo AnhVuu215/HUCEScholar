@@ -904,6 +904,13 @@ button[aria-busy='true'] {
 .users-table th:last-child {
   width: 22%;
 }
+/* Account list: wide enough for Sửa · Cấp lại mật khẩu · Khóa on one row at desktop widths. */
+.account-table th:first-child {
+  width: 32%;
+}
+.account-table th:last-child {
+  width: 32%;
+}
 .users-table td {
   padding: 16px 12px;
   border-bottom: 1px solid var(--line);
@@ -918,8 +925,15 @@ button[aria-busy='true'] {
   margin-top: 4px;
   color: var(--muted);
 }
-.user-row-actions .text-button + .text-button {
-  margin-left: 8px;
+/* Actions sit on one line and wrap together, aligned with each other (audit 23/10). */
+.user-row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+}
+.user-row-buttons .text-button {
+  white-space: nowrap;
 }
 .text-button {
   min-height: 44px;
@@ -1097,6 +1111,12 @@ button[aria-busy='true'] {
 .draft-filters {
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
+.draft-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 .catalog-linked-list li {
   display: flex;
   align-items: center;
@@ -1238,7 +1258,7 @@ button[aria-busy='true'] {
   .users-table .user-row-actions {
     grid-column: 1 / -1;
   }
-  .user-row-actions .text-button:first-child {
+  .user-row-buttons .text-button:first-child {
     padding-left: 0;
   }
   .users-pagination {

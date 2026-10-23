@@ -224,7 +224,7 @@ export function UserManagement() {
                 </p>
               </div>
             ) : (
-              <table className="users-table">
+              <table className="users-table account-table">
                 <caption className="sr-only">Tài khoản theo bộ lọc đang áp dụng</caption>
                 <thead>
                   <tr>
@@ -254,7 +254,7 @@ export function UserManagement() {
                         {user.role === 'ADMIN' ? (
                           <span className="field-hint">Chỉ xem</span>
                         ) : (
-                          <>
+                          <div className="user-row-buttons">
                             <button
                               className="text-button"
                               type="button"
@@ -286,7 +286,7 @@ export function UserManagement() {
                                   ? 'Mở khóa'
                                   : 'Xác minh'}
                             </button>
-                          </>
+                          </div>
                         )}
                       </td>
                     </tr>
