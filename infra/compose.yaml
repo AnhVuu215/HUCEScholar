@@ -92,9 +92,13 @@ services:
       CLAMAV_HOST: clamav
       CLAMAV_PORT: '3310'
       DOCX_CONVERTER_URL: http://docx-converter:8080
+      # Calendar reminder email (CAL-03) lands next to the API's local outbox.
+      MAIL_TRANSPORT: file
+      MAIL_DIR: /data/mail
     networks: [default, docx-internal]
     volumes:
       - ../.local/files:/data/files
+      - ../.local/mail-outbox:/data/mail
     depends_on:
       postgres:
         condition: service_healthy
