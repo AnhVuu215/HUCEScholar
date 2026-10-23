@@ -1,6 +1,6 @@
 # LEARN-02 — Nhãn riêng "Cần xem lại"
 
-Ngày 21/10/2026. Nhánh `codex/learn-02-review-later`, xây trên `main` sau PR #26. Đây là ý tưởng "Điều chưa hiểu" ở mục 6 của [roadmap](../roadmap/2026-10-17-web-improvement-roadmap.md); roadmap chưa đặt mã nên lượt này đặt LEARN-02.
+Ngày 21/10/2026. Nhánh `codex/learn-02-review-later`, xây trên `main` sau PR #26; ngày 23/10 gộp lại với `main` sau CAL-03 (PR #34–#35), migration đổi tên để xếp sau các migration CAL. Đây là ý tưởng "Điều chưa hiểu" ở mục 6 của [roadmap](../roadmap/2026-10-17-web-improvement-roadmap.md); roadmap chưa đặt mã nên lượt này đặt LEARN-02.
 
 ## Hành vi
 
@@ -11,7 +11,7 @@ Ngày 21/10/2026. Nhánh `codex/learn-02-review-later`, xây trên `main` sau PR
 
 ## API và schema
 
-- Migration `202610210005_annotation_review_later`: cột `annotations.review_later boolean NOT NULL DEFAULT false` và partial index `ix_annotation_review_later (user_id, version_id, page_number, id) WHERE review_later`. Prisma khai báo cùng index bằng `where: raw(...)`; bài kiểm schema nay đếm 11 partial index.
+- Migration `202610230003_annotation_review_later`: cột `annotations.review_later boolean NOT NULL DEFAULT false` và partial index `ix_annotation_review_later (user_id, version_id, page_number, id) WHERE review_later`. Prisma khai báo cùng index bằng `where: raw(...)`; bài kiểm schema nay đếm 15 partial index (sau khi gộp với `main`).
 - `PUT /library/versions/:id/annotations/:noteId/review-later`, body `{ "reviewLater": true|false }`:
   - **đặt** giá trị chứ không đảo, nên gửi lại an toàn
   - **không tăng `revision`**: đánh dấu từ sổ ghi chú không làm bản soạn đang mở bị xung đột

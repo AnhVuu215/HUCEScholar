@@ -12,7 +12,19 @@ V2 (A–C, gồm AUTH-01) đã vào `main` qua PR #8. AUTH-02 đã triển khai 
 
 ## Cập nhật 21/10
 
-QA-01 có [pilot local tự động](../implementation/2026-10-21-local-pilot.md): bộ tài liệu tự soạn chạy qua ClamAV/Poppler/LibreOffice thật cho cả ba vai trò. Lượt này phát hiện và sửa lỗi trang có `/Rotate` hiển thị sai chiều. Ba điểm pilot tìm ra đã xử lý: UPLOAD-03 ở [mốc lý do file không đạt](../implementation/2026-10-21-file-check-reasons.md) (nhận PDF chỉ khóa quyền, tắt tô và trích dẫn; báo rõ lý do từ chối file), SEARCH-02 ở [mốc tìm nhiều từ](../implementation/2026-10-21-multiword-search.md). UPLOAD-04 cho admin thấy cùng lý do ([mốc](../implementation/2026-10-21-admin-file-reasons.md)). NOTIFY-01 có [lát đầu thông báo trong ứng dụng](../implementation/2026-10-21-in-app-notifications.md). EXPORT-01 có [xuất ghi chú Markdown/văn bản](../implementation/2026-10-21-notes-export.md). PERF-01 có [công cụ đo và mốc đầu tiên](../implementation/2026-10-21-perf-baseline.md), chưa đặt mục tiêu. COURSE-01 có [danh sách đọc theo môn](../implementation/2026-10-21-reading-lists.md), mô hình mặc định ghi trong mốc. STUDY-01 có [thẻ ôn tập từ đoạn tô](../implementation/2026-10-21-study-cards.md). AUTH-03 có [khôi phục mật khẩu qua email](../implementation/2026-10-21-account-recovery.md), chưa thử SMTP thật/HTTPS. Ý tưởng "Điều chưa hiểu" ở mục 6 thành LEARN-02, [nhãn riêng Cần xem lại](../implementation/2026-10-21-review-later.md). Phiên dùng thử với người thật và OPS-02 vẫn mở.
+QA-01 có [pilot local tự động](../implementation/2026-10-21-local-pilot.md): bộ tài liệu tự soạn chạy qua ClamAV/Poppler/LibreOffice thật cho cả ba vai trò. Lượt này phát hiện và sửa lỗi trang có `/Rotate` hiển thị sai chiều. Ba điểm pilot tìm ra đã xử lý: UPLOAD-03 ở [mốc lý do file không đạt](../implementation/2026-10-21-file-check-reasons.md) (nhận PDF chỉ khóa quyền, tắt tô và trích dẫn; báo rõ lý do từ chối file), SEARCH-02 ở [mốc tìm nhiều từ](../implementation/2026-10-21-multiword-search.md). UPLOAD-04 cho admin thấy cùng lý do ([mốc](../implementation/2026-10-21-admin-file-reasons.md)). NOTIFY-01 có [lát đầu thông báo trong ứng dụng](../implementation/2026-10-21-in-app-notifications.md). EXPORT-01 có [xuất ghi chú Markdown/văn bản](../implementation/2026-10-21-notes-export.md). PERF-01 có [công cụ đo và mốc đầu tiên](../implementation/2026-10-21-perf-baseline.md), chưa đặt mục tiêu. COURSE-01 có [danh sách đọc theo môn](../implementation/2026-10-21-reading-lists.md), mô hình mặc định ghi trong mốc. STUDY-01 có [thẻ ôn tập từ đoạn tô](../implementation/2026-10-21-study-cards.md). Ý tưởng "Có bản mới nhưng không mất bản cũ" ở mục 6 thành VERSION-01, [khung báo phiên bản hiện hành](../implementation/2026-10-21-current-version-notice.md). Phiên dùng thử với người thật và OPS-02 vẫn mở. Ý tưởng "Điều chưa hiểu" ở mục 6 thành LEARN-02, [nhãn riêng Cần xem lại](../implementation/2026-10-21-review-later.md).
+
+## Cập nhật 22/10
+
+CAL-01 có [lịch học và việc cần làm riêng](../implementation/2026-10-22-study-calendar.md): ba chế độ Tuần/Tháng/Lịch biểu, panel việc cần làm, buổi học mở đúng trang tài liệu và nút "Lên lịch đọc" trong reader. Lộ trình CAL-02…05 ở [thiết kế](../superpowers/specs/2026-10-22-study-calendar.md).
+
+CAL-02 thêm [lặp lại hằng tuần, kéo thả và phím tắt](../implementation/2026-10-22-calendar-repeat-drag.md) cho lịch học: sửa hoặc xóa riêng một buổi trong chuỗi, kéo việc chưa có ngày lên lịch.
+
+AUTH-04 mở [tự đăng ký bằng email](../implementation/2026-10-22-self-signup.md) cho sinh viên và giảng viên theo quyết định của chủ dự án; tài khoản Admin vẫn chỉ do admin cấp.
+
+## Cập nhật 23/10
+
+CAL-03 thêm [nhắc trước giờ học](../implementation/2026-10-23-calendar-reminders.md): mỗi lịch học hoặc việc có giờ chọn một lời nhắc, hiện ở chuông thông báo, tùy chọn gửi email; worker PDF quét mỗi phút.
 
 ## Bổ sung yêu cầu V2 ngày 17/10
 
@@ -33,7 +45,7 @@ Các ràng buộc giữ nguyên:
 - Sinh viên đóng góp tài liệu qua kiểm duyệt; quyền vẫn do API quyết định.
 - Ghi chú và vùng tô riêng theo người/phiên bản/trang; không tự chia sẻ, gửi sang AI hoặc chuyển sang PDF mới.
 - PDF/DOCX giảng viên tối đa25MiB; Word được chuyển PDF, giữ nguồn gốc theo quyền. PPTX/video/DOC và DOCX sinh viên chưa thuộc phạm vi.
-- Không tự đăng ký, SSO, thu thập danh sách lớp thật hoặc kết nối thư viện trường.
+- Không SSO, thu thập danh sách lớp thật hoặc kết nối thư viện trường. Tự đăng ký sinh viên/giảng viên đã mở từ 22/10 (AUTH-04).
 
 ## 2. Hiện trạng và bằng chứng
 
