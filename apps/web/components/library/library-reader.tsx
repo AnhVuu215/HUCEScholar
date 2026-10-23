@@ -415,8 +415,8 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                       current={item.currentVersion}
                     />
                   )}
-                  <SaveMaterial key={item.documentId} documentId={item.documentId} />
-                  <ReaderReport key={item.versionId} versionId={item.versionId} />
+                  <SaveMaterial key={`save-${item.documentId}`} documentId={item.documentId} />
+                  <ReaderReport key={`report-${item.versionId}`} versionId={item.versionId} />
                   <ScheduleReading
                     key={`schedule-${item.versionId}`}
                     versionId={item.versionId}
