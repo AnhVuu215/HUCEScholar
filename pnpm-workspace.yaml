@@ -12,3 +12,7 @@ allowBuilds:
   prisma: true
   argon2: true
   msgpackr-extract: false
+# Advisories in transitive dependencies of the Prisma CLI (pnpm audit, 23/10/2026).
+overrides:
+  mysql2: 3.24.6
+  deepmerge-ts: 8.0.2
