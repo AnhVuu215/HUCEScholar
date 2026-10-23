@@ -134,10 +134,22 @@ export async function libraryCourses(signal: AbortSignal): Promise<LibraryItem['
     throw new Error('Invalid library courses.');
   return body.items;
 }
+/** HTTP status of an API error, or of pdf.js's ResponseException when it fetched the PDF itself. */
+function statusOf(error: unknown) {
+  if (error instanceof ApiError) return error.status;
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === 'number' ? status : null;
+}
+/** 410 FILE_MISSING: the version still exists but its PDF is gone from the server. */
+export function pdfMissing(error: unknown) {
+  return statusOf(error) === 410;
+}
 export function libraryError(error: unknown) {
+  if (pdfMissing(error))
+    return 'File PDF của phiên bản này không còn trên máy chủ. Thử lại cũng không mở được; hãy báo cho người tải lên hoặc quản trị viên bằng “Báo cáo tài liệu”.';
   if (error instanceof ApiError && error.status === 401)
     return 'Phiên đăng nhập đã hết hạn. Đăng nhập lại để tiếp tục.';
-  if (error instanceof ApiError && [403, 404].includes(error.status))
+  if ([403, 404].includes(statusOf(error) ?? 0))
     return 'Học liệu không còn khả dụng hoặc bạn không có quyền đọc. Quay lại kho để chọn tài liệu khác.';
   return 'Chưa tải được học liệu. Kiểm tra kết nối rồi thử lại.';
 }

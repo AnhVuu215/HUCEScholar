@@ -14,7 +14,8 @@
     "db:migrate": "pnpm prisma migrate deploy",
     "db:generate": "pnpm prisma generate",
     "test:integration": "node --env-file-if-exists=../../.local/test.env node_modules/jest/bin/jest.js --config jest.integration.config.cjs --runInBand",
-    "db:bootstrap-admin": "node --env-file-if-exists=.env --env-file-if-exists=.env.bootstrap dist/scripts/bootstrap-admin.js"
+    "db:bootstrap-admin": "node --env-file-if-exists=.env --env-file-if-exists=.env.bootstrap dist/scripts/bootstrap-admin.js",
+    "doctor:files": "node --env-file-if-exists=.env dist/scripts/doctor-files.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1149.0",
