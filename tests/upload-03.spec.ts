@@ -100,6 +100,30 @@ test('a failed PDF says why, so the uploader knows what to fix', async ({ page }
   ).toBeVisible();
 });
 
+test('a PDF the scanner never answered for is checked again without a new upload', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const { id, title } = await draftWithPdf(page);
+  await failWith(id, 'CHECK_UNAVAILABLE');
+  await page.goto('/workspace/student/materials');
+  await page.getByRole('button', { name: `Mở bản nháp ${title}`, exact: true }).click();
+  const pdf = page.getByRole('region', { name: 'PDF của bản nháp' });
+  await expect(pdf.getByText('không cần tải lên lại', { exact: false })).toBeVisible();
+  await pdf.getByRole('button', { name: 'Kiểm tra lại', exact: true }).click();
+  await expect(pdf.getByText('PDF đang kiểm tra', { exact: true })).toBeVisible();
+  await expect(
+    pdf.getByText('Đang kiểm tra lại đúng file đã tải lên', { exact: false }),
+  ).toBeVisible();
+  await expect(pdf.getByRole('button', { name: 'Kiểm tra lại', exact: true })).toHaveCount(0);
+  // A verdict about the file itself offers no such shortcut.
+  await failWith(id, 'MALWARE');
+  await page.reload();
+  await page.getByRole('button', { name: `Mở bản nháp ${title}`, exact: true }).click();
+  await expect(pdf.getByText('phát hiện mã độc', { exact: false })).toBeVisible();
+  await expect(pdf.getByRole('button', { name: 'Kiểm tra lại', exact: true })).toHaveCount(0);
+});
+
 test('a copy-restricted PDF can be read and page-noted but not highlighted or cited', async ({
   page,
 }) => {

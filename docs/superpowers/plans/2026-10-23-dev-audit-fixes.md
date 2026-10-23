@@ -67,6 +67,16 @@ Mỗi bước là một nhánh `codex/…` và một PR nhỏ, chạy đủ lint
   - unit: chính sách thử lại
   - integration: ClamAV giả lỗi 2 lần rồi đạt → SAFE; hết lượt → `CHECK_UNAVAILABLE`; recheck → CHECKING; người khác → 404
   - e2e: nút "Kiểm tra lại"
+- **Đã làm** (nhánh `codex/upload-scan-resilience`):
+  - Hàng đợi quét: 8 lần, cách 15 giây và nhân đôi (khoảng 32 phút) rồi mới ghi `CHECK_UNAVAILABLE`. Lỗi về chính file (mã độc, mật khẩu, PDF hỏng…) vẫn dừng ngay.
+  - `POST /material-drafts/:id/pdf/recheck` (`revision`, 202):
+    - chỉ chủ bản nháp, chỉ khi bản nháp còn là DRAFT, PDF tải trực tiếp (không phải bản dựng từ Word), đang `FAILED/CHECK_UNAVAILABLE`; ngoài ra trả 409 `PDF_NOT_RECHECKABLE`
+    - đưa file về `CHECKING`, tăng revision và ghi audit `MATERIAL_PDF_RECHECKED`
+    - xóa job lỗi cũ (BullMQ giữ 7 ngày) rồi đưa vào hàng đợi lại
+  - Migration `202610230004_file_check_round`: `files.check_round` (CHECK 1–100). Thông báo vòng đầu giữ khóa `file:<id>`; từ vòng 2 dùng `file:<id>:<vòng>`, để kết quả lần kiểm tra lại không bị trùng khóa và mất.
+  - Web: nút **Kiểm tra lại** cho sinh viên (`DraftPdf`) và giảng viên (`MaterialFileStatus`); thông báo lỗi nói rõ không cần tải lên lại.
+  - Kiểm chứng local: `pnpm check` (121 unit, build); integration 218 đạt, 1 bỏ qua (ca mới: kiểm tra lại → SAFE, hai thông báo `file:<id>` và `file:<id>:2`, revision cũ 409, người khác 404, mã độc 409); e2e 174 đạt, 8 bỏ qua (ca mới trong `upload-03`). Test schema: 107 CHECK, 15 partial index.
+
 
 ### Bước 4 — Báo đúng khi file PDF bị mất (P1, #4) · `codex/missing-object`
 
