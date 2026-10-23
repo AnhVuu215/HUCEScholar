@@ -1,4 +1,4 @@
-/* workspace-ui.css — updated to fix workspace header layout */
+/* workspace-ui.css â€” updated to fix workspace header layout */
 .select-field {
   min-width: 0;
 }
@@ -865,7 +865,7 @@
   font-size: 0.875rem;
   font-weight: 600;
 }
-/* Editor and the reader's "Lên lịch đọc". */
+/* Editor and the reader's "LÃªn lá»‹ch Ä‘á»c". */
 .calendar-editor {
   display: grid;
   gap: 12px;
@@ -958,7 +958,8 @@
 .calendar-shortcuts {
   margin: 0;
 }
-.calendar-repeat {
+.calendar-repeat,
+.calendar-remind {
   display: grid;
   gap: 8px;
 }

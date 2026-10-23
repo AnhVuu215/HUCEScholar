@@ -20,6 +20,9 @@ export type CalendarRepeat = {
 };
 /** What the form sends: ISO weekdays (1 = Monday), last local date, the device's UTC offset. */
 export type CalendarRepeatInput = { weekdays: number[]; until: string; utcOffset: number };
+/** CAL-03 lead times in minutes; 0 reminds at the start or due time. */
+export const remindOptions = [0, 5, 10, 15, 30, 60, 120, 1440] as const;
+export type CalendarReminder = { minutes: number; email: boolean };
 export type CalendarItem = {
   id: string;
   kind: CalendarKind;
@@ -35,6 +38,8 @@ export type CalendarItem = {
   material: { versionId: string; pageNumber: number; title: string } | null;
   materialUnavailable: boolean;
   repeat: CalendarRepeat | null;
+  /** In-app notice (and email when asked) before the start or due time. */
+  reminder: CalendarReminder | null;
   /** Original start of this occurrence of a repeating session; null for a single item. */
   occurrenceStart: string | null;
   revision: number;
@@ -51,6 +56,8 @@ export type CalendarFields = {
   versionId: string | null;
   pageNumber: number | null;
   repeat?: CalendarRepeatInput | null;
+  remindMinutes?: number | null;
+  remindEmail?: boolean;
 };
 export type CalendarRange = { items: CalendarItem[]; truncated: boolean };
 export type CalendarTasks = { items: CalendarItem[]; total: number; page: number; limit: number };
@@ -88,10 +95,20 @@ function valid(v: unknown): v is CalendarItem {
         typeof v.material.title === 'string')) &&
     typeof v.materialUnavailable === 'boolean' &&
     repeat(v.repeat) &&
+    (v.reminder === null ||
+      (record(v.reminder) &&
+        (remindOptions as readonly unknown[]).includes(v.reminder.minutes) &&
+        typeof v.reminder.email === 'boolean')) &&
     time(v.occurrenceStart) &&
     Number.isInteger(v.revision) &&
     typeof v.updatedAt === 'string'
   );
+}
+/** Only an item with a date and time reminds; a move to all-day or no date drops the reminder. */
+function fit(fields: CalendarFields): CalendarFields {
+  return fields.startsAt && !fields.allDay
+    ? fields
+    : { ...fields, remindMinutes: null, remindEmail: false };
 }
 async function send(path: string, method: string, body: object) {
   const token = await csrfToken();
@@ -132,7 +149,7 @@ export async function openTasks(signal?: AbortSignal) {
   throw new Error('Invalid calendar tasks.');
 }
 export async function createCalendarItem(fields: CalendarFields, requestId: string) {
-  return item(await (await send('/calendar/items', 'POST', { ...fields, requestId })).json());
+  return item(await (await send('/calendar/items', 'POST', { ...fit(fields), requestId })).json());
 }
 /** `keepSource` keeps the stored link, including one withheld because access ended. */
 export async function updateCalendarItem(
@@ -143,7 +160,7 @@ export async function updateCalendarItem(
   return item(
     await (
       await send(`/calendar/items/${encodeURIComponent(current.id)}`, 'PATCH', {
-        ...fields,
+        ...fit(fields),
         ...(keepSource ? { versionId: null, pageNumber: null, keepSource } : {}),
         revision: current.revision,
       })
@@ -167,7 +184,7 @@ export async function detachOccurrence(
   return item(
     await (
       await send(`/calendar/items/${encodeURIComponent(current.id)}/detach`, 'POST', {
-        ...fields,
+        ...fit(fields),
         ...(keepSource ? { versionId: null, pageNumber: null, keepSource } : {}),
         repeat: null,
         requestId,
@@ -202,7 +219,7 @@ export function calendarError(error: unknown) {
     if (error.status === 404)
       return 'Mục lịch hoặc tài liệu liên kết không còn khả dụng. Tải lại rồi thử lại.';
     if (error.status === 400)
-      return 'Kiểm tra lại: tiêu đề 1–200 ký tự, giờ kết thúc sau giờ bắt đầu, tối đa 14 ngày; lặp lại tối đa 366 ngày và gồm thứ của ngày bắt đầu.';
+      return 'Kiểm tra lại: tiêu đề 1–200 ký tự, giờ kết thúc sau giờ bắt đầu, tối đa 14 ngày; lặp lại tối đa 366 ngày và gồm thứ của ngày bắt đầu; chỉ nhắc mục có giờ.';
   }
   return 'Chưa xác nhận được với máy chủ. Nội dung vẫn còn trong ô; thử lại.';
 }
@@ -302,6 +319,11 @@ export function isoWeekday(date: Date) {
 export function utcOffset(date: Date) {
   return -date.getTimezoneOffset();
 }
+export function remindLabel(minutes: number) {
+  if (minutes === 0) return 'Lúc bắt đầu';
+  if (minutes === 1440) return 'Trước 1 ngày';
+  return minutes >= 60 ? `Trước ${minutes / 60} giờ` : `Trước ${minutes} phút`;
+}
 export function repeatLabel(repeat: CalendarRepeat) {
   const [y, m, d] = repeat.until.split('-').map(Number);
   const days = repeat.weekdays.map((w) => weekdayLabels[w - 1]).join(', ');
@@ -324,6 +346,8 @@ export function itemFields(item: CalendarItem): { fields: CalendarFields; keepSo
       versionId: item.material?.versionId ?? null,
       pageNumber: item.material?.pageNumber ?? null,
       repeat: null,
+      remindMinutes: item.reminder?.minutes ?? null,
+      remindEmail: item.reminder?.email ?? false,
     },
     keepSource: item.materialUnavailable,
   };

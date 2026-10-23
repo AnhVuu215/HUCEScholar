@@ -581,17 +581,21 @@ model notifications {
   user_id BigInt
   kind String @db.VarChar(24)
   event_key String @db.VarChar(64)
-  document_id BigInt
-  version_id BigInt
+  document_id BigInt?
+  version_id BigInt?
   title String @db.VarChar(300)
   detail String? @db.VarChar(40)
   created_at DateTime @default(now()) @db.Timestamptz(6)
   read_at DateTime? @db.Timestamptz(6)
+  calendar_item_id BigInt?
+  event_at DateTime? @db.Timestamptz(6)
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  documents documents @relation(fields: [document_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  document_versions document_versions @relation(fields: [document_id, version_id], references: [document_id, id], onDelete: Restrict, onUpdate: NoAction, map: "fk_notification_version")
+  documents documents? @relation(fields: [document_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  document_versions document_versions? @relation(fields: [document_id, version_id], references: [document_id, id], onDelete: Restrict, onUpdate: NoAction, map: "fk_notification_version")
+  calendar_items calendar_items? @relation(fields: [calendar_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   @@unique([user_id, event_key], map: "ux_notification_event")
   @@index([user_id, created_at(sort: Desc), id(sort: Desc)], map: "ix_notification_owner")
+  @@index([calendar_item_id], map: "ix_notification_calendar")
   @@schema("hucescholar")
 }
 
@@ -658,14 +662,19 @@ model calendar_items {
   repeat_days Int? @db.SmallInt
   repeat_until DateTime? @db.Date
   repeat_utc_offset Int? @db.SmallInt
+  remind_minutes Int? @db.SmallInt
+  remind_email Boolean @default(false)
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document_versions document_versions? @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   calendar_item_skips calendar_item_skips[]
+  notifications notifications[]
   @@unique([user_id, request_id], map: "ux_calendar_request")
   @@index([user_id, starts_at, id], map: "ix_calendar_owner_time")
   @@index([user_id, starts_at, id], map: "ix_calendar_open_tasks", where: raw("(((kind)::text = 'TASK'::text) AND (done_at IS NULL))"))
   @@index([version_id], map: "ix_calendar_version")
   @@index([user_id, repeat_until], map: "ix_calendar_series", where: raw("(repeat_days IS NOT NULL)"))
+  @@index([starts_at], map: "ix_calendar_remind_single", where: raw("((remind_minutes IS NOT NULL) AND (repeat_days IS NULL) AND (done_at IS NULL))"))
+  @@index([repeat_until], map: "ix_calendar_remind_series", where: raw("((remind_minutes IS NOT NULL) AND (repeat_days IS NOT NULL))"))
   @@schema("hucescholar")
 }
 
