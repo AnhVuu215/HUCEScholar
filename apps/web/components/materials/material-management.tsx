@@ -144,20 +144,25 @@ export function MaterialManagement({
               <option value="REJECTED">Từ chối</option>
             </select>
           </div>
-          <button className="secondary-button">Tìm kiếm</button>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => {
-              setSearch('');
-              setStatus('');
-              setQuery({ search: '', page: 1, reviewStatus: '' });
-              setError('');
-              setData(null);
-            }}
-          >
-            Xóa tìm kiếm
-          </button>
+          <div className="draft-filter-actions">
+            <button className="secondary-button">Tìm kiếm</button>
+            {/* Only when there is something to clear: typed, chosen or applied. */}
+            {(search || status || query.search || query.reviewStatus) && (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => {
+                  setSearch('');
+                  setStatus('');
+                  setQuery({ search: '', page: 1, reviewStatus: '' });
+                  setError('');
+                  setData(null);
+                }}
+              >
+                Xóa tìm kiếm
+              </button>
+            )}
+          </div>
         </form>
         {error ? (
           <div className="users-list-message">

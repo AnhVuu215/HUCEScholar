@@ -217,7 +217,7 @@ export function RoleWorkspace({
           >
             <WorkspaceHeader
               user={state.user}
-              title={title ?? 'Tài khoản của tôi'}
+              title={title ?? 'Trang đầu'}
               logoutPending={logoutPending}
               logoutError={logoutError}
               onLogout={() => void logout()}
