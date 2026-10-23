@@ -81,7 +81,10 @@ export class ScanProcessor {
     kind: 'FILE_SAFE' | 'FILE_FAILED',
     detail: string | null,
   ) {
-    const file = await tx.files.findUniqueOrThrow({ where: { id }, select: { uploaded_by: true } });
+    const file = await tx.files.findUniqueOrThrow({
+      where: { id },
+      select: { uploaded_by: true, check_round: true },
+    });
     const version = await tx.document_versions.findFirst({
       where: { file_id: id },
       select: { id: true },
@@ -91,7 +94,7 @@ export class ScanProcessor {
       await notify(tx, {
         userId: file.uploaded_by,
         kind,
-        eventKey: `file:${id}`,
+        eventKey: file.check_round > 1 ? `file:${id}:${file.check_round}` : `file:${id}`,
         versionId: version.id,
         detail,
       });

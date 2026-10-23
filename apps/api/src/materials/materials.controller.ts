@@ -23,6 +23,7 @@ import {
   WithdrawMaterialDto,
   UpdateDraftDto,
   SourceRetryDto,
+  PdfRecheckDto,
 } from './materials.dto';
 import { MaterialsService } from './materials.service';
 import { DraftPdfService } from './draft-pdf.service';
@@ -92,6 +93,15 @@ export class MaterialsController {
   }
   @Post(':id/pdf') upload(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.pdf.upload(req.user, id, req);
+  }
+  @Post(':id/pdf/recheck')
+  @HttpCode(202)
+  recheckPdf(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: PdfRecheckDto,
+  ) {
+    return this.pdf.recheck(req.user, id, body);
   }
   @Post(':id/file')
   @HttpCode(202)

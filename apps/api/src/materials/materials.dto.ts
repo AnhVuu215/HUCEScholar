@@ -56,6 +56,7 @@ export class SubmitMaterialDto {
 export class SourceRetryDto extends SubmitMaterialDto {
   @IsString() @Matches(/^[1-9]\d{0,18}$/) sourceUploadId!: string;
 }
+export class PdfRecheckDto extends SubmitMaterialDto {}
 export class WithdrawMaterialDto extends SubmitMaterialDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(1000) reason!: string;
 }
