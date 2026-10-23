@@ -13,6 +13,8 @@ const select = {
   detail: true,
   created_at: true,
   read_at: true,
+  calendar_item_id: true,
+  event_at: true,
 } as const;
 
 /** Every query filters by the session user: a notice is never readable by anyone else. */
@@ -40,8 +42,11 @@ export class NotificationsService {
       items: rows.map((n) => ({
         id: String(n.id),
         kind: n.kind,
-        documentId: String(n.document_id),
-        versionId: String(n.version_id),
+        documentId: n.document_id === null ? null : String(n.document_id),
+        versionId: n.version_id === null ? null : String(n.version_id),
+        /** CALENDAR_REMINDER: the item and the start (or due time) it is about. */
+        calendarItemId: n.calendar_item_id === null ? null : String(n.calendar_item_id),
+        eventAt: n.event_at?.toISOString() ?? null,
         title: n.title,
         detail: n.detail,
         createdAt: n.created_at.toISOString(),

@@ -24,6 +24,9 @@ import { join } from 'node:path';
 import { DOCX_MIME } from '../src/files/receive-docx';
 import { DocxTools, SourceConversionProcessor } from '../src/materials/source-conversion.processor';
 import { SourceConversionQueue } from '../src/files/source-conversion-queue';
+import { CalendarReminders } from '../src/calendar/calendar-reminders';
+import { Mailer } from '../src/auth/mailer';
+import { AUTH_CONFIG } from '../src/auth/auth.config';
 
 type Browser = ReturnType<typeof request.agent>;
 const origin = 'http://127.0.0.1:3100';
@@ -511,6 +514,8 @@ describe('private material drafts', () => {
           kind: 'FILE_SAFE',
           documentId: item.id,
           versionId,
+          calendarItemId: null,
+          eventAt: null,
           title: expect.any(String),
           detail: null,
           createdAt: expect.any(String),
@@ -1256,6 +1261,123 @@ describe('private material drafts', () => {
           )
         ).rows[0].n,
       ).toBe(0);
+    });
+  });
+  describe('CAL-03 reminders', () => {
+    const items = '/api/v1/calendar/items';
+    // Monday 5 April 2027 in Hanoi (UTC+7); away from the CAL-01/02 dates.
+    const fields = (overrides: object = {}) => ({
+      kind: 'EVENT',
+      title: 'Ôn Sức bền',
+      details: 'không gửi trong thư',
+      startsAt: '2027-04-05T02:00:00.000Z',
+      endsAt: '2027-04-05T03:00:00.000Z',
+      allDay: false,
+      color: 'blue',
+      versionId: null,
+      pageNumber: null,
+      remindMinutes: 15,
+      remindEmail: true,
+      requestId: randomUUID(),
+      ...overrides,
+    });
+    const reminders = async (name = 'student') =>
+      (await agents[name].get('/api/v1/notifications?limit=50')).body.items.filter(
+        (n: { kind: string }) => n.kind === 'CALENDAR_REMINDER',
+      );
+
+    it('validates reminders, notifies each due occurrence once and mails only when asked', async () => {
+      const session = await readingWrite('student', items, fields());
+      expect(session.status).toBe(201);
+      expect(session.body.item.reminder).toEqual({ minutes: 15, email: true });
+      for (const bad of [
+        { remindMinutes: 7 },
+        { allDay: true, endsAt: '2027-04-06T00:00:00.000Z', startsAt: '2027-04-05T00:00:00.000Z' },
+        { kind: 'TASK', startsAt: null, endsAt: null },
+        { remindMinutes: null, remindEmail: true },
+      ])
+        expect((await readingWrite('student', items, fields(bad))).status).toBe(400);
+      await expect(
+        db.query(
+          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,all_day,remind_minutes) VALUES(gen_random_uuid(),$1,'EVENT','x','2027-04-05','2027-04-06',true,0)",
+          [users.student],
+        ),
+      ).rejects.toThrow(/ck_calendar_remind/);
+      await expect(
+        db.query(
+          "INSERT INTO hucescholar.notifications(user_id,kind,event_key,title) VALUES($1,'CALENDAR_REMINDER','reminder:1:1','x')",
+          [users.student],
+        ),
+      ).rejects.toThrow(/ck_notification_target/);
+      const task = await readingWrite(
+        'student',
+        items,
+        fields({ kind: 'TASK', endsAt: null, remindMinutes: 0, remindEmail: false }),
+      );
+      await readingWrite('student', `${items}/${task.body.item.id}/done`, { done: true }, 'put');
+      const weekly = await readingWrite(
+        'student',
+        items,
+        fields({
+          startsAt: '2027-04-05T00:00:00.000Z',
+          endsAt: '2027-04-05T01:00:00.000Z',
+          remindMinutes: 60,
+          remindEmail: false,
+          repeat: { weekdays: [1, 3], until: '2027-04-14', utcOffset: 420 },
+        }),
+      );
+      expect(weekly.status).toBe(201);
+      await readingWrite('student', `${items}/${weekly.body.item.id}/skip`, {
+        revision: 1,
+        occurrenceStart: '2027-04-07T00:00:00.000Z',
+      });
+
+      const sent: { to: string; subject: string; text: string }[] = [];
+      const mailer = {
+        enabled: true,
+        send: async (mail: (typeof sent)[0]) => void sent.push(mail),
+      };
+      const service = new CalendarReminders(
+        app.get(DatabaseService),
+        mailer as unknown as Mailer,
+        app.get(AUTH_CONFIG),
+      );
+      expect(app.get(CalendarReminders)).toBeInstanceOf(CalendarReminders);
+      // 15 minutes before the session; the series' first reminder (23:00 the day before) is past.
+      expect(await service.dispatch(new Date('2027-04-05T01:50:00.000Z'))).toBe(1);
+      expect(await service.dispatch(new Date('2027-04-05T01:52:00.000Z'))).toBe(0);
+      // The task is done at its due time.
+      expect(await service.dispatch(new Date('2027-04-05T02:00:00.000Z'))).toBe(0);
+      // Wednesday was skipped; next Monday reminds an hour before.
+      expect(await service.dispatch(new Date('2027-04-06T23:05:00.000Z'))).toBe(0);
+      expect(await service.dispatch(new Date('2027-04-11T23:05:00.000Z'))).toBe(1);
+      // Older than the look-back window: dropped, not sent late.
+      expect(await service.dispatch(new Date('2027-04-13T23:30:00.000Z'))).toBe(0);
+
+      expect(sent).toHaveLength(1);
+      expect(sent[0].subject).toBe('Nhắc lịch: Ôn Sức bền');
+      expect(sent[0].text).toContain('bắt đầu sau 15 phút');
+      expect(sent[0].text).toContain(`${origin}/workspace/calendar?at=2027-04-05T02:00:00.000Z`);
+      expect(sent[0].text).not.toContain('không gửi trong thư');
+      const mine = await reminders();
+      expect(
+        mine.map((n: { calendarItemId: string; eventAt: string }) => [n.calendarItemId, n.eventAt]),
+      ).toEqual([
+        [weekly.body.item.id, '2027-04-12T00:00:00.000Z'],
+        [session.body.item.id, '2027-04-05T02:00:00.000Z'],
+      ]);
+      expect(mine[1]).toMatchObject({
+        title: 'Ôn Sức bền',
+        detail: 'EVENT',
+        documentId: null,
+        versionId: null,
+      });
+      expect(await reminders('other')).toEqual([]);
+      // Deleting the item removes its reminders.
+      await readingWrite('student', `${items}/${session.body.item.id}`, { revision: 1 }, 'delete');
+      expect((await reminders()).map((n: { calendarItemId: string }) => n.calendarItemId)).toEqual([
+        weekly.body.item.id,
+      ]);
     });
   });
   it('study cards are private, keep their source after the highlight is deleted, and follow read access', async () => {

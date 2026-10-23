@@ -23,14 +23,14 @@ describe('migrated PostgreSQL authentication lifecycle', () => {
     );
     expect(constraints.rows).toEqual(
       expect.arrayContaining([
-        { contype: 'f', n: 66 },
-        { contype: 'c', n: 103 },
+        { contype: 'f', n: 67 },
+        { contype: 'c', n: 106 },
       ]),
     );
     const partial = await client.query(
       "SELECT count(*)::int n FROM pg_indexes WHERE schemaname='hucescholar' AND indexdef LIKE '% WHERE %'",
     );
-    expect(partial.rows[0].n).toBe(12);
+    expect(partial.rows[0].n).toBe(14);
     const guards = await client.query(
       "SELECT count(*)::int n FROM pg_trigger WHERE tgrelid IN ('hucescholar.document_versions'::regclass,'hucescholar.version_courses'::regclass,'hucescholar.files'::regclass,'hucescholar.documents'::regclass) AND NOT tgisinternal",
     );
