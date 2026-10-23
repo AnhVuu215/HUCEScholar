@@ -18,6 +18,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check apps tests scripts infra .github *.json *.yaml *.mjs",
     "infra:up": "docker compose --env-file infra/.env -f infra/compose.yaml up -d",
+    "infra:files": "docker compose --env-file infra/.env -f infra/compose.yaml --profile files up -d --build clamav docx-converter file-worker",
     "infra:down": "docker compose --env-file infra/.env -f infra/compose.yaml down",
     "setup:local": "node scripts/setup-local.mjs",
     "test:setup": "node scripts/test-environment.mjs",
