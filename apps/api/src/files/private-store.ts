@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { GoneException, Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import {
   S3Client,
   PutObjectCommand,
@@ -12,6 +12,25 @@ import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
 import { DOCX_MIME } from './receive-docx';
+/** The database names an object the store no longer has: not a network problem, retrying won't help. */
+export class MissingObjectError extends Error {
+  constructor() {
+    super('Private object missing.');
+  }
+}
+/**
+ * 410 FILE_MISSING for a reader, preview or review of a file whose bytes are gone. Logs the file id
+ * (never the key or a path) so an operator can find it; `pnpm --filter @hucescholar/api doctor:files` lists them all.
+ */
+export function fileMissing(fileId: bigint | string) {
+  Logger.warn(`Private object missing for file ${fileId}.`, 'Files');
+  return new GoneException({
+    code: 'FILE_MISSING',
+    message: 'File PDF của phiên bản này không còn trên máy chủ.',
+  });
+}
+const notFound = (error: unknown) =>
+  (error as NodeJS.ErrnoException)?.code === 'ENOENT' || (error as Error)?.name === 'NoSuchKey';
 export interface ByteRange {
   start: number;
   end: number;
@@ -67,15 +86,24 @@ export class PrivateStore implements OnModuleDestroy {
         range.end < range.start)
     )
       throw new Error('Invalid private byte range.');
-    if (!this.s3) return createReadStream(path, range);
-    const object = await this.s3.send(
-      new GetObjectCommand({
-        Bucket: this.config.bucket,
-        Key: key,
-        ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}),
-      }),
-      { abortSignal: AbortSignal.timeout(30_000) },
-    );
+    if (!this.s3) {
+      await access(path, constants.R_OK).catch((error: unknown) => {
+        throw notFound(error) ? new MissingObjectError() : error;
+      });
+      return createReadStream(path, range);
+    }
+    const object = await this.s3
+      .send(
+        new GetObjectCommand({
+          Bucket: this.config.bucket,
+          Key: key,
+          ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}),
+        }),
+        { abortSignal: AbortSignal.timeout(30_000) },
+      )
+      .catch((error: unknown) => {
+        throw notFound(error) ? new MissingObjectError() : error;
+      });
     if (!(object.Body instanceof Readable)) throw new Error('Private object unavailable.');
     if (
       range &&
@@ -97,6 +125,16 @@ export class PrivateStore implements OnModuleDestroy {
     }
     await mkdir(this.config.root, { recursive: true });
     await access(this.config.root, constants.W_OK);
+  }
+  /** Whether the object is still there; for the doctor:files check, not for serving. */
+  async exists(key: string, isSource = false) {
+    try {
+      (await this.read(key, { start: 0, end: 0 }, isSource)).destroy();
+      return true;
+    } catch (error) {
+      if (error instanceof MissingObjectError) return false;
+      throw error;
+    }
   }
   async remove(key: string, isSource = false) {
     const path = this.path(key, isSource);

@@ -11,7 +11,12 @@ import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
 import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
-import { PrivateStore, type ByteRange } from '../files/private-store';
+import {
+  PrivateStore,
+  type ByteRange,
+  MissingObjectError,
+  fileMissing,
+} from '../files/private-store';
 import { LibraryListDto } from './library.dto';
 import { DOCX_MIME } from '../files/receive-docx';
 import { MaterialsService } from './materials.service';
@@ -311,7 +316,8 @@ export class LibraryService {
           : `${download ? 'attachment' : 'inline'}; filename="material.pdf"`,
         length: selected ? selected.end - selected.start + 1 : size,
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof MissingObjectError) throw fileMissing(file.id);
       throw new ServiceUnavailableException('Chưa mở được PDF. Kiểm tra kết nối rồi thử lại.');
     }
   }
@@ -337,7 +343,8 @@ export class LibraryService {
         disposition: 'inline; filename="preview.pdf"',
         length: Number(file.byte_size),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof MissingObjectError) throw fileMissing(file.id);
       throw new ServiceUnavailableException('Chưa mở được bản đọc.');
     }
   }
