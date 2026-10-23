@@ -9,7 +9,8 @@ export type NotificationKind =
   | 'REVIEW_CHANGES_REQUIRED'
   | 'REVIEW_REJECTED'
   | 'REPORT_RESOLVED'
-  | 'REPORT_DISMISSED';
+  | 'REPORT_DISMISSED'
+  | 'CALENDAR_REMINDER';
 
 /**
  * Records one notice in the caller's transaction, so it commits or rolls back with the state

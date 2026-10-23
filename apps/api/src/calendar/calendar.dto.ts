@@ -24,6 +24,8 @@ const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? val
 const integer = ({ value }: { value: unknown }) =>
   typeof value === 'string' && /^\d{1,6}$/.test(value) ? Number(value) : value;
 export const calendarColors = ['blue', 'green', 'orange', 'purple', 'red', 'gray'] as const;
+/** CAL-03 lead times in minutes; 0 reminds at the start (or due time). */
+export const remindMinutes = [0, 5, 10, 15, 30, 60, 120, 1440] as const;
 /** CAL-02 weekly repeat. Weekdays and `until` are local to `utcOffset` (minutes east of UTC). */
 export class CalendarRepeatDto {
   @IsArray()
@@ -65,6 +67,12 @@ export class CalendarFieldsDto {
   @ValidateNested()
   @Type(() => CalendarRepeatDto)
   repeat: CalendarRepeatDto | null = null;
+  /** Only items with a time can remind; absent means no reminder. */
+  @IsOptional()
+  @IsIn(remindMinutes)
+  remindMinutes: (typeof remindMinutes)[number] | null = null;
+  /** Also email the owner; needs a reminder. */
+  @IsOptional() @IsBoolean() remindEmail = false;
 }
 export class CreateCalendarItemDto extends CalendarFieldsDto {
   @IsUUID('4') requestId!: string;

@@ -22,6 +22,10 @@ CAL-02 thêm [lặp lại hằng tuần, kéo thả và phím tắt](../implemen
 
 AUTH-04 mở [tự đăng ký bằng email](../implementation/2026-10-22-self-signup.md) cho sinh viên và giảng viên theo quyết định của chủ dự án; tài khoản Admin vẫn chỉ do admin cấp.
 
+## Cập nhật 23/10
+
+CAL-03 thêm [nhắc trước giờ học](../implementation/2026-10-23-calendar-reminders.md): mỗi lịch học hoặc việc có giờ chọn một lời nhắc, hiện ở chuông thông báo, tùy chọn gửi email; worker PDF quét mỗi phút.
+
 ## Bổ sung yêu cầu V2 ngày 17/10
 
 Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.
