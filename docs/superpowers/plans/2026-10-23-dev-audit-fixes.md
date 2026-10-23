@@ -102,6 +102,13 @@ Mỗi bước là một nhánh `codex/…` và một PR nhỏ, chạy đủ lint
 - #8: cột thao tác dùng hàng ngang (wrap khi hẹp), canh trái đều; kiểm 1440/390/320px.
 - #9: "Xóa tìm kiếm" chỉ hiện khi có từ khóa hoặc bộ lọc, đặt cạnh nút "Tìm kiếm".
 - Thêm kiểm tra trong e2e: breadcrumb trang đầu; không có cảnh báo React "same key" trên reader (đọc console).
+- **Đã làm** (nhánh `codex/ui-audit-fixes`):
+  - #7: `RoleWorkspace` mặc định breadcrumb "Trang đầu"; chỉ trang đầu theo vai trò dùng giá trị mặc định này.
+  - #8: ba nút trong `.user-row-buttons` (flex, `gap`, không xuống dòng giữa chữ). Chỉ bảng tài khoản (`.account-table`) đổi độ rộng cột (32% / 32%); bảng danh mục và báo cáo giữ nguyên.
+  - #9: "Xóa tìm kiếm" cùng ô với "Tìm kiếm", chỉ hiện khi có từ khóa, bộ lọc hoặc truy vấn đang áp dụng.
+  - E2e mới `tests/ui-audit.spec.ts`: breadcrumb; ba nút cùng hàng và đúng thứ tự ở 1280px, không tràn ở 390/320px; "Xóa tìm kiếm" ẩn/hiện; reader không có cảnh báo React "same key". Lượt đầu test này bắt được ba nút vẫn xếp ba dòng vì cột hẹp.
+  - Kiểm chứng local: `pnpm check` (121 unit, build); e2e 177 đạt, 8 bỏ qua, 1 lỗi `reader-rotation` (hết 15 giây chờ trang hiển thị); chạy lại riêng 3 lần đều đạt.
+
 
 ### Bước 6 — Dọn cảnh báo pg (P3, #10) · `codex/pg-concurrent-query`
 
