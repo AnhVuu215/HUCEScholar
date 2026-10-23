@@ -484,6 +484,73 @@ describe('private material drafts', () => {
       scan.mockRestore();
     }
   });
+  it('checks a PDF again after the scanner never answered, and notifies each round', async () => {
+    const item = await create('student');
+    await upload('student', item.id, 1);
+    const file = await uploadedFile(item);
+    const draft = async () =>
+      (await agents.student.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+    const recheck = async (name: string, revision: number) =>
+      readingWrite(name, `/api/v1/material-drafts/${item.id}/pdf/recheck`, { revision });
+    const scan = jest
+      .spyOn(app.get(PdfScanner), 'scan')
+      .mockRejectedValue(new FileCheckError(true));
+    try {
+      await expect(app.get(ScanProcessor).process(file.id, true)).rejects.toThrow();
+      const failed = await draft();
+      expect(failed).toMatchObject({ fileState: 'FAILED', fileError: 'CHECK_UNAVAILABLE' });
+      expect((await recheck('student', failed.revision - 1)).status).toBe(409);
+      expect((await recheck('other', failed.revision)).status).toBe(404);
+      const again = await recheck('student', failed.revision);
+      expect(again.status).toBe(202);
+      expect(again.body.item).toMatchObject({ fileState: 'CHECKING', fileError: null });
+      expect(
+        (await db.query('SELECT check_round FROM hucescholar.files WHERE id=$1', [file.id])).rows[0]
+          .check_round,
+      ).toBe(2);
+      // The scanner is back: the same bytes pass, and the second round has its own notice.
+      scan.mockResolvedValue({ pageCount: 2, hasTextLayer: true, copyRestricted: false });
+      await app.get(ScanProcessor).process(file.id, false);
+      expect(await draft()).toMatchObject({ fileState: 'SAFE', fileError: null });
+      const kinds = (
+        await db.query(
+          'SELECT kind, event_key FROM hucescholar.notifications WHERE event_key LIKE $1 ORDER BY id',
+          [`file:${file.id}%`],
+        )
+      ).rows;
+      expect(kinds).toEqual([
+        { kind: 'FILE_FAILED', event_key: `file:${file.id}` },
+        { kind: 'FILE_SAFE', event_key: `file:${file.id}:2` },
+      ]);
+      // Only an unanswered check can be repeated.
+      const safe = await recheck('student', (await draft()).revision);
+      expect(safe.status).toBe(409);
+      expect(safe.body.code).toBe('PDF_NOT_RECHECKABLE');
+    } finally {
+      scan.mockRestore();
+    }
+    const infected = await create('student');
+    await upload('student', infected.id, 1);
+    const malware = jest
+      .spyOn(app.get(PdfScanner), 'scan')
+      .mockRejectedValue(new FileCheckError(false, 'MALWARE'));
+    try {
+      await expect(
+        app.get(ScanProcessor).process((await uploadedFile(infected)).id, false),
+      ).rejects.toBeInstanceOf(UnrecoverableError);
+      const revision = (await agents.student.get(`/api/v1/material-drafts/${infected.id}`)).body
+        .item.revision;
+      expect(
+        (
+          await readingWrite('student', `/api/v1/material-drafts/${infected.id}/pdf/recheck`, {
+            revision,
+          })
+        ).status,
+      ).toBe(409);
+    } finally {
+      malware.mockRestore();
+    }
+  });
   async function notices(name: string, query = '') {
     return (await agents[name].get(`/api/v1/notifications${query}`).expect(200)).body;
   }

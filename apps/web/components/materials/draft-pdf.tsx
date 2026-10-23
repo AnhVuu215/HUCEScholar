@@ -2,7 +2,9 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '../../lib/auth';
 import {
+  canRecheckPdf,
   currentDraft,
+  recheckDraftPdf,
   fileErrorMessage,
   materialError,
   uploadDraftPdf,
@@ -46,6 +48,23 @@ export function DraftPdf({
   function fail(message: string) {
     setError(message);
     requestAnimationFrame(() => feedback.current?.focus());
+  }
+  async function recheck() {
+    if (blocked) return;
+    setPending(true);
+    busy(true);
+    setError('');
+    setNotice('');
+    try {
+      changed(await recheckDraftPdf(current));
+      watch.refreshed();
+      setNotice('Đang kiểm tra lại đúng file đã tải lên. Kết quả sẽ hiển thị tại đây.');
+    } catch (failure) {
+      fail(materialError(failure));
+    } finally {
+      setPending(false);
+      busy(false);
+    }
   }
   async function run(upload: boolean) {
     if (blocked || (upload && (!file || uncertain))) return;
@@ -104,6 +123,16 @@ export function DraftPdf({
       </p>
       {current.fileState === 'FAILED' && (
         <p className="field-hint">{fileErrorMessage(current.fileError)}</p>
+      )}
+      {canRecheckPdf(current) && (
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={blocked}
+          onClick={() => void recheck()}
+        >
+          Kiểm tra lại
+        </button>
       )}
       {current.fileState === 'SAFE' && current.pdf?.copyRestricted && (
         <p className="field-hint">
