@@ -62,7 +62,8 @@ export const available = (): Prisma.document_versionsWhereInput => ({
   documents_document_versions_document_idTodocuments: { visibility: 'VISIBLE' },
   OR: [{ rights_valid_until: null }, { rights_valid_until: { gt: new Date() } }],
 });
-function serialize(v: LibraryRow) {
+type CurrentVersion = { versionId: string; versionNo: number; title: string };
+function serialize(v: LibraryRow, currentVersion: CurrentVersion | null = null) {
   return {
     documentId: String(v.document_id),
     versionId: String(v.id),
@@ -97,6 +98,8 @@ function serialize(v: LibraryRow) {
       code: c.code,
       name: c.name,
     })),
+    /** On an earlier version: the document's current version, only while it is readable too. */
+    currentVersion,
   };
 }
 // A single byte range only; malformed, multi-range and unsatisfiable requests fail closed.
@@ -156,7 +159,7 @@ export class LibraryService {
               skip: (query.page - 1) * query.limit,
               take: query.limit,
             })
-          ).map(serialize),
+          ).map((row) => serialize(row)),
           total: await tx.document_versions.count({ where }),
           page: query.page,
           limit: query.limit,
@@ -206,9 +209,35 @@ export class LibraryService {
       throw new NotFoundException('Học liệu không còn khả dụng hoặc bạn không có quyền đọc.');
     return row;
   }
+  /** Serializes rows with a pointer to each earlier version's current version, if readable. */
+  private async withCurrent(tx: Prisma.TransactionClient, rows: LibraryRow[]) {
+    const wanted = rows.flatMap((row) => {
+      const current = row.documents_document_versions_document_idTodocuments.current_version_id;
+      return current && current !== row.id ? [current] : [];
+    });
+    const currents = wanted.length
+      ? await tx.document_versions.findMany({
+          where: { AND: [{ id: { in: wanted } }, available()] },
+          select: { id: true, version_no: true, title: true },
+        })
+      : [];
+    const byId = new Map(currents.map((c) => [c.id, c]));
+    return rows.map((row) => {
+      const id = row.documents_document_versions_document_idTodocuments.current_version_id;
+      const current = id && id !== row.id ? byId.get(id) : undefined;
+      return serialize(
+        row,
+        current
+          ? { versionId: String(current.id), versionNo: current.version_no, title: current.title }
+          : null,
+      );
+    });
+  }
   async get(rawId: string) {
     return this.db.$transaction(
-      async (tx) => ({ item: serialize(await this.readable(tx, academicId(rawId))) }),
+      async (tx) => ({
+        item: (await this.withCurrent(tx, [await this.readable(tx, academicId(rawId))]))[0],
+      }),
       { isolationLevel: 'RepeatableRead' },
     );
   }
@@ -217,7 +246,7 @@ export class LibraryService {
       where: { AND: [{ id: { in: ids } }, available()] },
       select: selection,
     });
-    return new Map(rows.map((row) => [String(row.id), serialize(row)]));
+    return new Map((await this.withCurrent(tx, rows)).map((item) => [item.versionId, item]));
   }
   async file(
     actor: Profile,

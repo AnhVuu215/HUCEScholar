@@ -110,7 +110,8 @@ export function NotificationList() {
         </div>
       </div>
       <p className="field-hint">
-        Thông báo về file bạn tải lên, kết quả duyệt và báo cáo bạn đã gửi. Chỉ bạn xem được.
+        Thông báo về file bạn tải lên, kết quả duyệt, báo cáo bạn đã gửi và lời nhắc lịch học. Chỉ
+        bạn xem được.
       </p>
       {notice && <p role="status">{notice}</p>}
       {error ? (
@@ -150,7 +151,11 @@ export function NotificationList() {
                       if (!n.read) void markNotificationRead(n.id).then(announce, () => undefined);
                     }}
                   >
-                    {n.kind.startsWith('REPORT_') ? 'Mở tài liệu' : 'Mở bản nháp'}
+                    {n.kind === 'CALENDAR_REMINDER'
+                      ? 'Mở lịch'
+                      : n.kind.startsWith('REPORT_')
+                        ? 'Mở tài liệu'
+                        : 'Mở bản nháp'}
                   </Link>
                   {!n.read && (
                     <button

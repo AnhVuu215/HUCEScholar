@@ -19,6 +19,8 @@ import { quadBounds } from '../../lib/highlight-geometry';
 import { useReadingProgress } from './use-reading-progress';
 import { SaveMaterial } from './save-material';
 import { ReaderReport } from './reader-report';
+import { ScheduleReading } from '../calendar/schedule-reading';
+import { CurrentVersionNotice } from './current-version-notice';
 import { ReaderHighlights } from './reader-highlights';
 import type { HighlightSurface } from '../../lib/highlight-geometry';
 import { SelectField } from '../ui/select-field';
@@ -407,8 +409,21 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                     {item.authors || 'Chưa ghi tác giả'} · Phiên bản {item.versionNo}
                     {!item.current ? ' · Bản công bố trước' : ''}
                   </p>
-                  <SaveMaterial key={item.documentId} documentId={item.documentId} />
-                  <ReaderReport key={item.versionId} versionId={item.versionId} />
+                  {item.currentVersion && (
+                    <CurrentVersionNotice
+                      versionNo={item.versionNo}
+                      current={item.currentVersion}
+                    />
+                  )}
+                  <SaveMaterial key={`save-${item.documentId}`} documentId={item.documentId} />
+                  <ReaderReport key={`report-${item.versionId}`} versionId={item.versionId} />
+                  <ScheduleReading
+                    key={`schedule-${item.versionId}`}
+                    versionId={item.versionId}
+                    pageNumber={page}
+                    title={item.title}
+                    disabled={invalidLink}
+                  />
                   <div className="reader-toolbar" aria-label="Điều khiển đọc PDF">
                     <button
                       className="secondary-button"

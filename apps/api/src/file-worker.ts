@@ -13,8 +13,11 @@ import { MaterialDraftCoreModule } from './materials/material-draft-core.module'
 import { SourceConversionProcessor } from './materials/source-conversion.processor';
 import { SOURCE_QUEUE } from './files/source-conversion-queue';
 import { WORKER_HEARTBEAT_INTERVAL_MS, WORKER_HEARTBEAT_KEY } from './ops/readiness.service';
+import { CalendarReminders, CalendarRemindersModule } from './calendar/calendar-reminders';
 
-@Module({ imports: [DatabaseModule, FilesModule, MaterialDraftCoreModule] })
+@Module({
+  imports: [DatabaseModule, FilesModule, MaterialDraftCoreModule, CalendarRemindersModule],
+})
 class FileWorkerModule {}
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(FileWorkerModule, {
@@ -60,6 +63,22 @@ async function bootstrap() {
   };
   await reconcile();
   const interval = setInterval(() => void reconcile(), 30_000);
+  // CAL-03: due calendar reminders become in-app notices (and email when the owner asked).
+  const reminders = app.get(CalendarReminders);
+  let reminding = false;
+  const remind = async () => {
+    if (reminding) return;
+    reminding = true;
+    try {
+      await reminders.dispatch();
+    } catch {
+      Logger.warn('Calendar reminders interrupted; will retry.', 'FileWorker');
+    } finally {
+      reminding = false;
+    }
+  };
+  await remind();
+  const remindTimer = setInterval(() => void remind(), 60_000);
   // Heartbeat for API readiness. Expires on its own if this process dies without cleanup.
   const heartbeat = new Redis(queueConnection(config.redisUrl));
   heartbeat.on('error', () => undefined);
@@ -74,6 +93,7 @@ async function bootstrap() {
     if (closing) return;
     closing = true;
     clearInterval(interval);
+    clearInterval(remindTimer);
     clearInterval(beating);
     await heartbeat
       .del(WORKER_HEARTBEAT_KEY)
