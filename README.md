@@ -69,6 +69,21 @@ Mở [http://127.0.0.1:3000/](http://127.0.0.1:3000/) rồi đăng nhập. API l
 
 Đổi web/API origin cần sửa `APP_ORIGIN` (origin truy cập trình duyệt) và `API_PROXY_TARGET` (server web gọi Nest). Next rewrites đọc đích API khi build; thay đích sau build cần build lại. Không đặt secret vào `NEXT_PUBLIC_*`. Mặc định phát triển local qua HTTP, không phải production HTTPS.
 
+### Chạy đầy đủ: kiểm tra file, Word, nhắc lịch
+
+`pnpm dev` chỉ chạy web và API. Quét PDF, tạo bản đọc từ Word và nhắc lịch (CAL-03) do **file worker** làm. Worker cần ClamAV, Poppler và docx-converter; các dịch vụ này chỉ có trong Docker và không mở cổng ra máy, nên worker chạy trong container:
+
+```powershell
+pnpm infra:up
+pnpm infra:files   # ClamAV, docx-converter, file-worker; lần đầu ClamAV nạp chữ ký mất vài phút
+pnpm dev
+```
+
+- Đổi code API thì chạy lại `pnpm infra:files` để build lại image worker.
+- Không chạy thêm `pnpm --filter @hucescholar/api worker:files` trên máy cùng lúc. Hai worker cùng nhận job; bản trên máy không gọi được ClamAV nên sẽ đánh lỗi file "dịch vụ kiểm tra không phản hồi".
+- Thư đăng ký, khôi phục mật khẩu và nhắc lịch được ghi thành file JSON trong `.local/mail-outbox`, không gửi đi. API cần `MAIL_TRANSPORT=file` và `MAIL_DIR=<repo>.localmail-outbox` trong `apps/api/.env` (`setup:local` thêm sẵn cho file mới); worker trong container đã cấu hình sẵn.
+- Kiểm tra: `docker ps` thấy `clamav` healthy; `/api/v1/health/ready` báo heartbeat worker.
+
 ## Tạo quản trị viên đầu tiên
 
 Không có đăng ký công khai hoặc mật khẩu mặc định. Chỉ làm khi database chưa có ADMIN:
@@ -104,7 +119,7 @@ Admin mở **Kiểm duyệt học liệu** ở `/workspace/admin/moderation`, l�
 
 Ba vai trò mở **Kho học liệu** ở `/workspace/library`, tìm tiêu đề/tác giả, lọc môn/loại/nguồn và chọn **Đọc tài liệu**. Reader chuyển trang, zoom, xoay và chọn chữ nếu PDF có text layer. Nguồn/quyền nằm trong phần mở rộng inline; **Tải PDF gốc** chỉ xuất hiện khi được phép; nguồn DOCX có **Tải Word gốc** và **Tải bản PDF**. Mỗi lượt metadata/file kiểm tra APPROVED + VISIBLE + SAFE + hạn quyền; admin không vượt điều kiện này. Ghi chú riêng gắn phiên bản/trang, có tạo/sửa/xóa; lỗi lưu giữ bản soạn, retry tạo giữ request ID để tránh nhân đôi. Guard Back/Forward trong lịch sử ứng dụng giữ bản soạn khi chọn ở lại và chặn khi đang lưu; link/logout/unload vẫn có guard. Phạm vi browser và giới hạn: [checkpoint web](docs/implementation/2026-10-17-web-reader-history.md). Tiến độ chỉ lưu trang render thành công, mở lại sau khi máy chủ xác nhận; xung đột tab yêu cầu tải lại. Khi lỗi tải tiến độ có thể đọc từ trang 1 mà không ghi. Đã có vùng tô chữ riêng với tám màu và ghi chú tùy chọn; chưa đọc PDF offline. Hướng dẫn và giới hạn: [vùng tô PDF](docs/implementation/2026-10-17-pdf-text-highlights.md). Chi tiết: [ghi chú và tiến độ](docs/implementation/2026-10-12-reader-notes-progress.md). `dev`/`build` chuẩn bị worker, CMaps, font và wasm PDF.js cùng version vào public; không dùng CDN.
 
-Để chạy kiểm tra file local, bật profile Docker riêng: `docker compose --env-file infra/.env -f infra/compose.yaml --profile files up -d --build clamav file-worker`. API và worker dùng chung `.local/files` ngoài webroot. Production yêu cầu S3 private; chưa tạo dịch vụ cloud. Hướng dẫn, giới hạn và bằng chứng quét thật ở tài liệu upload phía trên.
+Để chạy kiểm tra file local, xem [Chạy đầy đủ](#chạy-đầy-đủ-kiểm-tra-file-word-nhắc-lịch). API và worker dùng chung `.local/files` ngoài webroot. Production yêu cầu S3 private; chưa tạo dịch vụ cloud. Hướng dẫn, giới hạn và bằng chứng quét thật ở tài liệu upload phía trên.
 
 ## Kiểm tra
 
