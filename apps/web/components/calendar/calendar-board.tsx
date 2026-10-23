@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import {
   addDays,
@@ -19,6 +20,7 @@ import {
   openTasks,
   overdue,
   readerHref,
+  remindLabel,
   repeatLabel,
   sameDay,
   setCalendarDone,
@@ -79,7 +81,9 @@ function sessionStart(anchor: Date, now: Date) {
 const SHORTCUT_HINT =
   'Phím tắt: T hôm nay · W tuần · M tháng · A lịch biểu · ← → chuyển khoảng · N thêm lịch học. Kéo thả bằng chuột: dời lịch học, kéo cạnh dưới để đổi thời lượng, kéo việc lên lịch để đặt hạn hoặc về panel để bỏ ngày.';
 const titleOf = (item: CalendarItem) =>
-  `${item.title} · ${whenLabel(item)}${item.repeat ? ` · ${repeatLabel(item.repeat)}` : ''}`;
+  `${item.title} · ${whenLabel(item)}${item.repeat ? ` · ${repeatLabel(item.repeat)}` : ''}${
+    item.reminder ? ` · Nhắc: ${remindLabel(item.reminder.minutes).toLowerCase()}` : ''
+  }`;
 /**
  * What is being dragged. `move`: the whole item, held `grabMinutes` below its start on the hour
  * grid. `resize`: the bottom edge of a timed session.
@@ -184,7 +188,11 @@ function Chip({
 
 export function CalendarBoard() {
   const [view, setView] = useState<View>('week');
-  const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
+  // A reminder links here with ?at=<instant>; the day is placed in this device's time zone.
+  const at = Date.parse(useSearchParams().get('at') ?? '');
+  const [anchor, setAnchor] = useState(() =>
+    startOfDay(Number.isNaN(at) ? new Date() : new Date(at)),
+  );
   const [range, setRange] = useState<CalendarRange | null>(null);
   const [tasks, setTasks] = useState<CalendarTasks | null>(null);
   const [error, setError] = useState('');
@@ -689,6 +697,12 @@ export function CalendarBoard() {
                           </button>
                           <span className="field-hint">{whenLabel(i)}</span>
                           {i.repeat && <span className="field-hint">{repeatLabel(i.repeat)}</span>}
+                          {i.reminder && (
+                            <span className="field-hint">
+                              Nhắc: {remindLabel(i.reminder.minutes).toLowerCase()}
+                              {i.reminder.email ? ' · có email' : ''}
+                            </span>
+                          )}
                           {i.material ? (
                             <Link href={readerHref(i.material)}>
                               Mở {i.material.title} · trang {i.material.pageNumber}
@@ -754,6 +768,11 @@ export function CalendarBoard() {
                     {overdue(task, now) ? 'Quá hạn · ' : ''}
                     {whenLabel(task)}
                   </span>
+                  {task.reminder && (
+                    <span className="field-hint">
+                      Nhắc: {remindLabel(task.reminder.minutes).toLowerCase()}
+                    </span>
+                  )}
                   {task.material && (
                     <Link href={readerHref(task.material)}>Trang {task.material.pageNumber}</Link>
                   )}

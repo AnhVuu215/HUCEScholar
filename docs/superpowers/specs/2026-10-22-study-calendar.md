@@ -1,6 +1,6 @@
 # CAL — Lịch học và việc cần làm
 
-Trạng thái: thiết kế ngày 22/10/2026. CAL-01 đã vào `main` (PR #29), xem [mốc CAL-01](../../implementation/2026-10-22-study-calendar.md). Thiết kế CAL-02 chốt ở [mục riêng](#cal-02--lặp-lại-kéo-thả-phím-tắt), kết quả ở [mốc CAL-02](../../implementation/2026-10-22-calendar-repeat-drag.md); CAL-03 trở đi là đề xuất, chưa làm.
+Trạng thái: thiết kế ngày 22/10/2026. CAL-01 đã vào `main` (PR #29), xem [mốc CAL-01](../../implementation/2026-10-22-study-calendar.md). Thiết kế CAL-02 chốt ở [mục riêng](#cal-02--lặp-lại-kéo-thả-phím-tắt), kết quả ở [mốc CAL-02](../../implementation/2026-10-22-calendar-repeat-drag.md). CAL-03 chốt ở [mục riêng](#cal-03--nhắc-trước-giờ-học), kết quả ở [mốc CAL-03](../../implementation/2026-10-23-calendar-reminders.md); CAL-04 trở đi là đề xuất, chưa làm.
 
 ## Mục tiêu
 
@@ -40,7 +40,7 @@ Chủ dự án muốn tiếp tục bằng lựa chọn khuyến nghị và ghi l
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | **CAL-01** | Bảng `calendar_items`; API CRUD có revision; Tuần/Tháng/Lịch biểu; panel việc cần làm và thêm nhanh; gắn học liệu/trang; "Lên lịch đọc" từ reader | —                              |
 | **CAL-02** | Lặp lại hằng tuần (tập con RRULE: theo thứ, đến ngày); kéo thả đổi giờ và kéo việc chưa có ngày lên lịch; phím tắt                                | CAL-01                         |
-| CAL-03     | Nhắc trước giờ học bằng thông báo trong ứng dụng (NOTIFY-01); email tùy chọn qua mailer AUTH-03                                                   | CAL-01, worker hẹn giờ         |
+| **CAL-03** | Nhắc trước giờ học bằng thông báo trong ứng dụng (NOTIFY-01); email tùy chọn qua mailer AUTH-03                                                   | CAL-01, worker hẹn giờ         |
 | CAL-04     | Hiện hạn danh sách đọc và mục "Cần xem lại" trong lịch; tạo buổi ôn từ mục "Cần xem lại"                                                          | CAL-01, COURSE-01, LEARN-02    |
 | CAL-05     | Xuất `.ics` hoặc link đăng ký riêng (token, thu hồi được) để xem trong Google Calendar                                                            | Đồng ý chia sẻ ra ngoài; HTTPS |
 
@@ -139,6 +139,15 @@ Ràng buộc nằm cả trong DTO lẫn CHECK của PostgreSQL:
 - phiên bản và số trang đi cùng nhau; trang ≥ 1 và không quá số trang của phiên bản
 - màu thuộc bảng 6 màu
 
-## Ngoài phạm vi CAL-01 và CAL-02
+## CAL-03 — nhắc trước giờ học
 
-Nhắc, chia sẻ/mời người khác, lịch lớp do giảng viên công bố, đồng bộ hoặc xuất ra lịch ngoài, nhiều lịch con. Không cache lịch trong service worker (AGENTS.md).
+Chọn theo lựa chọn khuyến nghị; đổi được ở lát sau.
+
+- **Một lời nhắc mỗi mục**, chọn trong 0/5/10/15/30/60/120/1440 phút. Chỉ mục có ngày và giờ (không phải cả ngày) mới nhắc được, vì máy chủ không biết múi giờ của mục đơn.
+- **Thông báo trong ứng dụng là mặc định; email bật riêng từng mục.** Thư chỉ có tiêu đề và giờ tương đối, không có ghi chú.
+- **Worker PDF quét mỗi 60 giây**, cửa sổ nhìn lại 10 phút. Lâu hơn thì bỏ lời nhắc, không gửi muộn. `event_key` theo mục và giờ bắt đầu, nên mỗi buổi chỉ được nhắc một lần.
+- Lời nhắc trỏ tới mục lịch, không tới tài liệu: `notifications` có `calendar_item_id` và `event_at`, CHECK `ck_notification_target` tách hai dạng.
+
+## Ngoài phạm vi CAL-01 đến CAL-03
+
+Nhiều lời nhắc cho một mục, chia sẻ/mời người khác, lịch lớp do giảng viên công bố, đồng bộ hoặc xuất ra lịch ngoài, nhiều lịch con. Không cache lịch trong service worker (AGENTS.md).

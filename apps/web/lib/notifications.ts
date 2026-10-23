@@ -1,4 +1,5 @@
 import { ApiError, apiRequest, csrfToken, type Role } from './auth';
+import { formatLongDay, formatTime } from './calendar';
 import { fileFailedLabel } from './materials';
 
 export const notificationKinds = [
@@ -11,13 +12,18 @@ export const notificationKinds = [
   'REVIEW_REJECTED',
   'REPORT_RESOLVED',
   'REPORT_DISMISSED',
+  'CALENDAR_REMINDER',
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 export type AppNotification = {
   id: string;
   kind: NotificationKind;
-  documentId: string;
-  versionId: string;
+  /** Null for a calendar reminder, which points at the calendar item instead. */
+  documentId: string | null;
+  versionId: string | null;
+  calendarItemId: string | null;
+  /** CALENDAR_REMINDER: start of the session or due time it is about. */
+  eventAt: string | null;
   title: string;
   detail: string | null;
   createdAt: string;
@@ -38,8 +44,13 @@ function valid(v: unknown): v is AppNotification {
   return (
     record(v) &&
     id(v.id) &&
-    id(v.documentId) &&
-    id(v.versionId) &&
+    (v.kind === 'CALENDAR_REMINDER'
+      ? v.documentId === null &&
+        v.versionId === null &&
+        id(v.calendarItemId) &&
+        typeof v.eventAt === 'string' &&
+        !Number.isNaN(Date.parse(v.eventAt))
+      : id(v.documentId) && id(v.versionId)) &&
     (notificationKinds as readonly string[]).includes(String(v.kind)) &&
     typeof v.title === 'string' &&
     (v.detail === null || typeof v.detail === 'string') &&
@@ -111,10 +122,19 @@ export function notificationMessage(n: AppNotification) {
       return `Báo cáo của bạn về ${title} đã được xử lý.`;
     case 'REPORT_DISMISSED':
       return `Báo cáo của bạn về ${title} đã đóng, tài liệu không cần thay đổi.`;
+    case 'CALENDAR_REMINDER': {
+      const at = new Date(n.eventAt!);
+      const when = `${formatTime(at)} ${formatLongDay(at)}`;
+      return n.detail === 'TASK'
+        ? `Nhắc việc: ${title} đến hạn lúc ${when}.`
+        : `Nhắc lịch học: ${title} bắt đầu lúc ${when}.`;
+    }
   }
 }
 /** Where the notice leads; the target page re-checks access, so a link never grants any. */
 export function notificationHref(n: AppNotification, role: Role) {
+  if (n.kind === 'CALENDAR_REMINDER')
+    return `/workspace/calendar?at=${encodeURIComponent(n.eventAt!)}`;
   if (n.kind.startsWith('REPORT_') || role === 'ADMIN')
     return `/workspace/library/versions/${n.versionId}`;
   return `/workspace/${role.toLowerCase()}/materials?draft=${n.documentId}`;

@@ -13,6 +13,8 @@ import {
   fromInputs,
   isoWeekday,
   readerHref,
+  remindLabel,
+  remindOptions,
   skipOccurrence,
   timeKey,
   updateCalendarItem,
@@ -70,6 +72,8 @@ function initial(item: CalendarItem | null, draft: CalendarDraft, scope: Scope) 
       weekdays: item.repeat?.weekdays ?? [],
       until:
         item.repeat?.until ?? (first ? dateKey(addDays(first, DEFAULT_REPEAT_WEEKS * 7 - 7)) : ''),
+      remind: item.reminder ? String(item.reminder.minutes) : '',
+      remindEmail: item.reminder?.email ?? false,
     };
   }
   const start = draft.start;
@@ -87,6 +91,9 @@ function initial(item: CalendarItem | null, draft: CalendarDraft, scope: Scope) 
     repeat: false,
     weekdays: [] as number[],
     until: '',
+    /** Minutes before, as the select's value; empty is no reminder. */
+    remind: '',
+    remindEmail: false,
   };
 }
 
@@ -108,6 +115,8 @@ export function CalendarEditor({
   const [form, setForm] = useState(() => initial(item, draft, 'one'));
   // Repeat is set on a whole series or a single item, never on one occurrence.
   const repeatable = form.kind === 'EVENT' && !(occurrence && scope === 'one');
+  // Reminders need a time: a timed session, or a task with a due date that is not all-day.
+  const remindable = !form.allDay && (form.kind === 'EVENT' || form.startDay !== '');
   const link = item
     ? (item.material ?? (item.materialUnavailable ? 'unavailable' : null))
     : (draft.material ?? null);
@@ -200,6 +209,8 @@ export function CalendarEditor({
       versionId,
       pageNumber: page,
       repeat,
+      remindMinutes: remindable && form.remind ? Number(form.remind) : null,
+      remindEmail: remindable && form.remind !== '' && form.remindEmail,
     };
   }
   async function submit(event: FormEvent) {
@@ -447,6 +458,41 @@ export function CalendarEditor({
       )}
       {form.kind === 'TASK' && !form.startDay && (
         <p className="field-hint">Để trống ngày hạn để giữ trong danh sách việc chưa có ngày.</p>
+      )}
+      {remindable && (
+        <div className="calendar-remind">
+          <div className="form-field">
+            <label htmlFor="calendar-remind">Nhắc</label>
+            <select
+              id="calendar-remind"
+              value={form.remind}
+              onChange={(e) => set('remind', e.target.value)}
+            >
+              <option value="">Không nhắc</option>
+              {remindOptions.map((minutes) => (
+                <option key={minutes} value={String(minutes)}>
+                  {remindLabel(minutes)}
+                </option>
+              ))}
+            </select>
+          </div>
+          {form.remind !== '' && (
+            <label className="calendar-check">
+              <input
+                type="checkbox"
+                checked={form.remindEmail}
+                onChange={(e) => set('remindEmail', e.target.checked)}
+              />
+              Gửi cả email
+            </label>
+          )}
+          {form.remind !== '' && (
+            <p className="field-hint">
+              Thông báo hiện ở chuông{form.remindEmail ? ' và gửi tới email tài khoản' : ''}. Thư
+              chỉ có tiêu đề, không có ghi chú.
+            </p>
+          )}
+        </div>
       )}
       <fieldset className="calendar-colors">
         <legend>Màu</legend>

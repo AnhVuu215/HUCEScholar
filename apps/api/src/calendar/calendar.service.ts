@@ -67,6 +67,10 @@ function normalize(body: CalendarFieldsDto) {
     const problem = seriesProblem({ ...repeat, start: startsAt!, end: endsAt! });
     if (problem) throw invalid(problem);
   }
+  const remind = body.remindMinutes ?? null;
+  if (remind !== null && (!startsAt || body.allDay))
+    throw invalid('Chỉ nhắc được mục có ngày và giờ, không phải cả ngày.');
+  if (body.remindEmail && remind === null) throw invalid('Chọn giờ nhắc trước khi bật email.');
   return {
     kind: body.kind,
     title: body.title,
@@ -80,6 +84,8 @@ function normalize(body: CalendarFieldsDto) {
     repeat_days: repeat?.days ?? null,
     repeat_until: repeat?.until ?? null,
     repeat_utc_offset: repeat?.offset ?? null,
+    remind_minutes: remind,
+    remind_email: body.remindEmail,
   };
 }
 type Fields = ReturnType<typeof normalize>;
@@ -93,6 +99,8 @@ const sameFields = (row: calendar_items, fields: Fields) =>
   row.color === fields.color &&
   row.version_id === fields.version_id &&
   row.page_number === fields.page_number &&
+  row.remind_minutes === fields.remind_minutes &&
+  row.remind_email === fields.remind_email &&
   sameRepeat(row, fields);
 const sameRepeat = (row: calendar_items, fields: Fields) =>
   row.repeat_days === fields.repeat_days &&
@@ -116,7 +124,7 @@ function series(row: calendar_items): Series | null {
 }
 
 /**
- * CAL-01/02. A private calendar: only the owner reads or writes. Linked material is shown only while
+ * CAL-01/02/03. A private calendar: only the owner reads or writes. Linked material is shown only while
  * the owner can read that version; otherwise the item stays but the link is withheld.
  */
 @Injectable()
@@ -165,6 +173,8 @@ export class CalendarService {
                 endsAt: r.ends_at!.toISOString(),
               }
             : null,
+        reminder:
+          r.remind_minutes === null ? null : { minutes: r.remind_minutes, email: r.remind_email },
         /** Original start of this occurrence of a series; null for a single item. */
         occurrenceStart: null as string | null,
         revision: r.revision,
