@@ -21,6 +21,8 @@ Ngày 21/10/2026. Nhánh `codex/learn-02-review-later`, xây trên `main` sau PR
 
 ## Kiểm chứng
 
+Sau khi gộp với `main` ngày 23/10 (CAL-01..03, AUTH-04, Next 16.4.1), chạy lại ở máy local: `pnpm check` (119 unit, build) đạt; `pnpm test:integration` 217 đạt, 1 bỏ qua; `pnpm test:e2e` 173 đạt, 8 bỏ qua. Các số bên dưới là của lần chạy đầu ngày 21/10.
+
 Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 
 - Integration, 1 ca mới trong `materials.integration.spec.ts`:
