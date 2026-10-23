@@ -24,7 +24,7 @@
     "test:integration": "pnpm --filter @hucescholar/api test:integration"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "16.4.0",
+    "@next/eslint-plugin-next": "16.4.1",
     "@playwright/test": "1.64.0",
     "@types/node": "24.19.2",
     "concurrently": "9.2.5",
