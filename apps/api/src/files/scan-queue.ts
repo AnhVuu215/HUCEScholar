@@ -3,6 +3,12 @@ import { Queue } from 'bullmq';
 import { AUTH_CONFIG, AuthConfiguration } from '../auth/auth.config';
 
 export const PDF_QUEUE = 'hs-pdf-scan';
+/**
+ * A scanner outage of about half an hour is ridden out: 8 tries, 15 s apart and doubling
+ * (15 s, 30 s, 1 min … 16 min). Only then does the file record CHECK_UNAVAILABLE.
+ */
+export const SCAN_ATTEMPTS = 8;
+export const SCAN_BACKOFF_MS = 15_000;
 export function queueConnection(url: string, worker = false) {
   const parsed = new URL(url);
   return {
@@ -30,8 +36,8 @@ export class ScanQueue implements OnModuleDestroy {
       { fileId: id },
       {
         jobId: `file-${id}`,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
+        attempts: SCAN_ATTEMPTS,
+        backoff: { type: 'exponential', delay: SCAN_BACKOFF_MS },
         removeOnComplete: { age: 86400 },
         removeOnFail: { age: 604800 },
       },
@@ -47,6 +53,11 @@ export class ScanQueue implements OnModuleDestroy {
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+  /** Checks a file again; its failed job keeps the same id for 7 days and would block a new one. */
+  async requeue(id: string) {
+    await (await this.queue.getJob(`file-${id}`))?.remove();
+    await this.enqueue(id);
   }
   async onModuleDestroy() {
     await this.queue.close();

@@ -1,7 +1,9 @@
 'use client';
 import { useState } from 'react';
 import {
+  canRecheckPdf,
   currentDraft,
+  recheckDraftPdf,
   fileErrorMessage,
   materialError,
   retryDraftSource,
@@ -25,12 +27,17 @@ export function MaterialFileStatus({
     ? ['QUEUED', 'RUNNING'].includes(source.conversionState)
     : current.fileState === 'CHECKING';
   const watch = useScanWatch(current, waiting, changed);
-  async function refresh(retry = false) {
+  async function refresh(retry: false | 'source' | 'pdf' = false) {
     if (busy || blocked) return;
     setBusy(true);
     setError('');
     try {
-      const item = retry ? await retryDraftSource(current) : await currentDraft(current.id);
+      const item =
+        retry === 'source'
+          ? await retryDraftSource(current)
+          : retry === 'pdf'
+            ? await recheckDraftPdf(current)
+            : await currentDraft(current.id);
       changed(item);
       watch.refreshed();
     } catch (failure) {
@@ -132,11 +139,21 @@ export function MaterialFileStatus({
               type="button"
               className="secondary-button"
               disabled={busy || blocked}
-              onClick={() => void refresh(true)}
+              onClick={() => void refresh('source')}
             >
               Thử chuyển PDF lại
             </button>
           )}
+        {canRecheckPdf(current) && (
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={busy || blocked}
+            onClick={() => void refresh('pdf')}
+          >
+            Kiểm tra lại
+          </button>
+        )}
       </div>
       {waiting && <ScanWatchHint watch={watch} />}
       {error && (

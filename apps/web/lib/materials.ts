@@ -24,7 +24,7 @@ const fileErrors: Record<string, string> = {
     'File không phải PDF hợp lệ hoặc đã hỏng (có thể tải xuống chưa trọn). Hãy xuất lại PDF rồi tải lên.',
   TOO_MANY_PAGES: 'PDF vượt quá 10.000 trang. Hãy tách thành nhiều tài liệu.',
   CHECK_UNAVAILABLE:
-    'Dịch vụ kiểm tra file chưa phản hồi sau nhiều lần thử. Hãy tải file lên lại sau ít phút hoặc liên hệ quản trị viên.',
+    'Dịch vụ kiểm tra file chưa phản hồi sau khoảng 30 phút thử lại. Bấm “Kiểm tra lại” để kiểm tra đúng file này, không cần tải lên lại; nếu vẫn lỗi, liên hệ quản trị viên.',
 };
 const fileErrorLabels: Record<string, string> = {
   MALWARE: 'phát hiện mã độc',
@@ -323,6 +323,24 @@ export async function uploadDraftFile(current: MaterialDraft, file: File, upload
     ),
   );
 }
+/** A PDF the scanner never answered for can be checked again without uploading it again. */
+export function canRecheckPdf(current: MaterialDraft) {
+  return (
+    !current.source &&
+    current.editable &&
+    current.fileState === 'FAILED' &&
+    current.fileError === 'CHECK_UNAVAILABLE'
+  );
+}
+export async function recheckDraftPdf(current: MaterialDraft) {
+  return readItem(
+    await academicWrite(
+      `/material-drafts/${current.id}/pdf/recheck`,
+      { revision: current.revision },
+      'POST',
+    ),
+  );
+}
 export async function retryDraftSource(current: MaterialDraft) {
   return readItem(
     await academicWrite(
@@ -338,6 +356,8 @@ export function materialError(error: unknown) {
       return 'Phân công đã thay đổi. Bạn cần phân công hiện hành cho tất cả môn cũ và môn mới để sửa bản nháp. Nội dung đang nhập được giữ lại.';
     if (error.code === 'COURSE_UNAVAILABLE')
       return 'Có môn hoặc khoa đã ngừng sử dụng. Kiểm tra lại các môn đã chọn. Nội dung đang nhập được giữ lại.';
+    if (error.code === 'PDF_NOT_RECHECKABLE')
+      return 'PDF đã có kết quả kiểm tra mới. Cập nhật trạng thái file để xem.';
     if (error.code === 'NOT_DRAFT')
       return 'Phiên bản không còn ở trạng thái nháp. Đóng bản sửa và mở lại để kiểm tra.';
     if (error.status === 400 || error.status === 413)

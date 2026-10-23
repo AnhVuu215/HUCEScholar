@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Inject,
   Injectable,
   HttpException,
@@ -17,6 +18,7 @@ import { PrivateStore } from '../files/private-store';
 import { pdfHeaders, receivePdf } from '../files/receive-pdf';
 import { ScanQueue } from '../files/scan-queue';
 import { MaterialsService } from './materials.service';
+import { PdfRecheckDto } from './materials.dto';
 
 @Injectable()
 export class DraftPdfService {
@@ -115,5 +117,49 @@ export class DraftPdfService {
       if (directory) await rm(directory, { recursive: true, force: true }).catch(() => undefined);
       this.active.delete(actor.id);
     }
+  }
+  /**
+   * "Kiểm tra lại": a PDF the scanner never answered for is checked again as it is, so the owner
+   * does not have to upload it again. Verdicts about the file itself (malware, password…) stay.
+   */
+  async recheck(actor: Profile, id: string, body: PdfRecheckDto) {
+    const fileId = await this.db.$transaction(async (tx) => {
+      const {
+        actorId,
+        row,
+        id: documentId,
+      } = await this.materials.lockDraft(tx, actor, id, body.revision);
+      const file = row.file_id ? await tx.files.findUnique({ where: { id: row.file_id } }) : null;
+      if (
+        !file ||
+        row.source_upload ||
+        file.uploaded_by !== actorId ||
+        file.scan_status !== 'FAILED' ||
+        file.check_error !== 'CHECK_UNAVAILABLE'
+      )
+        throw new ConflictException({
+          code: 'PDF_NOT_RECHECKABLE',
+          message: 'Chỉ kiểm tra lại PDF mà dịch vụ kiểm tra chưa phản hồi.',
+        });
+      await tx.files.update({
+        where: { id: file.id },
+        data: {
+          scan_status: 'CHECKING',
+          check_error: null,
+          checked_at: null,
+          check_round: { increment: 1 },
+        },
+      });
+      await tx.document_versions.update({
+        where: { id: row.id },
+        data: { revision: { increment: 1 }, updated_at: new Date() },
+      });
+      await this.materials.audit(tx, actorId, documentId, 'MATERIAL_PDF_RECHECKED');
+      return String(file.id);
+    });
+    await this.queue
+      .requeue(fileId)
+      .catch(() => Logger.warn('PDF recheck saved; queue reconciliation required.', 'Files'));
+    return this.materials.get(actor, id);
   }
 }
