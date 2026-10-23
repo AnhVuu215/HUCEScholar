@@ -27,7 +27,7 @@ Chưa rà: bấm sâu từng thao tác (ghi chú, tô màu, duyệt, báo cáo, 
 | 7 | P2 | Web: trang đầu | Breadcrumb trang đầu của cả 3 vai trò ghi "**Tài khoản của tôi**" thay vì "Trang đầu". | Ảnh chụp `/workspace/admin`, `/student`; `role-workspace.tsx:220` lấy mặc định này |
 | 8 | P2 | Web: quản lý tài khoản | Cột "Thao tác" bị lệch: "Sửa" thụt khác hai link còn lại, mỗi dòng rất cao vì ba link xếp dọc. | Ảnh chụp `/workspace/admin/users` 1280px |
 | 9 | P2 | Web: học liệu của tôi | Link "Xóa tìm kiếm" nằm lơ lửng giữa form, hiện cả khi chưa tìm gì. | Ảnh chụp `/workspace/lecturer/materials`; `material-management.tsx:159` |
-| 10 | P3 | API | Cảnh báo `pg`: "Calling client.query() when the client is already executing a query is deprecated… removed in pg@9". Xuất hiện ngay sau `GET /notifications/unread`. Nghi do `$transaction([...])` dạng mảng chạy song song trên một kết nối của adapter-pg. | Log API dòng 203 |
+| 10 | P3 | API | Cảnh báo `pg`: "Calling client.query() when the client is already executing a query is deprecated… removed in pg@9". Xuất hiện ngay sau `GET /notifications/unread`. Nguyên nhân thật: Prisma chạy song song các truy vấn con của `include` trong transaction (xem Bước 6). | Log API dòng 203 |
 | 11 | P3 | Dev/e2e | Badge "1 Insight" của Next che logo ở góc trái trên. Có lẽ đây cũng là lý do `pwa-install › mobile` lỗi ổn định (link bị che, bấm không được, kể cả trên `main`). | Mọi ảnh chụp; log e2e CAL-03 |
 
 Không thấy: lỗi JS, request 5xx khác (ngoài #4), tràn ngang ở 390px, trang bị chuyển hướng sai vai trò.
@@ -115,6 +115,16 @@ Mỗi bước là một nhánh `codex/…` và một PR nhỏ, chạy đủ lint
 - Chạy API với `NODE_OPTIONS=--trace-deprecation` để tìm đúng chỗ.
 - Đổi các `$transaction([...])` bị ảnh hưởng sang transaction tương tác (`async (tx) => { await …; await …; }`), giữ `RepeatableRead`.
 - Test: integration hiện có của notifications, reader và tasks phải đạt, không còn cảnh báo trong log.
+- **Kết quả điều tra** (nhánh `codex/pg-concurrent-query`): giả thuyết ban đầu sai.
+  - `--trace-deprecation` khi chạy bộ integration cho thấy cảnh báo không đến từ `$transaction([...])` của mình. Nó đến từ bộ thực thi truy vấn của Prisma: nút `join` trong `@prisma/client-engine-runtime` chạy `Promise.all` các truy vấn con của một `include` nhiều quan hệ. Trong transaction tương tác, các truy vấn con này dùng chung một client `pg`.
+  - `pg@8` tự xếp hàng các truy vấn nên kết quả vẫn đúng; `pg@9` sẽ từ chối.
+  - Runtime của Prisma 7.10.1 (bản mới nhất, 15/10) giống hệt 7.10.0, nên nâng Prisma chưa giúp được. Tìm kiếm chưa thấy issue nào trên Prisma hay `pg` khớp đúng trường hợp này.
+  - Đã chốt (đổi được về sau):
+    - không vá code Prisma trong `node_modules`
+    - không viết lại mọi `include` trong transaction
+    - giữ `pg` ở 8.x; unit test `apps/api/test/pg-major.spec.ts` báo đỏ khi `pg` lên major 9, để người nâng phải xem lại mục này
+  - Việc sau: khi Prisma có bản chạy tuần tự các truy vấn con trong transaction (hoặc có issue để theo dõi), nâng Prisma rồi mới nâng `pg`.
+
 
 ### Sau cùng
 
