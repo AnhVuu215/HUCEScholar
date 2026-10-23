@@ -7,7 +7,7 @@ COPY apps/api ./apps/api
 RUN npm install --global pnpm@11.25.0 \
     && pnpm install --frozen-lockfile --filter @hucescholar/api... \
     && pnpm --filter @hucescholar/api build
-RUN mkdir -p /data/files && chown node:node /data/files
+RUN mkdir -p /data/files /data/mail && chown node:node /data/files /data/mail
 USER node
 WORKDIR /workspace/apps/api
 CMD ["node", "dist/file-worker.js"]
