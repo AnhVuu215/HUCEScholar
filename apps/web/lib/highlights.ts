@@ -31,6 +31,7 @@ export interface TextHighlight {
   color: string;
   revision: number;
   updatedAt: string;
+  reviewLater: boolean;
 }
 const validId = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 export function isHighlight(v: unknown): v is TextHighlight {
@@ -50,6 +51,7 @@ export function isHighlight(v: unknown): v is TextHighlight {
     typeof r.color === 'string' &&
     /^#[0-9a-f]{6}$/i.test(r.color) &&
     typeof r.updatedAt === 'string' &&
+    typeof r.reviewLater === 'boolean' &&
     !!a &&
     a.coordinateSpace === 'normalized-pdf-v1' &&
     typeof a.quote === 'string' &&

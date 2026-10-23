@@ -1,5 +1,15 @@
 import { Transform } from 'class-transformer';
-import { IsInt, IsIn, IsString, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsIn,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 import { highlightColors } from './highlight.dto';
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export class AnnotationSearchDto {
@@ -9,6 +19,10 @@ export class AnnotationSearchDto {
   @ValidateIf((_, value: unknown) => value !== undefined)
   @IsIn(highlightColors)
   color?: string;
+  /** Only items the owner marked "Cần xem lại"; false is the same as leaving it out. */
+  @ValidateIf((_, value: unknown) => value !== undefined)
+  @IsBoolean()
+  reviewLater?: boolean;
   @ValidateIf((_, value: unknown) => value !== undefined)
   @Transform(trim)
   @IsString()

@@ -5,6 +5,7 @@ import { ApiError } from '../../lib/auth';
 import {
   exportNotes,
   searchAnnotations,
+  setReviewLater,
   type NotesExportFormat,
   type AnnotationFilters,
   type AnnotationItem,
@@ -71,6 +72,7 @@ export function ReaderNotebook({ versionId, active, available, onSelect }: Noteb
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('');
   const [color, setColor] = useState('');
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [search, setSearch] = useState<{ filters: AnnotationFilters; iteration: number }>({
     filters: {},
     iteration: 0,
@@ -92,6 +94,7 @@ export function ReaderNotebook({ versionId, active, available, onSelect }: Noteb
               query: query.trim(),
               ...(kind === 'PAGE_NOTE' || kind === 'TEXT_HIGHLIGHT' ? { kind } : {}),
               ...(kind !== 'PAGE_NOTE' && isHighlightColor(color) ? { color } : {}),
+              ...(reviewOnly ? { reviewLater: true as const } : {}),
             },
           });
         }}
@@ -136,6 +139,14 @@ export function ReaderNotebook({ versionId, active, available, onSelect }: Noteb
           ]}
           onChange={setColor}
         />
+        <label className="eligibility-check notebook-review-filter">
+          <input
+            type="checkbox"
+            checked={reviewOnly}
+            onChange={(event) => setReviewOnly(event.target.checked)}
+          />
+          <span>Chỉ mục cần xem lại</span>
+        </label>
         <button className="primary-button" type="submit">
           Tìm ghi chú
         </button>
@@ -163,6 +174,8 @@ function NotebookResults({
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [marking, setMarking] = useState<string | null>(null);
+  const [markMessage, setMarkMessage] = useState('');
   const request = useRef<AbortController | null>(null);
   const failedCursor = useRef<string | null>(null);
   const load = useCallback(
@@ -215,6 +228,29 @@ function NotebookResults({
     }
     load(after);
   }
+  async function mark(item: AnnotationItem) {
+    if (marking) return;
+    setMarking(item.id);
+    setMarkMessage('');
+    try {
+      const saved = await setReviewLater(versionId, item, !item.reviewLater);
+      // An item unmarked under the "cần xem lại" filter stays until the next search, so focus does not jump.
+      setItems((old) => old.map((entry) => (entry.id === saved.id ? saved : entry)));
+      setMarkMessage(
+        saved.reviewLater
+          ? `Đã đánh dấu cần xem lại · Trang ${saved.pageNumber}.`
+          : `Đã bỏ dấu cần xem lại · Trang ${saved.pageNumber}.`,
+      );
+    } catch (failure) {
+      setMarkMessage(
+        failure instanceof ApiError
+          ? personalError(failure)
+          : 'Chưa lưu được dấu cần xem lại. Kiểm tra kết nối rồi thử lại.',
+      );
+    } finally {
+      setMarking(null);
+    }
+  }
   return (
     <>
       <button className="quiet-button" disabled={loading} onClick={() => start()}>
@@ -239,6 +275,11 @@ function NotebookResults({
           Không có ghi chú phù hợp. Thử đổi bộ lọc hoặc viết ghi chú ở trang đang đọc.
         </p>
       )}
+      {markMessage && (
+        <p role="status" className="field-hint">
+          {markMessage}
+        </p>
+      )}
       <div className="notebook-results">
         {items.map((item) => (
           <article key={item.id} aria-label={`Mục ghi chú ${item.id}`}>
@@ -247,6 +288,7 @@ function NotebookResults({
                 ? 'Ghi chú trang'
                 : `Đoạn tô · ${highlightColorLabel(item.color)}`}{' '}
               · Trang {item.pageNumber}
+              {item.reviewLater && <strong className="review-later-tag"> · Cần xem lại</strong>}
             </p>
             {item.kind === 'TEXT_HIGHLIGHT' && <blockquote>{item.anchor.quote}</blockquote>}
             {item.content && <p className="note-content">{item.content}</p>}
@@ -256,6 +298,18 @@ function NotebookResults({
               onClick={() => onSelect(item)}
             >
               {item.kind === 'PAGE_NOTE' ? 'Mở ghi chú' : 'Mở đoạn tô'} · Trang {item.pageNumber}
+            </button>
+            {/* Not disabled while saving, so keyboard focus stays on the button. */}
+            <button
+              className="text-button"
+              aria-busy={marking === item.id}
+              onClick={() => void mark(item)}
+            >
+              {marking === item.id
+                ? 'Đang lưu…'
+                : item.reviewLater
+                  ? 'Bỏ dấu cần xem lại'
+                  : 'Đánh dấu cần xem lại'}
             </button>
           </article>
         ))}

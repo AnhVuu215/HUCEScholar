@@ -18,6 +18,7 @@ import {
   CreateNoteDto,
   NotesQueryDto,
   ReadingRevisionDto,
+  ReviewLaterDto,
   SaveProgressDto,
   UpdateNoteDto,
 } from './reading.dto';
@@ -29,6 +30,7 @@ const noteItem = (n: annotations) => ({
   content: n.content,
   revision: n.revision,
   updatedAt: n.updated_at.toISOString(),
+  reviewLater: n.review_later,
   ...(n.kind === 'TEXT_HIGHLIGHT' ? { anchor: n.anchor, color: n.color } : {}),
 });
 const progressItem = (p: reading_progress | null) =>
@@ -91,8 +93,9 @@ export class ReadingService {
         throw new BadRequestException('Màu chỉ áp dụng cho đoạn tô.');
       const kind = query.color ? 'TEXT_HIGHLIGHT' : query.kind;
       const term = query.query ?? '';
+      const reviewLater = query.reviewLater === true;
       const fingerprint = createHash('sha256')
-        .update(JSON.stringify([kind ?? null, query.color ?? null, term]))
+        .update(JSON.stringify([kind ?? null, query.color ?? null, term, reviewLater]))
         .digest('base64url');
       const prefix = [1, String(owner), String(version)];
       let after: { page: number; id: bigint } | undefined;
@@ -125,6 +128,7 @@ export class ReadingService {
         WHERE user_id = ${owner} AND version_id = ${version}
           ${kind ? Prisma.sql`AND kind = ${kind}` : Prisma.empty}
           ${query.color ? Prisma.sql`AND color = ${query.color}` : Prisma.empty}
+          ${reviewLater ? Prisma.sql`AND review_later` : Prisma.empty}
           ${term ? Prisma.sql`AND (content ILIKE ${pattern} ESCAPE ${'\\'} OR anchor->>'quote' ILIKE ${pattern} ESCAPE ${'\\'})` : Prisma.empty}
           ${after ? Prisma.sql`AND (page_number, id) > (${after.page}, ${after.id})` : Prisma.empty}
         ORDER BY page_number ASC, id ASC LIMIT ${limit + 1}
@@ -275,6 +279,21 @@ export class ReadingService {
     return this.run(actor, id, true, async (tx, owner, version) => {
       await this.owned(tx, owner, version, target, dto.revision, kind);
       await tx.annotations.delete({ where: { id: target } });
+    });
+  }
+  /**
+   * Sets (not toggles) the owner's private "Cần xem lại" mark, so a retry is harmless.
+   * Content revision is untouched: marking from the notebook must not stale an open draft.
+   */
+  setReviewLater(actor: Profile, id: string, noteId: string, dto: ReviewLaterDto) {
+    const target = academicId(noteId);
+    return this.run(actor, id, true, async (tx, user_id, version_id) => {
+      const { count } = await tx.annotations.updateMany({
+        where: { id: target, user_id, version_id },
+        data: { review_later: dto.reviewLater },
+      });
+      if (!count) throw new NotFoundException('Không tìm thấy ghi chú.');
+      return { item: noteItem(await tx.annotations.findUniqueOrThrow({ where: { id: target } })) };
     });
   }
   progress(actor: Profile, id: string) {

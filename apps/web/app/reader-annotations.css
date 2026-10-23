@@ -224,3 +224,17 @@
   flex-basis: 100%;
   margin: 0;
 }
+/* LEARN-02: private "cần xem lại" mark. */
+.notebook-filters .notebook-review-filter {
+  margin-top: 0;
+}
+.notebook-filters .notebook-review-filter input {
+  width: 20px;
+  min-height: 0;
+}
+.notebook-results article > .text-button {
+  margin-left: 12px;
+}
+.review-later-tag {
+  color: var(--ink);
+}

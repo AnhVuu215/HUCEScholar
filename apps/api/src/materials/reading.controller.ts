@@ -23,6 +23,7 @@ import {
   NotesQueryDto,
   ExportNotesDto,
   ReadingRevisionDto,
+  ReviewLaterDto,
   SaveProgressDto,
   UpdateNoteDto,
 } from './reading.dto';
@@ -38,6 +39,14 @@ export class ReadingController {
     @Body() dto: AnnotationSearchDto,
   ) {
     return this.reading.search(req.user, id, dto);
+  }
+  @Put('annotations/:noteId/review-later') setReviewLater(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('noteId') noteId: string,
+    @Body() dto: ReviewLaterDto,
+  ) {
+    return this.reading.setReviewLater(req.user, id, noteId, dto);
   }
   @Get('highlights') highlights(
     @Req() req: AuthenticatedRequest,
