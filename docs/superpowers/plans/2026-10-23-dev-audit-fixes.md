@@ -41,6 +41,13 @@ Mỗi bước là một nhánh `codex/…` và một PR nhỏ, chạy đủ lint
 - Nâng `next` và `@next/eslint-plugin-next` lên `16.4.1` (bản patch). Đọc changelog 16.4.1, chạy lại toàn bộ test.
 - Thêm `pnpm.overrides` cho `mysql2 >=3.23.1`. Với `deepmerge-ts`, bản 8 là major nên chỉ ép nếu `prisma generate`/`migrate` vẫn chạy; nếu không thì ghi lại và chờ Prisma nâng.
 - Kỳ vọng: hết thông báo dừng của Next, có thể hết luôn #11 và lỗi `pwa-install › mobile`.
+- **Đã làm** (nhánh `codex/next-16-4-1`):
+  - `next` và `@next/eslint-plugin-next` 16.4.1; overrides `mysql2 3.24.6`, `deepmerge-ts 8.0.2`
+  - `pnpm audit --prod`: không còn lỗ hổng
+  - `prisma generate` và `migrate status` vẫn chạy với deepmerge-ts 8
+  - `pnpm check` đạt: 119 unit, build không còn bị Next dừng
+  - integration 216 đạt
+  - e2e 167 đạt, 8 bỏ qua; `pwa-install › mobile` đã đạt. 5 ca `password-change` lỗi 401 vì lượt trước đã đổi mật khẩu tài khoản test; chạy `pnpm test:setup` rồi chạy lại thì 6/6 đạt.
 
 ### Bước 2 — Môi trường dev chạy đủ (P1, #5) · `codex/dev-full-stack`
 
