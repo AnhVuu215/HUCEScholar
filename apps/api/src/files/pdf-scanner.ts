@@ -128,9 +128,31 @@ export async function clamScan(
     socket.destroy();
   }
 }
+/** True only when clamd answers PING; clamd refuses connections while it loads signatures. */
+export async function clamPing(host: string, port: number, timeout = 2_000): Promise<boolean> {
+  const socket = createConnection({ host, port });
+  try {
+    return await new Promise<boolean>((resolve) => {
+      let response = '';
+      socket.setTimeout(timeout, () => resolve(false));
+      socket.on('error', () => resolve(false));
+      socket.on('close', () => resolve(response === 'PONG\0'));
+      socket.on('data', (data: Buffer) => {
+        response += data.toString('utf8');
+        if (response.includes('\0') || response.length > 64) resolve(response === 'PONG\0');
+      });
+      socket.once('connect', () => socket.write('zPING\0'));
+    });
+  } finally {
+    socket.destroy();
+  }
+}
 @Injectable()
 export class PdfScanner {
   constructor(@Inject(FILE_CONFIG) private readonly config: FileConfiguration) {}
+  reachable() {
+    return clamPing(this.config.clamHost, this.config.clamPort);
+  }
   async scan(path: string) {
     await clamScan(path, this.config.clamHost, this.config.clamPort);
     const info = parsePdfInfo(await runTool(this.config.pdfinfo, ['-isodates', path], 30_000));

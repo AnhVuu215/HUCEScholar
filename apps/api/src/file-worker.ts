@@ -12,7 +12,12 @@ import { SafeLogger } from './safe-logger';
 import { MaterialDraftCoreModule } from './materials/material-draft-core.module';
 import { SourceConversionProcessor } from './materials/source-conversion.processor';
 import { SOURCE_QUEUE } from './files/source-conversion-queue';
-import { WORKER_HEARTBEAT_INTERVAL_MS, WORKER_HEARTBEAT_KEY } from './ops/readiness.service';
+import {
+  SCANNER_STATUS_KEY,
+  WORKER_HEARTBEAT_INTERVAL_MS,
+  WORKER_HEARTBEAT_KEY,
+} from './ops/readiness.service';
+import { PdfScanner } from './files/pdf-scanner';
 import { CalendarReminders, CalendarRemindersModule } from './calendar/calendar-reminders';
 
 @Module({
@@ -79,13 +84,19 @@ async function bootstrap() {
   };
   await remind();
   const remindTimer = setInterval(() => void remind(), 60_000);
-  // Heartbeat for API readiness. Expires on its own if this process dies without cleanup.
+  // Heartbeat and scanner state for API readiness. Both expire if this process dies without cleanup.
   const heartbeat = new Redis(queueConnection(config.redisUrl));
   heartbeat.on('error', () => undefined);
-  const beat = () =>
-    heartbeat
+  const scanner = app.get(PdfScanner);
+  const beat = async () => {
+    const scannerUp = await scanner.reachable();
+    await heartbeat
+      .multi()
       .set(WORKER_HEARTBEAT_KEY, String(Date.now()), 'EX', 60)
+      .set(SCANNER_STATUS_KEY, scannerUp ? 'ok' : 'fail', 'EX', 60)
+      .exec()
       .catch(() => Logger.warn('Worker heartbeat not recorded; will retry.', 'FileWorker'));
+  };
   await beat();
   const beating = setInterval(() => void beat(), WORKER_HEARTBEAT_INTERVAL_MS);
   let closing = false;
@@ -96,7 +107,7 @@ async function bootstrap() {
     clearInterval(remindTimer);
     clearInterval(beating);
     await heartbeat
-      .del(WORKER_HEARTBEAT_KEY)
+      .del(WORKER_HEARTBEAT_KEY, SCANNER_STATUS_KEY)
       .catch(() => undefined)
       .finally(() => heartbeat.disconnect());
     await worker.close();
