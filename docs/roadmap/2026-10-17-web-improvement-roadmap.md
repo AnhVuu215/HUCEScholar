@@ -1,6 +1,6 @@
 # HUCEScholar — kế hoạch cải thiện web và ý tưởng sản phẩm
 
-Cập nhật: 17/10/2026. Mốc đối chiếu: commit `b7cef22`, nhánh `codex/web-ui-refinements`. Bảng hiện trạng ở mục 2 cập nhật lại ngày 24/10/2026 theo `main` `aee4daf`.
+Cập nhật: 17/10/2026. Mốc đối chiếu: commit `b7cef22`, nhánh `codex/web-ui-refinements`. Bảng hiện trạng ở mục 2 cập nhật lại ngày 25/10/2026 theo `main` `da0ff4d`.
 
 **Ưu tiên mới theo yêu cầu người dùng:** viết plan upload PDF/DOCX cho giảng viên trước khi triển khai. DOCX có bản PDF để đọc/ghi chú và giữ Word gốc để tải theo quyền. [Thiết kế](../superpowers/specs/2026-10-17-lecturer-pdf-docx-upload.md) · [Plan chi tiết](../superpowers/plans/2026-10-17-lecturer-pdf-docx-upload.md). Đã chuyển sang triển khai; bằng chứng và giới hạn tại [mốc PDF/DOCX](../implementation/2026-10-17-lecturer-pdf-docx-upload.md).
 
@@ -55,7 +55,7 @@ Các ràng buộc giữ nguyên:
 
 ## 2. Hiện trạng và bằng chứng
 
-Cập nhật 24/10/2026 theo `main` `aee4daf`. Cột giữa chỉ ghi những gì có mốc implementation; cột phải là việc còn mở.
+Cập nhật 25/10/2026 theo `main` `da0ff4d` (sau PR #42–#44). Cột giữa chỉ ghi những gì có mốc implementation; cột phải là việc còn mở.
 
 | Khu vực             | Đã có trên `main`                                                                                                                         | Khoảng trống cần xử lý                                                                                    |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -63,12 +63,12 @@ Cập nhật 24/10/2026 theo `main` `aee4daf`. Cột giữa chỉ ghi những g�
 | Học liệu giảng viên | Bản nháp, PDF/DOCX private, tự công bố, phiên bản, phân công; trạng thái quét tự cập nhật và lý do không đạt (UPLOAD-01/03); "Kiểm tra lại" khi trình quét gián đoạn | Cần thử với tập PDF thực tế được phép dùng                                                                |
 | Tài liệu sinh viên  | Gửi/rút, yêu cầu sửa, từ chối/duyệt, lịch sử; thông báo trong ứng dụng (NOTIFY-01)                                                        | Chưa thử với người thật                                                                                   |
 | Kho học liệu        | Tìm không dấu, nhiều từ (SEARCH-01/02); lọc môn/loại/nguồn; danh sách đọc theo môn (COURSE-01)                                            | Chưa xếp hạng kết quả hoặc tìm trong nội dung PDF                                                         |
-| Reader              | Trang, zoom, xoay, text layer, lưu tiến độ; tìm chữ, mục lục, đọc tập trung (READ-01); báo phiên bản hiện hành (VERSION-01); báo đúng khi PDF mất | Chưa thử Safari/cảm ứng (đang hoãn)                                                                       |
+| Reader              | Trang, zoom, xoay, text layer, lưu tiến độ; tìm chữ, mục lục, đọc tập trung (READ-01); báo phiên bản hiện hành (VERSION-01); báo đúng khi PDF mất | Mỗi lần hiện một trang, chưa cuộn liền hay ảnh thu nhỏ; chưa ghi chú đặt ngay trên trang; chưa thử Safari/cảm ứng (đang hoãn)                                                                       |
 | Ghi chú và ôn tập   | Ghi chú trang, tô màu, trích dẫn; sổ ghi chú toàn phiên bản (LEARN-01); "Cần xem lại" (LEARN-02); thẻ ôn tập (STUDY-01); xuất ghi chú (EXPORT-01) | Chưa có sổ tay toàn kho hoặc thuật toán nhắc lại                                                          |
-| Thư viện cá nhân    | Đã lưu, đọc gần đây; "Học tiếp" ở trang đầu (HOME-01); lịch học, lặp lại, kéo thả và nhắc lịch (CAL-01…03)                                | Chưa có nhóm tự tạo; CAL-04/05 theo [thiết kế](../superpowers/specs/2026-10-22-study-calendar.md)        |
+| Thư viện cá nhân    | Đã lưu, đọc gần đây; "Học tiếp" ở trang đầu (HOME-01); lịch học, lặp lại, kéo thả và nhắc lịch (CAL-01…03); "Cần xem lại" và buổi ôn trên lịch (CAL-04a)                                | Chưa có nhóm tự tạo; hạn danh sách đọc (CAL-04b) và CAL-05 theo [thiết kế](../superpowers/specs/2026-10-22-study-calendar.md)        |
 | Báo cáo nội dung    | Báo cáo từ reader, trang xử lý cho admin, ẩn tài liệu trong luồng xử lý (REPORT-01)                                                       | —                                                                                                         |
 | Vận hành            | PrivateStore local/S3; worker ClamAV/Poppler/LibreOffice; `pnpm infra:files`; `doctor:files`; pilot tự động trên máy (QA-01)              | Chưa có bằng chứng S3/HTTPS, phục hồi dữ liệu; OPS-02 và phiên dùng thử với người thật đang hoãn          |
-| Health/CI           | `/health` liveness và `/health/ready` cho DB/Redis/kho file/worker (OPS-01); workflow chạy format/check/integration/Playwright             | Readiness chưa báo riêng khi ClamAV không phản hồi; chưa đối chiếu kết quả run GitHub trên commit này     |
+| Health/CI           | `/health` liveness và `/health/ready` cho DB/Redis/kho file/worker (OPS-01) và trình quét ClamAV; workflow chạy format/check/integration/Playwright             | Readiness chưa gắn vào healthcheck hay cảnh báo tự động (OPS-02)     |
 
 Bằng chứng gần nhất, theo mốc của từng bước trong [kế hoạch sửa sau rà soát](../superpowers/plans/2026-10-23-dev-audit-fixes.md): 123 unit, 219 integration đạt và 1 bỏ qua (bước 4); e2e 177 đạt, 8 bỏ qua (bước 5). Đây là **các lượt chạy local khác nhau**, không cộng lại thành một bộ test hoặc coi là bằng chứng production.
 
