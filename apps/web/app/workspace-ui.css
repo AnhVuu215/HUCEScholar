@@ -827,6 +827,22 @@
   overflow-wrap: anywhere;
 }
 /* Task panel and quick add. */
+.calendar-side {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.calendar-review-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.calendar-review .schedule-reading {
+  margin: 4px 0 0;
+}
 .calendar-tasks h2 {
   margin: 0 0 12px;
   font-size: 1.125rem;

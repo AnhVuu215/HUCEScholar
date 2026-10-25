@@ -2,9 +2,22 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
 import { academicId } from '../academic/academic.service';
-import { Prisma } from '../generated/prisma/client';
+import { Prisma, type annotations } from '../generated/prisma/client';
 import { DraftListDto } from './materials.dto';
-import { LibraryService } from './library.service';
+import { available, LibraryService } from './library.service';
+/** Short text for a "cần xem lại" row: the owner's note, else the highlighted quote. */
+function excerpt(note: Pick<annotations, 'content' | 'anchor'>) {
+  const anchor = note.anchor;
+  const quote =
+    anchor &&
+    typeof anchor === 'object' &&
+    !Array.isArray(anchor) &&
+    typeof anchor.quote === 'string'
+      ? anchor.quote
+      : '';
+  const text = (note.content.trim() || quote).replace(/\s+/g, ' ').trim();
+  return text.length > 160 ? `${text.slice(0, 159)}…` : text;
+}
 @Injectable()
 export class PersonalLibraryService {
   constructor(
@@ -120,6 +133,51 @@ export class PersonalLibraryService {
           material: items.get(String(r.version_id)) ?? null,
         })),
         total: await tx.reading_progress.count({ where: { user_id } }),
+        page: query.page,
+        limit: query.limit,
+      };
+    });
+  }
+  /**
+   * CAL-04: the owner's "cần xem lại" marks across documents, newest version first, then by page.
+   * Marks on versions that are no longer readable stay stored (LEARN-02) but are not listed.
+   */
+  reviewLater(actor: Profile, query: DraftListDto) {
+    return this.run(actor, false, async (tx, user_id) => {
+      const where: Prisma.annotationsWhereInput = {
+        user_id,
+        review_later: true,
+        document_versions: available(),
+      };
+      const rows = await tx.annotations.findMany({
+        where,
+        orderBy: [{ version_id: 'desc' }, { page_number: 'asc' }, { id: 'asc' }],
+        take: query.limit,
+        skip: (query.page - 1) * query.limit,
+        select: {
+          id: true,
+          version_id: true,
+          page_number: true,
+          kind: true,
+          content: true,
+          anchor: true,
+          color: true,
+        },
+      });
+      const items = await this.library.readableItems(tx, [
+        ...new Set(rows.map((r) => r.version_id)),
+      ]);
+      return {
+        items: rows.map((r) => ({
+          id: String(r.id),
+          versionId: String(r.version_id),
+          pageNumber: r.page_number,
+          kind: r.kind,
+          excerpt: excerpt(r),
+          ...(r.kind === 'TEXT_HIGHLIGHT' ? { color: r.color } : {}),
+          material: items.get(String(r.version_id)) ?? null,
+        })),
+        total: await tx.annotations.count({ where }),
         page: query.page,
         limit: query.limit,
       };
