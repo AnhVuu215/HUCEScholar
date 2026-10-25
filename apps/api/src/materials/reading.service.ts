@@ -18,10 +18,22 @@ import {
   CreateNoteDto,
   NotesQueryDto,
   ReadingRevisionDto,
+  NotePosition,
   ReviewLaterDto,
   SaveProgressDto,
   UpdateNoteDto,
 } from './reading.dto';
+const pinAnchor = (p: NotePosition) => ({
+  coordinateSpace: 'normalized-pdf-v1',
+  point: [Math.round(p.x * 1e6) / 1e6, Math.round(p.y * 1e6) / 1e6],
+});
+function notePosition(anchor: unknown): NotePosition | null {
+  if (!anchor || typeof anchor !== 'object' || !('point' in anchor)) return null;
+  const point = anchor.point;
+  return Array.isArray(point) && typeof point[0] === 'number' && typeof point[1] === 'number'
+    ? { x: point[0], y: point[1] }
+    : null;
+}
 const noteItem = (n: annotations) => ({
   id: String(n.id),
   versionId: String(n.version_id),
@@ -31,7 +43,9 @@ const noteItem = (n: annotations) => ({
   revision: n.revision,
   updatedAt: n.updated_at.toISOString(),
   reviewLater: n.review_later,
-  ...(n.kind === 'TEXT_HIGHLIGHT' ? { anchor: n.anchor, color: n.color } : {}),
+  ...(n.kind === 'TEXT_HIGHLIGHT'
+    ? { anchor: n.anchor, color: n.color }
+    : { position: notePosition(n.anchor) }),
 });
 const progressItem = (p: reading_progress | null) =>
   p
@@ -176,7 +190,11 @@ export class ReadingService {
   private createAnnotation(actor: Profile, id: string, dto: CreateNoteDto | CreateHighlightDto) {
     const highlight = 'anchor' in dto;
     const kind = highlight ? 'TEXT_HIGHLIGHT' : 'PAGE_NOTE';
-    const anchor = highlight ? { ...dto.anchor, quote: dto.anchor.quote.trim() } : null;
+    const anchor = highlight
+      ? { ...dto.anchor, quote: dto.anchor.quote.trim() }
+      : dto.position
+        ? pinAnchor(dto.position)
+        : null;
     return this.run(
       actor,
       id,
@@ -192,8 +210,8 @@ export class ReadingService {
             existing.page_number !== dto.pageNumber ||
             existing.kind !== kind ||
             existing.content !== dto.content ||
-            (highlight &&
-              (existing.color !== dto.color || !isDeepStrictEqual(existing.anchor, anchor)))
+            (highlight && existing.color !== dto.color) ||
+            !isDeepStrictEqual(existing.anchor ?? null, anchor)
           )
             throw new ConflictException({
               code: 'NOTE_REQUEST_REUSED',
@@ -219,7 +237,8 @@ export class ReadingService {
             page_number: dto.pageNumber,
             kind,
             content: dto.content,
-            ...(highlight ? { anchor: anchor as Prisma.InputJsonValue, color: dto.color } : {}),
+            ...(anchor ? { anchor: anchor as Prisma.InputJsonValue } : {}),
+            ...(highlight ? { color: dto.color } : {}),
           },
         });
         return { item: noteItem(item) };
@@ -249,7 +268,14 @@ export class ReadingService {
         item: noteItem(
           await tx.annotations.update({
             where: { id: target },
-            data: { content: dto.content, revision: { increment: 1 }, updated_at: new Date() },
+            data: {
+              content: dto.content,
+              ...(dto.position === undefined
+                ? {}
+                : { anchor: dto.position ? pinAnchor(dto.position) : Prisma.DbNull }),
+              revision: { increment: 1 },
+              updated_at: new Date(),
+            },
           }),
         ),
       };

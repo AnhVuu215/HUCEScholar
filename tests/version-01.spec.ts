@@ -42,6 +42,10 @@ test('an earlier version links to the current one while its notes stay where the
       })
     ).status(),
   ).toBe(201);
+  // The reader saves page 1 on its own right after opening; read the revision after that save.
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Đã lưu tiến độ · Trang 1' }),
+  ).toBeVisible();
   const progress = await (await page.request.get(`${fixture.path}/progress`)).json();
   expect(
     (
