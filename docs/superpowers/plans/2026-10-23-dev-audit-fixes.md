@@ -130,6 +130,23 @@ Mỗi bước là một nhánh `codex/…` và một PR nhỏ, chạy đủ lint
 
 - Chạy lại script quét trang và luồng tải lên trên app dev. Ghi kết quả vào mốc implementation của từng bước.
 - Xóa 3 tài khoản audit và bản nháp/môn "Khoa audit / Môn audit" khỏi database dev, nếu chủ dự án muốn.
+- **Đã chạy lại** ngày 24/10/2026 trên `main` `aee4daf`, app dev local (`pnpm dev`, image `file-worker` build lại bằng `pnpm infra:files`). Bằng chứng local, không phải production.
+  - **Quét trang** (51 trang × 1280/390px, 3 vai trò): 48 phát hiện, tất cả trên `/workspace/library/versions/1` và `/2`, đúng hai phiên bản bị mất PDF.
+    - API trả 410, không còn 503 (#4).
+    - Reader báo "File PDF của phiên bản này không còn trên máy chủ…".
+    - Log API ghi `Private object missing for file 1.` và `… file 2.`
+    - Không có cảnh báo React "same key", không có badge issue của Next, lỗi JS, tràn ngang hay chuyển hướng sai vai trò (#6, #11).
+    - "networkidle >15s" trên hai trang này đã có từ lượt 23/10, không phải lỗi mới.
+  - **Tải lên:** giảng viên tải PDF 2 trang, CHECKING → SAFE trong 5 giây.
+  - **Trình quét gián đoạn** (#3): tắt ClamAV, tải PDF lên, 25 giây sau bật lại.
+    - Worker thử lúc +8s, +27s và +57s, đều lỗi; lần cuối lỗi vì ClamAV chưa nạp xong dữ liệu.
+    - File vẫn ở `CHECKING`, không bị ghi FAILED như lượt 23/10 (FAILED sau khoảng 6 giây).
+    - Lần thử kế tiếp đạt: `SAFE`, vẫn `check_round` 1, không phải tải lên lại.
+  - **`doctor:files`:** báo đúng file 1 và file 2 mất object, thoát mã 2.
+  - **Log API:** cảnh báo `pg` "already executing a query" vẫn xuất hiện 2 lần, đúng như đã chốt ở bước 6.
+  - **Còn chờ chủ dự án quyết định:**
+    - tải lại PDF hay ẩn hai phiên bản mất file
+    - có xóa dữ liệu audit hay không; lượt này tạo thêm hai môn "Môn audit" và hai bản nháp (draft 5, 6)
 
 ## Ghi chú
 
