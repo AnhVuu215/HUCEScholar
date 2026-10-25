@@ -5,7 +5,7 @@ import Redis from 'ioredis';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApplication } from '../src/configure-application';
-import { WORKER_HEARTBEAT_KEY } from '../src/ops/readiness.service';
+import { SCANNER_STATUS_KEY, WORKER_HEARTBEAT_KEY } from '../src/ops/readiness.service';
 
 describe('API readiness', () => {
   let app: INestApplication;
@@ -30,15 +30,15 @@ describe('API readiness', () => {
   });
 
   afterAll(async () => {
-    await redis?.del(WORKER_HEARTBEAT_KEY);
+    await redis?.del(WORKER_HEARTBEAT_KEY, SCANNER_STATUS_KEY);
     await redis?.quit();
     await app?.close();
   });
 
   const ready = () => request(app.getHttpServer()).get('/api/v1/health/ready');
 
-  it('checks database, Redis and storage, and reports the worker separately', async () => {
-    await redis.del(WORKER_HEARTBEAT_KEY);
+  it('checks database, Redis and storage, and reports the worker and scanner separately', async () => {
+    await redis.del(WORKER_HEARTBEAT_KEY, SCANNER_STATUS_KEY);
     const degraded = await ready().expect(200).expect('Cache-Control', 'no-store');
     expect(degraded.body).toMatchObject({
       service: 'hucescholar-api',
@@ -48,16 +48,24 @@ describe('API readiness', () => {
         redis: { status: 'ok' },
         storage: { status: 'ok' },
         worker: { status: 'absent', ageSeconds: null },
+        scanner: { status: 'unknown' },
       },
     });
     expect(Object.keys(degraded.body.checks).sort()).toEqual([
       'database',
       'redis',
+      'scanner',
       'storage',
       'worker',
     ]);
     await redis.set(WORKER_HEARTBEAT_KEY, String(Date.now()), 'EX', 60);
+    await redis.set(SCANNER_STATUS_KEY, 'ok', 'EX', 60);
     expect((await ready().expect(200)).body.status).toBe('ready');
+    await redis.set(SCANNER_STATUS_KEY, 'fail', 'EX', 60);
+    const noScanner = (await ready().expect(200)).body;
+    expect(noScanner.status).toBe('degraded');
+    expect(noScanner.checks.scanner).toEqual({ status: 'fail' });
+    await redis.set(SCANNER_STATUS_KEY, 'ok', 'EX', 60);
     await redis.set(WORKER_HEARTBEAT_KEY, String(Date.now() - 5 * 60_000), 'EX', 60);
     const stale = (await ready().expect(200)).body;
     expect(stale.status).toBe('degraded');

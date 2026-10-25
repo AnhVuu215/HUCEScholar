@@ -63,7 +63,7 @@ pnpm --filter @hucescholar/api db:migrate
 pnpm dev
 ```
 
-Mở [http://127.0.0.1:3000/](http://127.0.0.1:3000/) rồi đăng nhập. API liveness ở `http://127.0.0.1:3001/api/v1/health`; readiness (DB, Redis, kho file và heartbeat worker) ở `/api/v1/health/ready`, trả 503 khi dependency bắt buộc lỗi. Mỗi phản hồi có `X-Request-Id`, trùng với id trong log truy cập và log lỗi. Dừng web/API bằng `Ctrl+C`. Trang tiến độ dự án và kiểm tra API nằm ở `/project`.
+Mở [http://127.0.0.1:3000/](http://127.0.0.1:3000/) rồi đăng nhập. API liveness ở `http://127.0.0.1:3001/api/v1/health`; readiness (DB, Redis, kho file, heartbeat worker và trình quét ClamAV) ở `/api/v1/health/ready`, trả 503 khi dependency bắt buộc lỗi. Mỗi phản hồi có `X-Request-Id`, trùng với id trong log truy cập và log lỗi. Dừng web/API bằng `Ctrl+C`. Trang tiến độ dự án và kiểm tra API nằm ở `/project`.
 
 `setup:local` tạo `infra/.env` và `apps/api/.env` với password/CSRF secret ngẫu nhiên, giữ nguyên file đã có và không in secret. PostgreSQL mặc định **55432**, Redis **56379**, chỉ bind `127.0.0.1`; không đụng PostgreSQL khác trên 5432. `pnpm infra:down` giữ named volumes; không thêm `-v` khi cần giữ dữ liệu.
 
@@ -82,7 +82,7 @@ pnpm dev
 - Đổi code API thì chạy lại `pnpm infra:files` để build lại image worker.
 - Không chạy thêm `pnpm --filter @hucescholar/api worker:files` trên máy cùng lúc. Hai worker cùng nhận job; bản trên máy không gọi được ClamAV nên sẽ đánh lỗi file "dịch vụ kiểm tra không phản hồi".
 - Thư đăng ký, khôi phục mật khẩu và nhắc lịch được ghi thành file JSON trong `.local/mail-outbox`, không gửi đi. API cần `MAIL_TRANSPORT=file` và `MAIL_DIR=<repo>.localmail-outbox` trong `apps/api/.env` (`setup:local` thêm sẵn cho file mới); worker trong container đã cấu hình sẵn.
-- Kiểm tra: `docker ps` thấy `clamav` healthy; `/api/v1/health/ready` báo heartbeat worker.
+- Kiểm tra: `docker ps` thấy `clamav` healthy; `/api/v1/health/ready` báo `worker` và `scanner` đều `ok`. Ngay sau khi bật, `scanner` là `fail` khoảng một phút trong lúc ClamAV nạp dữ liệu.
 
 ## Tạo quản trị viên đầu tiên
 

@@ -3,7 +3,12 @@ import { ConsoleLogger, Controller, Get, type INestApplication } from '@nestjs/c
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { currentRequestId, requestContext } from '../src/ops/request-context';
-import { ReadinessService, timed, WORKER_HEARTBEAT_KEY } from '../src/ops/readiness.service';
+import {
+  ReadinessService,
+  SCANNER_STATUS_KEY,
+  timed,
+  WORKER_HEARTBEAT_KEY,
+} from '../src/ops/readiness.service';
 import { SafeLogger } from '../src/safe-logger';
 import type { DatabaseService } from '../src/database/database.module';
 import type { PrivateStore } from '../src/files/private-store';
@@ -93,9 +98,13 @@ describe('readiness', () => {
     files: PrivateStore,
     heartbeat: string | null,
     ping = 'PONG',
+    scanner: string | null = 'ok',
   ) {
     const readiness = new ReadinessService(db, files);
-    const keys = new Map<string, string | null>([[WORKER_HEARTBEAT_KEY, heartbeat]]);
+    const keys = new Map<string, string | null>([
+      [WORKER_HEARTBEAT_KEY, heartbeat],
+      [SCANNER_STATUS_KEY, scanner],
+    ]);
     Object.assign(readiness, {
       redisClient: {
         status: 'ready',
@@ -115,6 +124,20 @@ describe('readiness', () => {
     const stale = await service(ok, store, String(Date.now() - 120_000)).check();
     expect(stale.checks.worker.status).toBe('stale');
     expect(stale.status).toBe('degraded');
+  });
+
+  it('is degraded when the worker cannot reach the scanner', async () => {
+    const fresh = String(Date.now());
+    const down = await service(ok, store, fresh, 'PONG', 'fail').check();
+    expect(down.status).toBe('degraded');
+    expect(down.checks.worker.status).toBe('ok');
+    expect(down.checks.scanner).toEqual({ status: 'fail' });
+    // An older worker that never wrote the key, and a dead worker's leftover "ok", prove nothing.
+    expect((await service(ok, store, fresh, 'PONG', null).check()).checks.scanner.status).toBe(
+      'unknown',
+    );
+    const stale = await service(ok, store, String(Date.now() - 120_000), 'PONG', 'ok').check();
+    expect(stale.checks.scanner.status).toBe('unknown');
   });
 
   it('is not ready when a critical dependency fails, without exposing the error', async () => {

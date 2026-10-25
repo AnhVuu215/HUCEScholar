@@ -55,7 +55,7 @@ Mỗi bước là một nhánh `codex/…` và một PR nhỏ, chạy đủ lint
 - ~~`pnpm dev:all` chạy worker trên máy~~: bỏ. ClamAV và docx-converter không mở cổng ra máy, Windows không có Poppler, nên worker trên máy luôn đánh lỗi file và còn tranh job với worker trong container. Dùng worker trong container; image mới có luôn nhắc lịch (CAL-03).
 - Worker trong container ghi thư (nhắc lịch) vào `.local/mail-outbox`. `setup:local` thêm `MAIL_TRANSPORT=file`/`MAIL_DIR` cho `apps/api/.env` mới và nhắc khi file cũ thiếu.
 - README thêm mục "Chạy đầy đủ": thứ tự lệnh, build lại image sau khi đổi code, không chạy `worker:files` song song, xem mail.
-- Để sau: readiness (`/health/ready`) báo riêng "scanner" khi ClamAV không phản hồi.
+- Để sau: readiness (`/health/ready`) báo riêng "scanner" khi ClamAV không phản hồi. **Đã làm** ngày 24/10 ở nhánh `codex/ops-scanner-readiness`, xem [mốc OPS-01](../../implementation/2026-10-20-readiness-logging.md).
 - **Đã làm và kiểm trên máy dev:** ClamAV healthy; giảng viên tải PDF lên thì CHECKING → SAFE dưới 10 giây (2 trang, có lớp chữ); worker container nạp `CalendarRemindersModule` và ghi đúng thư "Nhắc lịch: …" vào `.local/mail-outbox` cho một buổi học nhắc lúc bắt đầu.
 
 ### Bước 3 — Kiểm tra file bền hơn khi dịch vụ quét gián đoạn (P1, #3) · `codex/upload-scan-resilience`
