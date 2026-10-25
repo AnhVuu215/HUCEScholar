@@ -1,6 +1,6 @@
 # HUCEScholar — kế hoạch cải thiện web và ý tưởng sản phẩm
 
-Cập nhật: 17/10/2026. Mốc đối chiếu: commit `b7cef22`, nhánh `codex/web-ui-refinements`.
+Cập nhật: 17/10/2026. Mốc đối chiếu: commit `b7cef22`, nhánh `codex/web-ui-refinements`. Bảng hiện trạng ở mục 2 cập nhật lại ngày 24/10/2026 theo `main` `aee4daf`.
 
 **Ưu tiên mới theo yêu cầu người dùng:** viết plan upload PDF/DOCX cho giảng viên trước khi triển khai. DOCX có bản PDF để đọc/ghi chú và giữ Word gốc để tải theo quyền. [Thiết kế](../superpowers/specs/2026-10-17-lecturer-pdf-docx-upload.md) · [Plan chi tiết](../superpowers/plans/2026-10-17-lecturer-pdf-docx-upload.md). Đã chuyển sang triển khai; bằng chứng và giới hạn tại [mốc PDF/DOCX](../implementation/2026-10-17-lecturer-pdf-docx-upload.md).
 
@@ -26,6 +26,12 @@ AUTH-04 mở [tự đăng ký bằng email](../implementation/2026-10-22-self-si
 
 CAL-03 thêm [nhắc trước giờ học](../implementation/2026-10-23-calendar-reminders.md): mỗi lịch học hoặc việc có giờ chọn một lời nhắc, hiện ở chuông thông báo, tùy chọn gửi email; worker PDF quét mỗi phút.
 
+Rà soát app dev sau CAL-03 tìm ra 11 lỗi; [kế hoạch sửa](../superpowers/plans/2026-10-23-dev-audit-fixes.md) chia thành sáu nhánh nhỏ, đã vào `main` qua PR #35–#41: vá bảo mật Next 16.4.1, `pnpm infra:files` cho môi trường dev, kiểm tra file chịu được trình quét gián đoạn và nút "Kiểm tra lại", báo đúng khi PDF mất khỏi kho (410 `FILE_MISSING`, `doctor:files`), sửa giao diện nhỏ, giữ `pg` ở major 8.
+
+## Cập nhật 24/10
+
+Chạy lại đợt rà soát trên app dev với `main` `aee4daf`. Kết quả ghi ở mục "Sau cùng" của [kế hoạch sửa](../superpowers/plans/2026-10-23-dev-audit-fixes.md). Bảng hiện trạng ở mục 2 được viết lại theo `main`.
+
 ## Bổ sung yêu cầu V2 ngày 17/10
 
 Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.
@@ -49,20 +55,22 @@ Các ràng buộc giữ nguyên:
 
 ## 2. Hiện trạng và bằng chứng
 
-| Khu vực             | Đã có trong repository                                                                  | Khoảng trống cần xử lý                                                                                                       |
-| ------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Tài khoản           | Cookie phiên, Argon2id, CSRF, giới hạn đăng nhập, quản lý/cấp/khóa tài khoản            | Chưa tự đổi mật khẩu, chưa buộc đổi mật khẩu cấp ban đầu, chưa có API/UI khôi phục                                           |
-| Học liệu giảng viên | Bản nháp, PDF private, scan, tự công bố, phiên bản, phân công                           | Theo dõi scan còn cần thao tác cập nhật; cần thử với tập PDF thực tế được phép dùng                                          |
-| Tài liệu sinh viên  | Gửi/rút, yêu cầu sửa, từ chối/duyệt, lịch sử                                            | Cải thiện hướng dẫn và đường đi tới việc cần sửa; chưa có thông báo trong ứng dụng                                           |
-| Kho học liệu        | Tìm tiêu đề/tác giả không phân biệt hoa thường; lọc môn/loại/nguồn                      | Chưa thấy tìm không dấu, xếp hạng kết quả hoặc tìm nội dung PDF; cần test trước khi chọn giải pháp tìm kiếm                  |
-| Reader              | Trang, zoom, xoay, text layer, tải theo quyền, lưu tiến độ                              | Chưa có tìm chữ trong PDF, mục lục PDF hoặc chế độ đọc ít nhiễu                                                              |
-| Ghi chú             | Ghi chú trang, highlight, màu, ghi chú kèm, quyền riêng tư, CAS/retry                   | Chưa có danh sách ghi chú toàn phiên bản/tài liệu để tìm lại và ôn tập                                                       |
-| Thư viện cá nhân    | Đã lưu và đọc gần đây, đúng phiên bản/trang, xử lý mất quyền                            | Chưa có nhóm tự tạo hoặc trang “Học tiếp” gọn; còn backlog focus/ca biên phân trang                                          |
-| Báo cáo nội dung    | Có bảng `reports`, `report_actions`; admin đã có ẩn/khôi phục                           | Chưa thấy module/API/UI xử lý báo cáo trong `apps/api/src` và `apps/web/app`                                                 |
-| Vận hành            | PrivateStore đã hỗ trợ local/S3; worker ClamAV/Poppler, hàng đợi                        | Chưa có bằng chứng pilot S3/HTTPS, phục hồi dữ liệu và xử lý sự cố xuyên suốt                                                |
-| Health/CI           | `/health` là liveness; workflow đã chạy format/check/integration/Playwright khi push/PR | Liveness không chứng minh DB/Redis/storage/worker sẵn sàng; trạng thái run GitHub chưa được kiểm tra trong lượt lập kế hoạch |
+Cập nhật 24/10/2026 theo `main` `aee4daf`. Cột giữa chỉ ghi những gì có mốc implementation; cột phải là việc còn mở.
 
-Bằng chứng gần nhất được ghi trong các checkpoint: highlight có 50 unit test, 136 integration đạt và một ca worker thật opt-in bị bỏ qua; bộ browser ở mốc đó có 77 ca đạt. Đợt UI sau đó có 43 ca đạt, rồi 9 ca liên quan đạt sau sửa cuối. Đây là **các lượt chạy khác nhau**, không cộng lại thành một bộ test mới hoặc coi là bằng chứng production.
+| Khu vực             | Đã có trên `main`                                                                                                                         | Khoảng trống cần xử lý                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Tài khoản           | Cookie phiên, Argon2id, CSRF, giới hạn đăng nhập; tự đổi mật khẩu, buộc đổi lần đầu (AUTH-02), khôi phục qua email (AUTH-03), tự đăng ký (AUTH-04) | Mail mới thử bằng transport file trên máy; chưa thử SMTP thật                                             |
+| Học liệu giảng viên | Bản nháp, PDF/DOCX private, tự công bố, phiên bản, phân công; trạng thái quét tự cập nhật và lý do không đạt (UPLOAD-01/03); "Kiểm tra lại" khi trình quét gián đoạn | Cần thử với tập PDF thực tế được phép dùng                                                                |
+| Tài liệu sinh viên  | Gửi/rút, yêu cầu sửa, từ chối/duyệt, lịch sử; thông báo trong ứng dụng (NOTIFY-01)                                                        | Chưa thử với người thật                                                                                   |
+| Kho học liệu        | Tìm không dấu, nhiều từ (SEARCH-01/02); lọc môn/loại/nguồn; danh sách đọc theo môn (COURSE-01)                                            | Chưa xếp hạng kết quả hoặc tìm trong nội dung PDF                                                         |
+| Reader              | Trang, zoom, xoay, text layer, lưu tiến độ; tìm chữ, mục lục, đọc tập trung (READ-01); báo phiên bản hiện hành (VERSION-01); báo đúng khi PDF mất | Chưa thử Safari/cảm ứng (đang hoãn)                                                                       |
+| Ghi chú và ôn tập   | Ghi chú trang, tô màu, trích dẫn; sổ ghi chú toàn phiên bản (LEARN-01); "Cần xem lại" (LEARN-02); thẻ ôn tập (STUDY-01); xuất ghi chú (EXPORT-01) | Chưa có sổ tay toàn kho hoặc thuật toán nhắc lại                                                          |
+| Thư viện cá nhân    | Đã lưu, đọc gần đây; "Học tiếp" ở trang đầu (HOME-01); lịch học, lặp lại, kéo thả và nhắc lịch (CAL-01…03)                                | Chưa có nhóm tự tạo; CAL-04/05 theo [thiết kế](../superpowers/specs/2026-10-22-study-calendar.md)        |
+| Báo cáo nội dung    | Báo cáo từ reader, trang xử lý cho admin, ẩn tài liệu trong luồng xử lý (REPORT-01)                                                       | —                                                                                                         |
+| Vận hành            | PrivateStore local/S3; worker ClamAV/Poppler/LibreOffice; `pnpm infra:files`; `doctor:files`; pilot tự động trên máy (QA-01)              | Chưa có bằng chứng S3/HTTPS, phục hồi dữ liệu; OPS-02 và phiên dùng thử với người thật đang hoãn          |
+| Health/CI           | `/health` liveness và `/health/ready` cho DB/Redis/kho file/worker (OPS-01); workflow chạy format/check/integration/Playwright             | Readiness chưa báo riêng khi ClamAV không phản hồi; chưa đối chiếu kết quả run GitHub trên commit này     |
+
+Bằng chứng gần nhất, theo mốc của từng bước trong [kế hoạch sửa sau rà soát](../superpowers/plans/2026-10-23-dev-audit-fixes.md): 123 unit, 219 integration đạt và 1 bỏ qua (bước 4); e2e 177 đạt, 8 bỏ qua (bước 5). Đây là **các lượt chạy local khác nhau**, không cộng lại thành một bộ test hoặc coi là bằng chứng production.
 
 ## 3. Các vấn đề đáng ưu tiên
 
