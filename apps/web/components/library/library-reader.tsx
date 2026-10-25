@@ -15,7 +15,7 @@ import { ReaderFind } from './reader-find';
 import { ReaderOutline } from './reader-outline';
 import { pdfTextParts } from '../../lib/pdf-find';
 import type { AnnotationItem } from '../../lib/annotations';
-import { quadBounds } from '../../lib/highlight-geometry';
+import { positionToViewport, quadBounds } from '../../lib/highlight-geometry';
 import { useReadingProgress } from './use-reading-progress';
 import { SaveMaterial } from './save-material';
 import { ReaderReport } from './reader-report';
@@ -112,10 +112,15 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
       return;
     const frame = requestAnimationFrame(() => {
       const host = stage.current;
-      if (target.kind === 'TEXT_HIGHLIGHT' && surface?.key === renderKey && host) {
-        const bounds = quadBounds(target.anchor.quads[0], surface.viewport);
-        host.scrollTop = Math.max(0, bounds.top - host.clientHeight / 3);
-        host.scrollLeft = Math.max(0, bounds.left - host.clientWidth / 3);
+      const point =
+        surface?.key !== renderKey
+          ? null
+          : target.kind === 'TEXT_HIGHLIGHT'
+            ? quadBounds(target.anchor.quads[0], surface.viewport)
+            : target.position && positionToViewport(target.position, surface.viewport);
+      if (point && host) {
+        host.scrollTop = Math.max(0, point.top - host.clientHeight / 3);
+        host.scrollLeft = Math.max(0, point.left - host.clientWidth / 3);
       }
       const editor = document.getElementById(
         target.kind === 'PAGE_NOTE' ? 'page-note-content' : 'highlight-content',
@@ -203,7 +208,8 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
         );
         const canvas = document.createElement('canvas'),
           layer = document.createElement('div'),
-          overlay = document.createElement('div');
+          overlay = document.createElement('div'),
+          pins = document.createElement('div');
         canvas.width = Math.max(1, Math.floor(viewport.width * ratio));
         canvas.height = Math.max(1, Math.floor(viewport.height * ratio));
         canvas.style.width = `${viewport.width}px`;
@@ -212,10 +218,11 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
         canvas.setAttribute('role', 'img');
         layer.className = 'textLayer';
         overlay.className = 'pdf-highlight-layer';
+        pins.className = 'pdf-note-layer';
         pageNode.style.width = `${viewport.width}px`;
         pageNode.style.height = `${viewport.height}px`;
         pageNode.style.setProperty('--total-scale-factor', String(scale * pdfPage.userUnit));
-        pageNode.append(canvas, overlay, layer);
+        pageNode.append(canvas, overlay, layer, pins);
         render = pdfPage.render({
           canvas,
           viewport,
@@ -238,6 +245,7 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
             element: pageNode,
             layer,
             overlay,
+            pins,
             viewport,
             text: { parts: pdfTextParts(textContent.items), elements: text.textDivs },
           });
@@ -668,7 +676,17 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                 available={!error}
               />
             }
-            notes={<ReaderNotes versionId={id} page={page} />}
+            notes={
+              <ReaderNotes
+                versionId={id}
+                page={page}
+                surface={
+                  !error && rendered === renderKey && surface?.key === renderKey ? surface : null
+                }
+                tools={highlightTools}
+                onEdit={() => setFocusMode(false)}
+              />
+            }
           />
         )}
       </div>

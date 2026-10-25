@@ -1,4 +1,9 @@
 import { ApiError, apiRequest, csrfToken } from './auth';
+/** READ-04: a pinned note's point, normalized 0..1 on the unrotated page with y upward. */
+export interface NotePosition {
+  x: number;
+  y: number;
+}
 export interface PageNote {
   id: string;
   versionId: string;
@@ -8,6 +13,8 @@ export interface PageNote {
   revision: number;
   updatedAt: string;
   reviewLater: boolean;
+  /** Where the note sits on its page; null for a note kept only in the panel. */
+  position: NotePosition | null;
 }
 export interface ReadingProgress {
   versionId: string;
@@ -35,8 +42,15 @@ export function isNote(v: unknown): v is PageNote {
     validId(r.id) &&
     r.kind === 'PAGE_NOTE' &&
     typeof r.content === 'string' &&
-    typeof r.reviewLater === 'boolean'
+    typeof r.reviewLater === 'boolean' &&
+    isPosition(r.position)
   );
+}
+function isPosition(v: unknown): v is NotePosition | null {
+  if (v === null) return true;
+  if (!v || typeof v !== 'object') return false;
+  const p = v as Record<string, unknown>;
+  return [p.x, p.y].every((n) => typeof n === 'number' && n >= 0 && n <= 1);
 }
 const base = (id: string) => `/library/versions/${encodeURIComponent(id)}`;
 async function write(id: string, path: string, method: string, data: object) {
@@ -76,15 +90,27 @@ export async function readNotes(
 }
 export async function createNote(
   id: string,
-  data: { pageNumber: number; content: string; requestId: string },
+  data: {
+    pageNumber: number;
+    content: string;
+    requestId: string;
+    position?: NotePosition;
+  },
 ) {
   return noteResponse(await write(id, '/notes', 'POST', data));
 }
-export async function updateNote(id: string, note: PageNote, content: string) {
+/** `position` undefined keeps the pin; null takes the note off the page. */
+export async function updateNote(
+  id: string,
+  note: PageNote,
+  content: string,
+  position?: NotePosition | null,
+) {
   return noteResponse(
     await write(id, `/notes/${encodeURIComponent(note.id)}`, 'PATCH', {
       revision: note.revision,
       content,
+      ...(position === undefined ? {} : { position }),
     }),
   );
 }

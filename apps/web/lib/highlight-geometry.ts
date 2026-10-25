@@ -13,6 +13,8 @@ export interface HighlightSurface {
   element: HTMLDivElement;
   layer: HTMLDivElement;
   overlay: HTMLDivElement;
+  /** READ-04: above the text layer, holds the clickable sticky notes. */
+  pins: HTMLDivElement;
   viewport: HighlightViewport;
   text?: { parts: PdfTextPart[]; elements: HTMLElement[] };
 }
@@ -31,6 +33,32 @@ export function rectToQuad(
     const [px, py] = viewport.convertToPdfPoint(x, y);
     return [normalize((px - x0) / (x1 - x0)), normalize((py - y0) / (y1 - y0))];
   });
+}
+/** A point on the rendered page (CSS px from its top-left) as a stored note position. */
+export function pagePointToPosition(
+  clientX: number,
+  clientY: number,
+  surface: Pick<HighlightSurface, 'element' | 'viewport'>,
+) {
+  const page = surface.element.getBoundingClientRect(),
+    v = surface.viewport;
+  const x = (Math.min(Math.max(clientX - page.left, 0), page.width) * v.width) / page.width;
+  const y = (Math.min(Math.max(clientY - page.top, 0), page.height) * v.height) / page.height;
+  const [x0, y0, x1, y1] = v.viewBox;
+  const [px, py] = v.convertToPdfPoint(x, y);
+  return { x: normalize((px - x0) / (x1 - x0)), y: normalize((py - y0) / (y1 - y0)) };
+}
+/** A stored note position in viewport px on the current render (zoom and rotation applied). */
+export function positionToViewport(
+  position: { x: number; y: number },
+  viewport: HighlightViewport,
+) {
+  const [x0, y0, x1, y1] = viewport.viewBox;
+  const [left, top] = viewport.convertToViewportPoint(
+    x0 + position.x * (x1 - x0),
+    y0 + position.y * (y1 - y0),
+  );
+  return { left, top };
 }
 export function quadBounds(quad: number[], viewport: HighlightViewport) {
   const [x0, y0, x1, y1] = viewport.viewBox,
