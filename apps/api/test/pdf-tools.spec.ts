@@ -1,11 +1,11 @@
-import { createServer } from 'node:net';
+import { createServer, type Socket } from 'node:net';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileConfiguration } from '../src/files/files.config';
 import { receivePdf, pdfHeaders } from '../src/files/receive-pdf';
-import { clamScan, parsePdfInfo, runTool } from '../src/files/pdf-scanner';
+import { clamPing, clamScan, parsePdfInfo, runTool } from '../src/files/pdf-scanner';
 
 describe('bounded PDF checks', () => {
   let directory: string;
@@ -129,4 +129,34 @@ describe('bounded PDF checks', () => {
       }
     },
   );
+  it('counts ClamAV as reachable only on an exact PONG', async () => {
+    // null: accept the connection but never answer, like a hung clamd.
+    let reply: string | null = 'PONG\0';
+    const received: string[] = [];
+    const sockets = new Set<Socket>();
+    const server = createServer((socket) => {
+      sockets.add(socket);
+      socket.once('data', (chunk) => {
+        received.push(chunk.toString());
+        if (reply !== null) socket.end(reply);
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Server missing');
+    try {
+      expect(await clamPing('127.0.0.1', address.port, 500)).toBe(true);
+      reply = 'UNKNOWN COMMAND\0';
+      expect(await clamPing('127.0.0.1', address.port, 500)).toBe(false);
+      reply = null;
+      const started = Date.now();
+      expect(await clamPing('127.0.0.1', address.port, 300)).toBe(false);
+      expect(Date.now() - started).toBeLessThan(1_000);
+      expect(received).toEqual(['zPING\0', 'zPING\0', 'zPING\0']);
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+    expect(await clamPing('127.0.0.1', address.port, 500)).toBe(false);
+  });
 });
