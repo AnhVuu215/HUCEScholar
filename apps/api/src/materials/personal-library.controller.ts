@@ -13,6 +13,12 @@ export class PersonalLibraryController {
   @Get('recent') recent(@Req() req: AuthenticatedRequest, @Query() query: PersonalListDto) {
     return this.library.recent(req.user, query);
   }
+  @Get('review-later') reviewLater(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: PersonalListDto,
+  ) {
+    return this.library.reviewLater(req.user, query);
+  }
   @Get('saved/:id') status(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.library.status(req.user, id);
   }

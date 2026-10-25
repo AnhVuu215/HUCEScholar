@@ -36,6 +36,7 @@ import {
   type CalendarTasks,
 } from '../../lib/calendar';
 import { CalendarEditor, type CalendarDraft } from './calendar-editor';
+import { ReviewLaterPanel } from './review-later-panel';
 
 type View = 'week' | 'month' | 'agenda';
 const views: [View, string, string][] = [
@@ -722,69 +723,72 @@ export function CalendarBoard() {
           </div>
         )}
       </section>
-      <aside
-        className={`calendar-tasks${dropTarget === 'tasks' ? ' is-drop-target' : ''}`}
-        aria-labelledby="calendar-tasks-title"
-        {...unschedule}
-      >
-        <h2 id="calendar-tasks-title">Việc cần làm</h2>
-        <form className="calendar-quick" onSubmit={quickAdd}>
-          <label htmlFor="calendar-quick">Thêm việc nhanh</label>
-          <div>
-            <input
-              id="calendar-quick"
-              maxLength={200}
-              placeholder="Ví dụ: Ôn chương 3"
-              value={quick}
-              onChange={(e) => setQuick(e.target.value)}
-            />
-            <button className="secondary-button" disabled={busy || !quick.trim()}>
-              Thêm
-            </button>
-          </div>
-          <p className="field-hint">
-            Việc mới chưa có ngày; mở việc hoặc kéo việc lên lịch để đặt hạn.
-          </p>
-        </form>
-        {!tasks ? (
-          !error && <p role="status">Đang tải việc cần làm…</p>
-        ) : tasks.items.length === 0 ? (
-          <p className="field-hint">Không còn việc nào chưa xong.</p>
-        ) : (
-          <ul className="calendar-task-list">
-            {tasks.items.map((task) => (
-              <li
-                key={task.id}
-                className={`calendar-color-${task.color}`}
-                draggable={!busy}
-                onDragStart={(e) => startDrag(e, task, 0, 'move', true)}
-              >
-                <TaskCheck item={task} toggle={toggle} busy={busy} />
-                <div>
-                  <button type="button" className="text-button" onClick={() => open(task)}>
-                    {task.title}
-                  </button>
-                  <span className={overdue(task, now) ? 'calendar-overdue' : 'field-hint'}>
-                    {overdue(task, now) ? 'Quá hạn · ' : ''}
-                    {whenLabel(task)}
-                  </span>
-                  {task.reminder && (
-                    <span className="field-hint">
-                      Nhắc: {remindLabel(task.reminder.minutes).toLowerCase()}
+      <div className="calendar-side">
+        <aside
+          className={`calendar-tasks${dropTarget === 'tasks' ? ' is-drop-target' : ''}`}
+          aria-labelledby="calendar-tasks-title"
+          {...unschedule}
+        >
+          <h2 id="calendar-tasks-title">Việc cần làm</h2>
+          <form className="calendar-quick" onSubmit={quickAdd}>
+            <label htmlFor="calendar-quick">Thêm việc nhanh</label>
+            <div>
+              <input
+                id="calendar-quick"
+                maxLength={200}
+                placeholder="Ví dụ: Ôn chương 3"
+                value={quick}
+                onChange={(e) => setQuick(e.target.value)}
+              />
+              <button className="secondary-button" disabled={busy || !quick.trim()}>
+                Thêm
+              </button>
+            </div>
+            <p className="field-hint">
+              Việc mới chưa có ngày; mở việc hoặc kéo việc lên lịch để đặt hạn.
+            </p>
+          </form>
+          {!tasks ? (
+            !error && <p role="status">Đang tải việc cần làm…</p>
+          ) : tasks.items.length === 0 ? (
+            <p className="field-hint">Không còn việc nào chưa xong.</p>
+          ) : (
+            <ul className="calendar-task-list">
+              {tasks.items.map((task) => (
+                <li
+                  key={task.id}
+                  className={`calendar-color-${task.color}`}
+                  draggable={!busy}
+                  onDragStart={(e) => startDrag(e, task, 0, 'move', true)}
+                >
+                  <TaskCheck item={task} toggle={toggle} busy={busy} />
+                  <div>
+                    <button type="button" className="text-button" onClick={() => open(task)}>
+                      {task.title}
+                    </button>
+                    <span className={overdue(task, now) ? 'calendar-overdue' : 'field-hint'}>
+                      {overdue(task, now) ? 'Quá hạn · ' : ''}
+                      {whenLabel(task)}
                     </span>
-                  )}
-                  {task.material && (
-                    <Link href={readerHref(task.material)}>Trang {task.material.pageNumber}</Link>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        {tasks && tasks.total > tasks.items.length && (
-          <p className="field-hint">Còn {tasks.total - tasks.items.length} việc chưa hiện.</p>
-        )}
-      </aside>
+                    {task.reminder && (
+                      <span className="field-hint">
+                        Nhắc: {remindLabel(task.reminder.minutes).toLowerCase()}
+                      </span>
+                    )}
+                    {task.material && (
+                      <Link href={readerHref(task.material)}>Trang {task.material.pageNumber}</Link>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {tasks && tasks.total > tasks.items.length && (
+            <p className="field-hint">Còn {tasks.total - tasks.items.length} việc chưa hiện.</p>
+          )}
+        </aside>
+        <ReviewLaterPanel onScheduled={reload} />
+      </div>
     </div>
   );
 }
