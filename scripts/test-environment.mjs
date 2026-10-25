@@ -117,6 +117,8 @@ try {
     ['notebook-student', 'STUDENT'],
     ['review-later-admin', 'ADMIN'],
     ['review-later-student', 'STUDENT'],
+    ['cal4-admin', 'ADMIN'],
+    ['cal4-student', 'STUDENT'],
     ['version01-admin', 'ADMIN'],
     ['version01-student', 'STUDENT'],
     ['find-admin', 'ADMIN'],
