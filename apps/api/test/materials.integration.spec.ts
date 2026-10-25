@@ -3578,6 +3578,94 @@ describe('private material drafts', () => {
       (await readingWrite('student', endpoint, { reviewLater: true })).body.items,
     ).toHaveLength(1);
   });
+  it('lists the owner\'s "cần xem lại" marks across readable documents for the calendar (CAL-04)', async () => {
+    const first = await readingFixture();
+    const second = await readingFixture();
+    const mark = (path: string, noteId: string, reviewLater = true) =>
+      readingWrite('student', `${path}/annotations/${noteId}/review-later`, { reviewLater }, 'put');
+    const create = async (path: string, pageNumber: number, content: string) =>
+      (
+        await readingWrite('student', `${path}/notes`, {
+          pageNumber,
+          content,
+          requestId: randomUUID(),
+        })
+      ).body.item;
+    const late = await create(first.path, 3, `  Chưa hiểu\n${'x'.repeat(200)}`);
+    const early = await create(first.path, 1, 'Định lý 2');
+    const unmarked = await create(first.path, 2, 'Đã hiểu');
+    const highlight = (
+      await readingWrite('student', `${second.path}/highlights`, {
+        pageNumber: 2,
+        content: '',
+        color: '#A5D6A7',
+        requestId: randomUUID(),
+        anchor: highlightAnchor(),
+      })
+    ).body.item;
+    for (const [path, note] of [
+      [first.path, late],
+      [first.path, early],
+      [second.path, highlight],
+    ] as const)
+      expect((await mark(path, note.id)).status).toBe(200);
+    const mine = async (who = 'student', query = '') => {
+      const response = await agents[who].get(`/api/v1/personal-library/review-later${query}`);
+      expect(response.status).toBe(200);
+      const ours = [first.versionId, second.versionId];
+      return {
+        ...response.body,
+        items: response.body.items.filter((i: { versionId: string }) => ours.includes(i.versionId)),
+      };
+    };
+    const listed = await mine();
+    // Newest version first, then page order; only marked rows.
+    expect(listed.items.map((i: { id: string }) => i.id)).toEqual([
+      highlight.id,
+      early.id,
+      late.id,
+    ]);
+    expect(listed.items.map((i: { id: string }) => i.id)).not.toContain(unmarked.id);
+    expect(listed.items[0]).toMatchObject({
+      versionId: second.versionId,
+      pageNumber: 2,
+      kind: 'TEXT_HIGHLIGHT',
+      color: '#A5D6A7',
+      excerpt: 'Original selected text',
+      material: { versionId: second.versionId, title: expect.any(String) },
+    });
+    expect(listed.items[1]).toMatchObject({ kind: 'PAGE_NOTE', excerpt: 'Định lý 2' });
+    expect(listed.items[1]).not.toHaveProperty('color');
+    expect(listed.items[2].excerpt).toHaveLength(160);
+    expect(listed.items[2].excerpt.startsWith('Chưa hiểu x')).toBe(true);
+    expect(listed.items[2].excerpt.endsWith('…')).toBe(true);
+    // Nobody else sees them; no session is 401.
+    expect((await mine('other')).items).toEqual([]);
+    expect((await mine('admin')).items).toEqual([]);
+    expect(
+      (await request(app.getHttpServer()).get('/api/v1/personal-library/review-later')).status,
+    ).toBe(401);
+    for (const query of ['?limit=0', '?limit=101', '?page=0', '?page=x'])
+      expect(
+        (await agents.student.get(`/api/v1/personal-library/review-later${query}`)).status,
+      ).toBe(400);
+    // Hidden documents drop out of the list but keep the mark (LEARN-02).
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [second.id]);
+    try {
+      expect((await mine()).items.map((i: { id: string }) => i.id)).toEqual([early.id, late.id]);
+    } finally {
+      await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
+        second.id,
+      ]);
+    }
+    expect((await mine()).items.map((i: { id: string }) => i.id)).toEqual([
+      highlight.id,
+      early.id,
+      late.id,
+    ]);
+    expect((await mark(first.path, early.id, false)).status).toBe(200);
+    expect((await mine()).items.map((i: { id: string }) => i.id)).toEqual([highlight.id, late.id]);
+  });
   it('persists all eight highlight colors through create, CAS edit and reload; rejects unknown writes', async () => {
     const { path } = await readingFixture();
     const colors = [

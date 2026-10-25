@@ -63,3 +63,45 @@ export async function personalList(
     throw new Error('Invalid personal library.');
   return body as PersonalList;
 }
+/** CAL-04: one "cần xem lại" note or highlight of the signed-in user, on a readable version. */
+export type ReviewLaterEntry = {
+  id: string;
+  versionId: string;
+  pageNumber: number;
+  kind: 'PAGE_NOTE' | 'TEXT_HIGHLIGHT';
+  excerpt: string;
+  color?: string;
+  material: LibraryItem | null;
+};
+export type ReviewLaterList = {
+  items: ReviewLaterEntry[];
+  total: number;
+  page: number;
+  limit: number;
+};
+export async function reviewLaterList(page: number, signal: AbortSignal): Promise<ReviewLaterList> {
+  const body: unknown = await (
+    await apiRequest(`/personal-library/review-later?page=${page}&limit=12`, { signal })
+  ).json();
+  if (
+    !record(body) ||
+    !Array.isArray(body.items) ||
+    !body.items.every(
+      (entry) =>
+        record(entry) &&
+        id(entry.id) &&
+        id(entry.versionId) &&
+        Number.isSafeInteger(entry.pageNumber) &&
+        Number(entry.pageNumber) > 0 &&
+        (entry.kind === 'PAGE_NOTE' || entry.kind === 'TEXT_HIGHLIGHT') &&
+        typeof entry.excerpt === 'string' &&
+        (entry.material === null ||
+          (isLibraryItem(entry.material) && entry.material.versionId === entry.versionId)),
+    ) ||
+    !['total', 'page', 'limit'].every(
+      (key) => Number.isSafeInteger(body[key]) && Number(body[key]) >= (key === 'total' ? 0 : 1),
+    )
+  )
+    throw new Error('Invalid review list.');
+  return body as ReviewLaterList;
+}
