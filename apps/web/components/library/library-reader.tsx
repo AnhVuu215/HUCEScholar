@@ -65,6 +65,7 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
   const [focusMode, setFocusMode] = useState(false);
   const [tool, setTool] = useState<'find' | 'outline' | 'pages' | null>(null);
   const [layout, setLayout] = useState<Layout>(storedLayout);
+  const [showPins, setShowPins] = useState(true);
   const slots = useRef(new Map<number, HTMLDivElement>());
   const [readerTarget, setReaderTarget] = useState<{ page: number } | null>(null);
   const [selectedAnnotation, setSelectedAnnotation] = useState<{ item: AnnotationItem } | null>(
@@ -652,6 +653,8 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                           stageRef={stage}
                           slotsRef={slots}
                           onScrollPage={changePage}
+                          versionId={id}
+                          showPins={showPins}
                         />
                       ) : (
                         <div key="single" ref={paper} />
@@ -743,6 +746,8 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                 }
                 tools={highlightTools}
                 onEdit={() => setFocusMode(false)}
+                showPins={showPins}
+                onShowPins={setShowPins}
               />
             }
           />

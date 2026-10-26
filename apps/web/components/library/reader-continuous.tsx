@@ -1,7 +1,11 @@
 'use client';
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from 'react';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
+import type { PageViewport } from 'pdfjs-dist';
 import { paintPage, readerViewport } from '../../lib/pdf-viewport';
+import { pinBox, quadBounds } from '../../lib/highlight-geometry';
+import { readHighlights, type TextHighlight } from '../../lib/highlights';
+import { readNotes, type PageNote } from '../../lib/reading';
 
 type Size = { width: number; height: number };
 /** Fraction of the stage height, from its top, that decides which page is being read. */
@@ -22,6 +26,8 @@ export function ContinuousPages({
   stageRef,
   slotsRef,
   onScrollPage,
+  versionId,
+  showPins,
 }: {
   pdf: PDFDocumentProxy;
   page: number;
@@ -31,6 +37,8 @@ export function ContinuousPages({
   stageRef: RefObject<HTMLDivElement | null>;
   slotsRef: RefObject<Map<number, HTMLDivElement>>;
   onScrollPage: (page: number) => void;
+  versionId: string;
+  showPins: boolean;
 }) {
   const count = pdf.numPages;
   const view = `${zoom}:${rotation}:${width}`;
@@ -153,6 +161,9 @@ export function ContinuousPages({
                 rotation={rotation}
                 width={width}
                 onSize={(value) => measured(n, value)}
+                versionId={versionId}
+                active={n === page}
+                showPins={showPins}
               />
             )}
           </div>
@@ -169,6 +180,9 @@ function PagePreview({
   rotation,
   width,
   onSize,
+  versionId,
+  active,
+  showPins,
 }: {
   pdf: PDFDocumentProxy;
   page: number;
@@ -176,8 +190,33 @@ function PagePreview({
   rotation: number;
   width: number;
   onSize: (size: Size) => void;
+  versionId: string;
+  /** The page being read draws its own interactive layers on top; this one shows none. */
+  active: boolean;
+  showPins: boolean;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const [viewport, setViewport] = useState<PageViewport | null>(null);
+  const [marks, setMarks] = useState<{ highlights: TextHighlight[]; notes: PageNote[] } | null>(
+    null,
+  );
+  // Reload each time the page stops being read, so edits made on it show up here.
+  useEffect(() => {
+    if (active) return;
+    const controller = new AbortController();
+    Promise.all([
+      readHighlights(versionId, page, controller.signal),
+      readNotes(versionId, page, null, controller.signal),
+    ])
+      .then(([highlights, notes]) => {
+        if (!controller.signal.aborted) setMarks({ highlights, notes: notes.items });
+      })
+      .catch(() => {
+        // Without them the page still reads; its own layers load once it is being read.
+        if (!controller.signal.aborted) setMarks(null);
+      });
+    return () => controller.abort();
+  }, [versionId, page, active]);
   const report = useEffectEvent(onSize);
   useEffect(() => {
     const target = canvas.current;
@@ -190,6 +229,7 @@ function PagePreview({
         if (controller.signal.aborted) return;
         const { viewport } = readerViewport(pdfPage, zoom, rotation, width);
         report({ width: viewport.width, height: viewport.height });
+        setViewport(viewport);
         // Pictures of pages not being read can be a little softer than the page itself.
         await paintPage(pdfPage, viewport, target, controller.signal, 1.5);
       } catch {
@@ -205,5 +245,35 @@ function PagePreview({
       target.height = 0;
     };
   }, [pdf, page, zoom, rotation, width]);
-  return <canvas ref={canvas} className="reader-slot-preview" aria-hidden="true" />;
+  return (
+    <>
+      <canvas ref={canvas} className="reader-slot-preview" aria-hidden="true" />
+      {!active && viewport && marks && (
+        <div className="reader-slot-marks" aria-hidden="true">
+          {marks.highlights.flatMap((item) =>
+            item.anchor.quads.map((quad, i) => (
+              <span
+                key={`${item.id}:${i}`}
+                className="pdf-highlight"
+                style={{ ...quadBounds(quad, viewport), backgroundColor: item.color }}
+              />
+            )),
+          )}
+          {showPins &&
+            marks.notes.map(
+              (note) =>
+                note.position && (
+                  <div
+                    key={note.id}
+                    className="pdf-note-pin is-static"
+                    style={pinBox(note.position, viewport)}
+                  >
+                    {note.content}
+                  </div>
+                ),
+            )}
+        </div>
+      )}
+    </>
+  );
 }
