@@ -60,6 +60,16 @@ export function positionToViewport(
   );
   return { left, top };
 }
+/** Where a sticky note is drawn: at its point, kept inside the page, at most 180px wide. */
+export function pinBox(position: { x: number; y: number }, viewport: HighlightViewport) {
+  const { left, top } = positionToViewport(position, viewport);
+  const width = Math.min(180, viewport.width * 0.5);
+  return {
+    left: Math.max(0, Math.min(left, viewport.width - width)),
+    top: Math.max(0, Math.min(top, viewport.height - 32)),
+    width,
+  };
+}
 export function quadBounds(quad: number[], viewport: HighlightViewport) {
   const [x0, y0, x1, y1] = viewport.viewBox,
     xs: number[] = [],
