@@ -1,3 +1,4 @@
+import { isRecord, isNumericId } from './guards';
 import { ApiError, apiRequest } from './auth';
 import { academicError, academicWrite } from './academic';
 type Version = {
@@ -47,12 +48,10 @@ export type MaterialLifecycle = ManagedMaterial & {
   };
 };
 type List = { items: ManagedMaterial[]; total: number; page: number; limit: number };
-const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
-const id = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 const integer = (v: unknown) => Number.isSafeInteger(v) && Number(v) >= 0;
 const version = (v: unknown): v is Version =>
-  record(v) &&
-  id(v.id) &&
+  isRecord(v) &&
+  isNumericId(v.id) &&
   integer(v.versionNo) &&
   Number(v.versionNo) > 0 &&
   typeof v.title === 'string' &&
@@ -64,17 +63,17 @@ const version = (v: unknown): v is Version =>
   (v.fileError == null || typeof v.fileError === 'string');
 function overview(v: unknown): v is ManagedMaterial {
   return (
-    record(v) &&
-    id(v.id) &&
+    isRecord(v) &&
+    isNumericId(v.id) &&
     ['LECTURER_MATERIAL', 'STUDENT_SUPPLEMENT'].includes(String(v.kind)) &&
     ['VISIBLE', 'HIDDEN'].includes(String(v.visibility)) &&
     integer(v.revision) &&
     Number(v.revision) > 0 &&
-    record(v.manager) &&
-    id(v.manager.id) &&
+    isRecord(v.manager) &&
+    isNumericId(v.manager.id) &&
     typeof v.manager.name === 'string' &&
     version(v.latest) &&
-    (v.currentVersionId === null || id(v.currentVersionId))
+    (v.currentVersionId === null || isNumericId(v.currentVersionId))
   );
 }
 function detail(v: unknown): v is MaterialLifecycle {
@@ -85,29 +84,33 @@ function detail(v: unknown): v is MaterialLifecycle {
     (d.current === null || version(d.current)) &&
     Array.isArray(d.courses) &&
     d.courses.every(
-      (c) => record(c) && id(c.id) && typeof c.code === 'string' && typeof c.name === 'string',
+      (c) =>
+        isRecord(c) &&
+        isNumericId(c.id) &&
+        typeof c.code === 'string' &&
+        typeof c.name === 'string',
     ) &&
-    record(h) &&
+    isRecord(h) &&
     ['totalTransfers', 'totalVisibility', 'page', 'limit'].every((k) => integer(h[k])) &&
     Array.isArray(h.transfers) &&
     h.transfers.every(
       (t) =>
-        record(t) &&
-        id(t.id) &&
-        id(t.fromUserId) &&
-        id(t.toUserId) &&
+        isRecord(t) &&
+        isNumericId(t.id) &&
+        isNumericId(t.fromUserId) &&
+        isNumericId(t.toUserId) &&
         typeof t.fromName === 'string' &&
         typeof t.toName === 'string' &&
-        id(t.performedBy) &&
+        isNumericId(t.performedBy) &&
         typeof t.reason === 'string' &&
         typeof t.createdAt === 'string',
     ) &&
     Array.isArray(h.visibility) &&
     h.visibility.every(
       (t) =>
-        record(t) &&
-        id(t.id) &&
-        id(t.performedBy) &&
+        isRecord(t) &&
+        isNumericId(t.id) &&
+        isNumericId(t.performedBy) &&
         ['VISIBLE', 'HIDDEN'].includes(String(t.fromVisibility)) &&
         ['VISIBLE', 'HIDDEN'].includes(String(t.toVisibility)) &&
         typeof t.reason === 'string' &&
@@ -117,7 +120,7 @@ function detail(v: unknown): v is MaterialLifecycle {
 }
 async function readItem(response: Response) {
   const data: unknown = await response.json();
-  if (record(data) && detail(data.item)) return data.item;
+  if (isRecord(data) && detail(data.item)) return data.item;
   throw new Error('Invalid lifecycle response.');
 }
 export async function managedMaterials(
@@ -127,7 +130,7 @@ export async function managedMaterials(
   for (const key of ['kind', 'visibility']) if (!params.get(key)) params.delete(key);
   const data: unknown = await (await apiRequest(`/admin/materials?${params}`, { signal })).json();
   if (
-    record(data) &&
+    isRecord(data) &&
     Array.isArray(data.items) &&
     data.items.every(overview) &&
     ['total', 'page', 'limit'].every((k) => integer(data[k]))
@@ -143,11 +146,11 @@ export async function transferRecipients(id: string, params: URLSearchParams, si
     await apiRequest(`/admin/materials/${id}/recipients?${params}`, { signal })
   ).json();
   if (
-    record(data) &&
+    isRecord(data) &&
     Array.isArray(data.items) &&
     data.items.every(
       (v) =>
-        record(v) &&
+        isRecord(v) &&
         typeof v.name === 'string' &&
         typeof v.id === 'string' &&
         /^[1-9]\d*$/.test(v.id),

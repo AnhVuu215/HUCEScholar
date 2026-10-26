@@ -1,3 +1,4 @@
+import { isNumericId } from './guards';
 import { apiRequest, ApiError } from './auth';
 import { academicError, academicWrite } from './academic';
 import { materialTypes, reviewStatuses } from './materials';
@@ -47,12 +48,11 @@ export interface ReviewList {
   page: number;
   limit: number;
 }
-const id = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 function valid(value: unknown): value is ReviewItem {
   if (!value || typeof value !== 'object') return false;
   const r = value as Record<string, unknown>;
   return (
-    ['id', 'documentId', 'versionId'].every((k) => id(r[k])) &&
+    ['id', 'documentId', 'versionId'].every((k) => isNumericId(r[k])) &&
     ['revision', 'submittedRevision', 'versionNo', 'versionRevision'].every(
       (k) => Number.isInteger(r[k]) && Number(r[k]) > 0,
     ) &&
@@ -69,13 +69,13 @@ function valid(value: unknown): value is ReviewItem {
     ['VISIBLE', 'HIDDEN'].includes(String(r.visibility)) &&
     ['SAFE', 'CHECKING', 'FAILED', 'MISSING'].includes(String(r.fileState)) &&
     (r.fileError == null || typeof r.fileError === 'string') &&
-    (r.currentVersionId === null || id(r.currentVersionId)) &&
+    (r.currentVersionId === null || isNumericId(r.currentVersionId)) &&
     typeof r.snapshotMatches === 'boolean' &&
     typeof r.downloadAllowed === 'boolean' &&
     !!r.submitter &&
     typeof r.submitter === 'object' &&
     'id' in r.submitter &&
-    id(r.submitter.id) &&
+    isNumericId(r.submitter.id) &&
     'name' in r.submitter &&
     typeof r.submitter.name === 'string' &&
     (r.pdf === null ||
@@ -90,7 +90,7 @@ function valid(value: unknown): value is ReviewItem {
       (c) =>
         c &&
         typeof c === 'object' &&
-        id(c.id) &&
+        isNumericId(c.id) &&
         typeof c.name === 'string' &&
         typeof c.code === 'string' &&
         typeof c.active === 'boolean',

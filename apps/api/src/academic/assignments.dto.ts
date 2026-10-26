@@ -1,3 +1,4 @@
+import { trim, integer } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
   IsIn,
@@ -10,9 +11,6 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-const integer = ({ value }: { value: unknown }) =>
-  typeof value === 'string' && /^\d{1,6}$/.test(value) ? Number(value) : value;
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export class OwnAssignmentsDto {
   @IsOptional() @Transform(trim) @IsString() @MaxLength(200) search?: string;
   @IsOptional() @IsIn(['ACTIVE', 'REVOKED']) status?: string;

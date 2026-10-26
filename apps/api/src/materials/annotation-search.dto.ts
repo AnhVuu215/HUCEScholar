@@ -1,3 +1,4 @@
+import { trim } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
@@ -11,7 +12,6 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { highlightColors } from './highlight.dto';
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export class AnnotationSearchDto {
   @ValidateIf((_, value: unknown) => value !== undefined)
   @IsIn(['PAGE_NOTE', 'TEXT_HIGHLIGHT'])

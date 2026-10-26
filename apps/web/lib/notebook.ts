@@ -1,3 +1,4 @@
+import { isNumericId } from './guards';
 import { apiRequest, csrfToken } from './auth';
 import type { AnnotationFilters, AnnotationItem } from './annotations';
 import { isHighlight } from './highlights';
@@ -8,7 +9,6 @@ import { isNote } from './reading';
 export type NotebookEntry = AnnotationItem & { material: LibraryItem | null };
 export type NotebookFilters = AnnotationFilters & { courseId?: string };
 export type NotebookCourse = { id: string; code: string; name: string };
-const id = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 
 /** Searches every readable document; the text goes in a POST body, never the URL. */
 export async function searchNotebook(
@@ -65,7 +65,7 @@ export async function notebookCourses(signal: AbortSignal): Promise<NotebookCour
       (c: unknown) =>
         !!c &&
         typeof c === 'object' &&
-        id((c as NotebookCourse).id) &&
+        isNumericId((c as NotebookCourse).id) &&
         typeof (c as NotebookCourse).code === 'string' &&
         typeof (c as NotebookCourse).name === 'string',
     )

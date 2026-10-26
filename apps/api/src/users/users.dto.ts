@@ -1,3 +1,4 @@
+import { trim } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
   Equals,
@@ -12,7 +13,6 @@ import {
   MinLength,
 } from 'class-validator';
 
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const email = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 const queryInteger = ({ value }: { value: unknown }) =>

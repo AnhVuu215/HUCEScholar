@@ -1,3 +1,4 @@
+import { isNumericId } from './guards';
 import { ApiError, apiRequest, csrfToken } from './auth';
 /** READ-04: a pinned note's point, normalized 0..1 on the unrotated page with y upward. */
 export interface NotePosition {
@@ -22,12 +23,11 @@ export interface ReadingProgress {
   revision: number;
   updatedAt: string;
 }
-const validId = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 function isProgress(v: unknown): v is ReadingProgress {
   if (!v || typeof v !== 'object') return false;
   const r = v as Record<string, unknown>;
   return (
-    validId(r.versionId) &&
+    isNumericId(r.versionId) &&
     Number.isSafeInteger(r.pageNumber) &&
     Number(r.pageNumber) > 0 &&
     Number.isSafeInteger(r.revision) &&
@@ -39,7 +39,7 @@ export function isNote(v: unknown): v is PageNote {
   if (!isProgress(v)) return false;
   const r = v as unknown as Record<string, unknown>;
   return (
-    validId(r.id) &&
+    isNumericId(r.id) &&
     r.kind === 'PAGE_NOTE' &&
     typeof r.content === 'string' &&
     typeof r.reviewLater === 'boolean' &&
@@ -83,7 +83,7 @@ export async function readNotes(
     !Array.isArray(body.items) ||
     !body.items.every(isNote) ||
     !('nextCursor' in body) ||
-    !(body.nextCursor === null || validId(body.nextCursor))
+    !(body.nextCursor === null || isNumericId(body.nextCursor))
   )
     throw new Error('Invalid notes response');
   return { items: body.items, nextCursor: body.nextCursor };
