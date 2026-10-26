@@ -119,6 +119,8 @@ try {
     ['review-later-student', 'STUDENT'],
     ['cal4-admin', 'ADMIN'],
     ['cal4-student', 'STUDENT'],
+    ['pins-admin', 'ADMIN'],
+    ['pins-student', 'STUDENT'],
     ['version01-admin', 'ADMIN'],
     ['version01-student', 'STUDENT'],
     ['find-admin', 'ADMIN'],
