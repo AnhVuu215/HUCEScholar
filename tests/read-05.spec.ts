@@ -14,6 +14,24 @@ test('thumbnails jump to a page and continuous scroll follows the page being rea
   const fixture = await openReaderFixture(page, 'scroll');
   expect(
     (
+      await page.request.post(`${fixture.path}/highlights`, {
+        headers: await readerHeaders(page),
+        data: {
+          pageNumber: 1,
+          content: '',
+          color: '#A5D6A7',
+          requestId: randomUUID(),
+          anchor: {
+            coordinateSpace: 'normalized-pdf-v1',
+            quote: 'HUCEScholar reader fixture',
+            quads: [[0.1, 0.9, 0.5, 0.9, 0.5, 0.87, 0.1, 0.87]],
+          },
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
       await page.request.post(`${fixture.path}/notes`, {
         headers: await readerHeaders(page),
         data: {
@@ -60,6 +78,15 @@ test('thumbnails jump to a page and continuous scroll follows the page being rea
   await expect(page.locator('.reader-slot')).toHaveCount(2);
   await expect(shown(page, 1)).toBeVisible();
   await expect(page.locator('.reader-slot[data-page="1"] .reader-page')).toHaveCount(1);
+  // Pages not being read still show their sticky notes and highlights, view only.
+  const staticPin = page
+    .locator('.reader-slot[data-page="2"] .pdf-note-pin.is-static')
+    .filter({ hasText: text });
+  await expect(staticPin).toHaveCount(1);
+  await page.getByLabel('Hiện giấy nhớ trên trang', { exact: true }).uncheck();
+  await expect(staticPin).toHaveCount(0);
+  await page.getByLabel('Hiện giấy nhớ trên trang', { exact: true }).check();
+  await expect(staticPin).toHaveCount(1);
   await stage(page).evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
@@ -70,12 +97,39 @@ test('thumbnails jump to a page and continuous scroll follows the page being rea
   await expect(page.locator('.reader-slot[data-page="1"] .reader-slot-preview')).toHaveCount(1);
   await expect(page.locator('.reader-slot[data-page="1"] .reader-page')).toHaveCount(0);
   await expect(
+    page.locator('.reader-slot[data-page="1"] .reader-slot-marks .pdf-highlight'),
+  ).toHaveCount(1);
+  // The page being read draws its own layers, not a second copy of them.
+  await expect(page.locator('.reader-slot[data-page="2"] .reader-slot-marks')).toHaveCount(0);
+  await expect(
     page.getByRole('button', { name: new RegExp(`^Ghi chú trên trang: ${text}`) }),
   ).toBeVisible();
 
+  // Marks added while a page is being read show on its picture once reading moves on.
+  expect(
+    (
+      await page.request.post(`${fixture.path}/highlights`, {
+        headers: await readerHeaders(page),
+        data: {
+          pageNumber: 2,
+          content: '',
+          color: '#90CAF9',
+          requestId: randomUUID(),
+          anchor: {
+            coordinateSpace: 'normalized-pdf-v1',
+            quote: 'Second page',
+            quads: [[0.1, 0.9, 0.3, 0.9, 0.3, 0.87, 0.1, 0.87]],
+          },
+        },
+      })
+    ).status(),
+  ).toBe(201);
   // The toolbar still moves pages, and scrolls the column to the page.
   await page.getByRole('button', { name: 'Trang trước', exact: true }).click();
   await expect(shown(page, 1)).toBeVisible();
+  await expect(
+    page.locator('.reader-slot[data-page="2"] .reader-slot-marks .pdf-highlight'),
+  ).toHaveCount(1);
   const offset = await page.locator('.reader-slot[data-page="1"]').evaluate((slot) => {
     const root = slot.closest('.reader-stage')!;
     return slot.getBoundingClientRect().top - root.getBoundingClientRect().top;
