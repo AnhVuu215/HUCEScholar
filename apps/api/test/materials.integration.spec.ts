@@ -3666,6 +3666,109 @@ describe('private material drafts', () => {
     expect((await mark(first.path, early.id, false)).status).toBe(200);
     expect((await mine()).items.map((i: { id: string }) => i.id)).toEqual([highlight.id, late.id]);
   });
+  it('pins a page note to a point on its page, moves and unpins it (READ-04)', async () => {
+    const { path } = await readingFixture();
+    const requestId = randomUUID();
+    const body = {
+      pageNumber: 2,
+      content: 'Xem lại hình 3',
+      requestId,
+      position: { x: 0.25, y: 0.8 },
+    };
+    const created = await readingWrite('student', `${path}/notes`, body);
+    expect(created.status).toBe(201);
+    const note = created.body.item;
+    expect(note).toMatchObject({ kind: 'PAGE_NOTE', position: { x: 0.25, y: 0.8 } });
+    // A retry with the same request is the same note; another point is a reused request.
+    expect((await readingWrite('student', `${path}/notes`, body)).body.item.id).toBe(note.id);
+    const reused = await readingWrite('student', `${path}/notes`, {
+      ...body,
+      position: { x: 0.3, y: 0.8 },
+    });
+    expect(reused.status).toBe(409);
+    expect(
+      (await readingWrite('student', `${path}/notes`, { ...body, position: undefined })).status,
+    ).toBe(409);
+    for (const position of [
+      { x: 1.2, y: 0.5 },
+      { x: -0.1, y: 0.5 },
+      { x: 0.5 },
+      { x: 0.5, y: 0.5, z: 1 },
+      { x: '0.5', y: 0.5 },
+      [0.5, 0.5],
+    ])
+      expect(
+        (
+          await readingWrite('student', `${path}/notes`, {
+            ...body,
+            requestId: randomUUID(),
+            position,
+          })
+        ).status,
+      ).toBe(400);
+    const plain = (
+      await readingWrite('student', `${path}/notes`, {
+        pageNumber: 2,
+        content: 'Ghi chú ở khung bên',
+        requestId: randomUUID(),
+      })
+    ).body.item;
+    expect(plain.position).toBeNull();
+    // Moving bumps the revision; omitting position keeps the pin; null takes it off the page.
+    const moved = await readingWrite(
+      'student',
+      `${path}/notes/${note.id}`,
+      { revision: note.revision, content: note.content, position: { x: 0.6, y: 0.1 } },
+      'patch',
+    );
+    expect(moved.status).toBe(200);
+    expect(moved.body.item).toMatchObject({ position: { x: 0.6, y: 0.1 }, revision: 2 });
+    const kept = await readingWrite(
+      'student',
+      `${path}/notes/${note.id}`,
+      { revision: 2, content: 'Xem lại hình 3 và 4' },
+      'patch',
+    );
+    expect(kept.body.item.position).toEqual({ x: 0.6, y: 0.1 });
+    expect(
+      (
+        await readingWrite(
+          'student',
+          `${path}/notes/${note.id}`,
+          { revision: 2, content: 'cũ', position: { x: 0.1, y: 0.1 } },
+          'patch',
+        )
+      ).status,
+    ).toBe(409);
+    const listed = await agents.student.get(`${path}/notes?pageNumber=2`).expect(200);
+    expect(listed.body.items.find((n: { id: string }) => n.id === note.id).position).toEqual({
+      x: 0.6,
+      y: 0.1,
+    });
+    const found = await readingWrite('student', `${path}/annotations/search`, { query: 'hình 3' });
+    expect(found.body.items).toEqual([expect.objectContaining({ position: { x: 0.6, y: 0.1 } })]);
+    const unpinned = await readingWrite(
+      'student',
+      `${path}/notes/${note.id}`,
+      { revision: 3, content: 'Xem lại hình 3 và 4', position: null },
+      'patch',
+    );
+    expect(unpinned.body.item.position).toBeNull();
+    // The database refuses a malformed pin even when written directly.
+    for (const anchor of [
+      { coordinateSpace: 'normalized-pdf-v1', point: [1.5, 0.5] },
+      { coordinateSpace: 'normalized-pdf-v1', point: ['a', 0.5] },
+      { coordinateSpace: 'normalized-pdf-v1', point: [0.5] },
+      { coordinateSpace: 'other', point: [0.5, 0.5] },
+      { coordinateSpace: 'normalized-pdf-v1', point: [0.5, 0.5], quote: 'x' },
+    ])
+      await expect(
+        db.query('UPDATE hucescholar.annotations SET anchor=$1 WHERE id=$2', [
+          JSON.stringify(anchor),
+          plain.id,
+        ]),
+      ).rejects.toThrow(/ck_annotation_kind_anchor/);
+  });
   it('persists all eight highlight colors through create, CAS edit and reload; rejects unknown writes', async () => {
     const { path } = await readingFixture();
     const colors = [

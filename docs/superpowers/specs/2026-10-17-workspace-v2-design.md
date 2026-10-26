@@ -66,7 +66,7 @@ Desktop: thanh đọc gọn trên cùng → PDF ở trung tâm → panel bên ph
 | Tìm chữ/mục lục | Next/previous match, outline khi PDF có                                             | Scan không có text báo rõ; chưa OCR                                                |
 | Kho học liệu    | Filter chính gọn một hàng, bộ lọc phụ thu gọn, kết quả rõ version và nguồn          | Chỉ filter công khai vào URL; dữ liệu note không vào URL/analytics                 |
 
-Không thêm bút vẽ, tẩy, chèn chữ vào PDF, sửa Word online, cộng tác đồng thời hoặc xuất PDF kèm annotations vào đợt nền tảng. Chúng cần thiết kế riêng nếu được chọn sau.
+Không thêm bút vẽ, tẩy, chèn chữ vào PDF, sửa Word online, cộng tác đồng thời hoặc xuất PDF kèm annotations vào đợt nền tảng. Chúng cần thiết kế riêng nếu được chọn sau. Ngày 25/10, READ-04 thêm giấy nhớ ghim trên trang (lớp riêng, không sửa PDF), xem [mốc READ-04](../../implementation/2026-10-25-reader-page-pins.md).
 
 ### Tài khoản và cài đặt
 
