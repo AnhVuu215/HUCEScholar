@@ -12,11 +12,7 @@ import {
   type NotePosition,
   type PageNote,
 } from '../../lib/reading';
-import {
-  pagePointToPosition,
-  positionToViewport,
-  type HighlightSurface,
-} from '../../lib/highlight-geometry';
+import { pagePointToPosition, pinBox, type HighlightSurface } from '../../lib/highlight-geometry';
 import { useNotesLeaveGuard } from './use-notes-leave-guard';
 import { useAnnotationEditor, useAnnotationPanel } from './reader-annotation-panel';
 const samePosition = (a: NotePosition | null, b: NotePosition | null) =>
@@ -37,6 +33,8 @@ export function ReaderNotes({
   surface = null,
   tools = null,
   onEdit,
+  showPins: shownPins,
+  onShowPins,
 }: {
   versionId: string;
   page: number;
@@ -44,6 +42,9 @@ export function ReaderNotes({
   surface?: HighlightSurface | null;
   tools?: HTMLDivElement | null;
   onEdit?: () => void;
+  /** Shared with the continuous-scroll column (READ-05), which draws other pages' notes. */
+  showPins?: boolean;
+  onShowPins?: (value: boolean) => void;
 }) {
   const panel = useAnnotationPanel();
   const returnFocus = useReturnFocus();
@@ -62,7 +63,9 @@ export function ReaderNotes({
   const [uncertain, setUncertain] = useState(false);
   const [position, setPosition] = useState<NotePosition | null>(null),
     [picking, setPicking] = useState(false),
-    [showPins, setShowPins] = useState(true);
+    [ownShowPins, setOwnShowPins] = useState(true);
+  const showPins = shownPins ?? ownShowPins,
+    setShowPins = onShowPins ?? setOwnShowPins;
   const [dragged, setDragged] = useState<{ id: string; position: NotePosition } | null>(null);
   const drag = useRef<Drag | null>(null);
   const requestId = useRef<string | null>(null),
@@ -318,16 +321,7 @@ export function ReaderNotes({
   const pageItems = loadedPage === page ? items : [];
   const draftOnPage =
     !!surface && !!position && surface.page === effectiveDraftPage && surface.page === page;
-  function pinStyle(at: NotePosition) {
-    const v = surface!.viewport;
-    const { left, top } = positionToViewport(at, v);
-    const width = Math.min(180, v.width * 0.5);
-    return {
-      left: Math.max(0, Math.min(left, v.width - width)),
-      top: Math.max(0, Math.min(top, v.height - 32)),
-      width,
-    };
-  }
+  const pinStyle = (at: NotePosition) => pinBox(at, surface!.viewport);
   return (
     <section className="reader-notes" aria-label="Ghi chú riêng theo trang">
       {tools &&

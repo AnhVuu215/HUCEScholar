@@ -256,6 +256,16 @@
 .reader-slot-preview {
   display: block;
 }
+/* Other pages' highlights and sticky notes, view only; the page being read draws its own. */
+.reader-slot-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pdf-note-pin.is-static {
+  cursor: default;
+  pointer-events: none;
+}
 .reader-slot > .reader-page {
   position: absolute;
   inset: 0;
