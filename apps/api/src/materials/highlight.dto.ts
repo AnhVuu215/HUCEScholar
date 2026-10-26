@@ -1,3 +1,4 @@
+import { trim } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
   IsIn,
@@ -60,7 +61,6 @@ export class HighlightAnchorValidator implements ValidatorConstraintInterface {
     return 'Vùng tô phải có trích đoạn và tọa độ hợp lệ trên một trang PDF.';
   }
 }
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export class CreateHighlightDto {
   @IsInt() @Min(1) @Max(2147483647) pageNumber!: number;
   @Transform(trim) @IsString() @MaxLength(4000) content!: string;

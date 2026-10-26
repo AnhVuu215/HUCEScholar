@@ -1,3 +1,4 @@
+import { isNumericId } from './guards';
 import { apiRequest, csrfToken } from './auth';
 export const highlightColors = {
   '#FFF59D': 'Vàng',
@@ -33,14 +34,13 @@ export interface TextHighlight {
   updatedAt: string;
   reviewLater: boolean;
 }
-const validId = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 export function isHighlight(v: unknown): v is TextHighlight {
   if (!v || typeof v !== 'object') return false;
   const r = v as TextHighlight,
     a = r.anchor;
   return (
-    validId(r.id) &&
-    validId(r.versionId) &&
+    isNumericId(r.id) &&
+    isNumericId(r.versionId) &&
     Number.isSafeInteger(r.pageNumber) &&
     r.pageNumber > 0 &&
     Number.isSafeInteger(r.revision) &&
@@ -89,7 +89,7 @@ export async function readHighlights(
       !body.items.every(isHighlight) ||
       !body.items.every((item) => item.versionId === id && item.pageNumber === page) ||
       !('nextCursor' in body) ||
-      !(body.nextCursor === null || validId(body.nextCursor)) ||
+      !(body.nextCursor === null || isNumericId(body.nextCursor)) ||
       (body.nextCursor !== null && cursors.has(body.nextCursor))
     )
       throw new Error('Invalid highlights response');

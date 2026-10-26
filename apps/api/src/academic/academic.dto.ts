@@ -1,3 +1,4 @@
+import { trim, integer } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
@@ -15,11 +16,8 @@ import {
   ArrayUnique,
 } from 'class-validator';
 
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const code = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toUpperCase() : value;
-const integer = ({ value }: { value: unknown }) =>
-  typeof value === 'string' && /^\d{1,6}$/.test(value) ? Number(value) : value;
 export class CatalogFieldsDto {
   @Transform(code) @IsString() @MaxLength(30) @Matches(/^[A-Z0-9][A-Z0-9._-]*$/) code!: string;
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(200) name!: string;

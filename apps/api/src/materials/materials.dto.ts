@@ -1,3 +1,4 @@
+import { trim, integer } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -15,9 +16,6 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
-const integer = ({ value }: { value: unknown }) =>
-  typeof value === 'string' && /^\d{1,6}$/.test(value) ? Number(value) : value;
 export class DraftFieldsDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(300) title!: string;
   @Transform(trim) @IsString() @MaxLength(500) authors!: string;

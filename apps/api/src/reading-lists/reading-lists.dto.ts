@@ -1,3 +1,4 @@
+import { trim } from '../dto-transforms';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -13,7 +14,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export const MAX_READING_ITEMS = 100;
 export class ReadingItemDto {
   @Transform(trim) @IsString() @MaxLength(120) section!: string;

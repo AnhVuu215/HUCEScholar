@@ -1,3 +1,4 @@
+import { trim } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
@@ -12,7 +13,6 @@ import {
 } from 'class-validator';
 import { DraftListDto } from './materials.dto';
 
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export const reportCategories = [
   'FILE_ERROR',
   'WRONG_COURSE',

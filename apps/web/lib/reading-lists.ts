@@ -1,3 +1,4 @@
+import { isRecord, isNumericId } from './guards';
 import { ApiError, apiRequest, csrfToken } from './auth';
 import { materialTypes } from './materials';
 
@@ -27,39 +28,37 @@ export type ReadingList = {
 };
 export type ReadingDraftItem = { section: string; versionId: string; note: string };
 
-const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
-const id = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 function validItem(v: unknown): v is ReadingItem {
   if (
-    !record(v) ||
+    !isRecord(v) ||
     !Number.isInteger(v.position) ||
     typeof v.section !== 'string' ||
     typeof v.note !== 'string' ||
-    !id(v.versionId)
+    !isNumericId(v.versionId)
   )
     return false;
   if (v.material === null) return true;
   const m = v.material;
   return (
-    record(m) &&
+    isRecord(m) &&
     typeof m.title === 'string' &&
     typeof m.authors === 'string' &&
     Number.isInteger(m.versionNo) &&
     Object.hasOwn(materialTypes, String(m.materialType)) &&
-    (m.newerVersionId === null || id(m.newerVersionId))
+    (m.newerVersionId === null || isNumericId(m.newerVersionId))
   );
 }
 function validList(v: unknown): v is ReadingList {
   return (
-    record(v) &&
-    id(v.id) &&
-    id(v.courseId) &&
+    isRecord(v) &&
+    isNumericId(v.id) &&
+    isNumericId(v.courseId) &&
     typeof v.title === 'string' &&
     typeof v.published === 'boolean' &&
     Number.isInteger(v.revision) &&
     typeof v.updatedAt === 'string' &&
-    record(v.owner) &&
-    id(v.owner.id) &&
+    isRecord(v.owner) &&
+    isNumericId(v.owner.id) &&
     typeof v.owner.name === 'string' &&
     Array.isArray(v.items) &&
     v.items.every(validItem)
@@ -70,8 +69,8 @@ const path = (courseId: string) => `/courses/${encodeURIComponent(courseId)}/rea
 export async function publishedReadingLists(courseId: string, signal: AbortSignal) {
   const body: unknown = await (await apiRequest(path(courseId), { signal })).json();
   if (
-    record(body) &&
-    record(body.course) &&
+    isRecord(body) &&
+    isRecord(body.course) &&
     typeof body.course.code === 'string' &&
     typeof body.course.name === 'string' &&
     Array.isArray(body.items) &&
@@ -82,7 +81,7 @@ export async function publishedReadingLists(courseId: string, signal: AbortSigna
 }
 export async function myReadingList(courseId: string, signal: AbortSignal) {
   const body: unknown = await (await apiRequest(`${path(courseId)}/mine`, { signal })).json();
-  if (record(body) && (body.item === null || validList(body.item))) return body.item;
+  if (isRecord(body) && (body.item === null || validList(body.item))) return body.item;
   throw new Error('Invalid reading list.');
 }
 export async function saveReadingList(
@@ -97,7 +96,7 @@ export async function saveReadingList(
       body: JSON.stringify(data),
     })
   ).json();
-  if (record(body) && validList(body.item)) return body.item;
+  if (isRecord(body) && validList(body.item)) return body.item;
   throw new Error('Invalid reading list.');
 }
 export function readingListError(error: unknown) {
