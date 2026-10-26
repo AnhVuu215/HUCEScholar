@@ -8,6 +8,9 @@ import type {
   RenderTask,
   TextLayer,
 } from 'pdfjs-dist';
+import { canvasRatio, readerViewport } from '../../lib/pdf-viewport';
+import { ContinuousPages } from './reader-continuous';
+import { ReaderThumbnails } from './reader-thumbnails';
 import { libraryVersion, libraryError, pdfMissing, type LibraryItem } from '../../lib/library';
 import { ReaderNotes } from './reader-notes';
 import { ReaderNotebook } from './reader-notebook';
@@ -40,6 +43,16 @@ export function LibraryReader({ id, initialPage }: { id: string; initialPage?: n
     </ReaderAnnotationProvider>
   );
 }
+type Layout = 'single' | 'scroll';
+/** Per-browser convenience: the last layout chosen, not an account preference. */
+const LAYOUT_KEY = 'hucescholar:reader-layout';
+function storedLayout(): Layout {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === 'scroll' ? 'scroll' : 'single';
+  } catch {
+    return 'single';
+  }
+}
 function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: number | null }) {
   const { user } = useWorkspaceProfile();
   const panel = useAnnotationPanel();
@@ -50,7 +63,9 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
   const zoomTouched = useRef(false),
     zoomInitialized = useRef(false);
   const [focusMode, setFocusMode] = useState(false);
-  const [tool, setTool] = useState<'find' | 'outline' | null>(null);
+  const [tool, setTool] = useState<'find' | 'outline' | 'pages' | null>(null);
+  const [layout, setLayout] = useState<Layout>(storedLayout);
+  const slots = useRef(new Map<number, HTMLDivElement>());
   const [readerTarget, setReaderTarget] = useState<{ page: number } | null>(null);
   const [selectedAnnotation, setSelectedAnnotation] = useState<{ item: AnnotationItem } | null>(
     null,
@@ -119,8 +134,14 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
             ? quadBounds(target.anchor.quads[0], surface.viewport)
             : target.position && positionToViewport(target.position, surface.viewport);
       if (point && host) {
-        host.scrollTop = Math.max(0, point.top - host.clientHeight / 3);
-        host.scrollLeft = Math.max(0, point.left - host.clientWidth / 3);
+        // In continuous scroll the page sits somewhere down the column.
+        const slot = layout === 'scroll' ? slots.current.get(page) : undefined;
+        const box = slot?.getBoundingClientRect(),
+          frame = host.getBoundingClientRect();
+        const top = box ? box.top - frame.top + host.scrollTop : 0,
+          left = box ? box.left - frame.left + host.scrollLeft : 0;
+        host.scrollTop = Math.max(0, top + point.top - host.clientHeight / 3);
+        host.scrollLeft = Math.max(0, left + point.left - host.clientWidth / 3);
       }
       const editor = document.getElementById(
         target.kind === 'PAGE_NOTE' ? 'page-note-content' : 'highlight-content',
@@ -130,7 +151,7 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
       setSelectedAnnotation(null);
     });
     return () => cancelAnimationFrame(frame);
-  }, [selectedAnnotation, page, rendered, renderKey, surface, error, invalidLink]);
+  }, [selectedAnnotation, page, rendered, renderKey, surface, error, invalidLink, layout]);
   useEffect(() => {
     const node = stage.current;
     if (!node) return;
@@ -177,14 +198,16 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
     };
   }, [id, attempt]);
   useEffect(() => {
-    if (!pdf || !width || !paper.current || !progress.ready || invalidLink) return;
-    const controller = new AbortController(),
-      host = paper.current;
+    const host = layout === 'scroll' ? slots.current.get(page) : paper.current;
+    if (!pdf || !width || !host || !progress.ready || invalidLink) return;
+    const controller = new AbortController();
     let render: RenderTask | undefined, text: TextLayer | undefined;
     // Each render owns its canvas, so cancellation and rapid zoom cannot reuse a busy canvas.
     const pageNode = document.createElement('div');
     pageNode.className = 'reader-page';
-    host.replaceChildren(pageNode);
+    // A continuous-scroll slot keeps its picture under the page until the page is drawn.
+    if (layout === 'scroll') host.append(pageNode);
+    else host.replaceChildren(pageNode);
     const previous = rendering.current;
     rendering.current = (async () => {
       let pdfPage: PDFPageProxy | undefined;
@@ -194,18 +217,8 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
         await libraryVersion(id, controller.signal);
         pdfPage = await pdf.getPage(page);
         if (controller.signal.aborted) return;
-        // PDF.js treats `rotation` as absolute; add the page's own /Rotate so scans stay upright.
-        const turn = (pdfPage.rotate + rotation) % 360;
-        const natural = pdfPage.getViewport({ scale: 1, rotation: turn });
-        const scale = zoom === 'fit' ? width / natural.width : Number(zoom);
-        const viewport = pdfPage.getViewport({ scale, rotation: turn });
-        // Bound canvas memory, including unusual page dimensions and high-DPI mobile screens.
-        const ratio = Math.min(
-          window.devicePixelRatio || 1,
-          2,
-          4096 / Math.max(viewport.width, viewport.height),
-          Math.sqrt(8_000_000 / (viewport.width * viewport.height)),
-        );
+        const { viewport, scale } = readerViewport(pdfPage, zoom, rotation, width);
+        const ratio = canvasRatio(viewport);
         const canvas = document.createElement('canvas'),
           layer = document.createElement('div'),
           overlay = document.createElement('div'),
@@ -254,7 +267,8 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
         }
       } catch (e) {
         if (!controller.signal.aborted) {
-          host.replaceChildren();
+          if (layout === 'scroll') pageNode.remove();
+          else host.replaceChildren();
           setError(libraryError(e));
         }
       } finally {
@@ -269,11 +283,20 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
       text?.cancel();
       pageNode.remove();
     };
-  }, [pdf, id, page, zoom, rotation, width, progress.ready, reportRendered, invalidLink]);
+  }, [pdf, id, page, zoom, rotation, width, progress.ready, reportRendered, invalidLink, layout]);
   function changePage(value: number) {
     if (value === page) return;
     setRendered('');
     setPage(value);
+  }
+  function changeLayout(value: Layout) {
+    try {
+      localStorage.setItem(LAYOUT_KEY, value);
+    } catch {
+      // Private windows may refuse storage; the choice still holds for this visit.
+    }
+    setRendered('');
+    setLayout(value);
   }
   function retry() {
     setError('');
@@ -514,6 +537,14 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                     >
                       {focusMode ? 'Thoát đọc tập trung' : 'Đọc tập trung'}
                     </button>
+                    <button
+                      className="secondary-button"
+                      aria-pressed={layout === 'scroll'}
+                      disabled={!pdf}
+                      onClick={() => changeLayout(layout === 'scroll' ? 'single' : 'scroll')}
+                    >
+                      Cuộn liền các trang
+                    </button>
                     {item.downloadAllowed ? (
                       <>
                         <a
@@ -547,6 +578,14 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                       >
                         Tìm trong PDF
                       </button>
+                      <ReaderThumbnails
+                        pdf={pdf}
+                        page={page}
+                        rotation={rotation}
+                        open={tool === 'pages'}
+                        onToggle={() => (tool === 'pages' ? closeTool() : setTool('pages'))}
+                        onNavigate={navigateTool}
+                      />
                       <ReaderOutline
                         pdf={pdf}
                         open={tool === 'outline'}
@@ -595,9 +634,28 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                       className="reader-stage"
                       ref={stage}
                       tabIndex={0}
-                      aria-label="Trang tài liệu; cuộn ngang khi phóng lớn"
+                      data-layout={layout}
+                      aria-label={
+                        layout === 'scroll'
+                          ? 'Các trang tài liệu; cuộn để đọc tiếp'
+                          : 'Trang tài liệu; cuộn ngang khi phóng lớn'
+                      }
                     >
-                      <div ref={paper} />
+                      {layout === 'scroll' && pdf && !invalidLink ? (
+                        <ContinuousPages
+                          key="scroll"
+                          pdf={pdf}
+                          page={page}
+                          zoom={zoom}
+                          rotation={rotation}
+                          width={width}
+                          stageRef={stage}
+                          slotsRef={slots}
+                          onScrollPage={changePage}
+                        />
+                      ) : (
+                        <div key="single" ref={paper} />
+                      )}
                     </div>
                   </div>
                   <details className="reader-source">
