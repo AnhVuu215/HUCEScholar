@@ -34,7 +34,7 @@ function notePosition(anchor: unknown): NotePosition | null {
     ? { x: point[0], y: point[1] }
     : null;
 }
-const noteItem = (n: annotations) => ({
+export const noteItem = (n: annotations) => ({
   id: String(n.id),
   versionId: String(n.version_id),
   pageNumber: n.page_number,

@@ -3666,6 +3666,129 @@ describe('private material drafts', () => {
     expect((await mark(first.path, early.id, false)).status).toBe(200);
     expect((await mine()).items.map((i: { id: string }) => i.id)).toEqual([highlight.id, late.id]);
   });
+  it("searches the owner's notes across readable documents, by course, without leaking hidden ones (LEARN-03)", async () => {
+    const first = await readingFixture();
+    // The second document is also taught in the other course; courses freeze once submitted.
+    const draft = await safeDraft('student', 3);
+    await db.query('INSERT INTO hucescholar.version_courses(version_id,course_id) VALUES($1,$2)', [
+      draft.versionId,
+      courses[1],
+    ]);
+    expect((await publication('student', draft.id, 'submit', { revision: 2 })).status).toBe(201);
+    const pending = await db.query(
+      "SELECT id FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+      [draft.versionId],
+    );
+    expect((await review(pending.rows[0].id, decision())).status).toBe(201);
+    const second = { ...draft, path: `/api/v1/library/versions/${draft.versionId}` };
+    const hidden = await readingFixture();
+    const token = randomUUID().slice(0, 8);
+    const note = async (path: string, pageNumber: number, content: string) =>
+      (
+        await readingWrite('student', `${path}/notes`, {
+          pageNumber,
+          content,
+          requestId: randomUUID(),
+        })
+      ).body.item;
+    const late = await note(first.path, 3, `${token} cuối 100%_ off`);
+    const early = await note(first.path, 1, `${token} đầu`);
+    const highlight = (
+      await readingWrite('student', `${second.path}/highlights`, {
+        pageNumber: 2,
+        content: `${token} ý chính`,
+        color: '#A5D6A7',
+        requestId: randomUUID(),
+        anchor: highlightAnchor(),
+      })
+    ).body.item;
+    const secret = await note(hidden.path, 1, `${token} tài liệu ẩn`);
+    await readingWrite(
+      'student',
+      `${first.path}/annotations/${early.id}/review-later`,
+      { reviewLater: true },
+      'put',
+    );
+    await note(first.path, 2, 'không chứa mã tìm');
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [hidden.id]);
+    const endpoint = '/api/v1/personal-library/notebook/search';
+    const search = (body: object, who = 'student') => readingWrite(who, endpoint, body);
+    const ids = (response: { body: { items: { id: string }[] } }) =>
+      response.body.items.map((i) => i.id);
+    const all = await search({ query: token });
+    expect(all.status).toBe(201);
+    // Newest version first, then page order; the hidden document's note is not listed.
+    expect(ids(all)).toEqual([highlight.id, early.id, late.id]);
+    expect(ids(all)).not.toContain(secret.id);
+    expect(all.body.items[0]).toMatchObject({
+      kind: 'TEXT_HIGHLIGHT',
+      color: '#A5D6A7',
+      versionId: second.versionId,
+      content: `${token} ý chính`,
+      anchor: { quote: 'Original selected text' },
+      material: { versionId: second.versionId, title: expect.any(String) },
+    });
+    expect(all.body.items[1]).toMatchObject({ kind: 'PAGE_NOTE', reviewLater: true });
+    expect(all.body.nextCursor).toBeNull();
+    // Literal wildcards, kind, colour, review mark and course filters.
+    expect(ids(await search({ query: `${token} cuối 100%_` }))).toEqual([late.id]);
+    expect(ids(await search({ query: `${token}%đầu` }))).toEqual([]);
+    expect(ids(await search({ query: token, kind: 'PAGE_NOTE' }))).toEqual([early.id, late.id]);
+    expect(ids(await search({ query: token, color: '#A5D6A7' }))).toEqual([highlight.id]);
+    expect(ids(await search({ query: token, reviewLater: true }))).toEqual([early.id]);
+    expect(ids(await search({ query: token, courseId: String(courses[1]) }))).toEqual([
+      highlight.id,
+    ]);
+    expect(ids(await search({ query: token, courseId: '999999999' }))).toEqual([]);
+    // Keyset pages walk across documents without repeats; cursors are bound to the filter.
+    const one = await search({ query: token, limit: 1 });
+    const two = await search({ query: token, limit: 1, cursor: one.body.nextCursor });
+    const three = await search({ query: token, limit: 1, cursor: two.body.nextCursor });
+    expect([...ids(one), ...ids(two), ...ids(three)]).toEqual([highlight.id, early.id, late.id]);
+    expect(three.body.nextCursor).toBeNull();
+    expect(
+      (await search({ query: token, kind: 'PAGE_NOTE', cursor: one.body.nextCursor })).status,
+    ).toBe(400);
+    expect(
+      (await search({ query: token, limit: 1, cursor: one.body.nextCursor }, 'other')).status,
+    ).toBe(400);
+    for (const body of [
+      { kind: 'PAGE_NOTE', color: '#A5D6A7' },
+      { courseId: 'x' },
+      { courseId: 1 },
+      { limit: 51 },
+      { cursor: 'not a cursor' },
+      { owner: '1' },
+    ])
+      expect((await search(body)).status).toBe(400);
+    // Course choices only list courses of readable documents the owner has notes on.
+    const choices = await agents.student
+      .get('/api/v1/personal-library/notebook/courses')
+      .expect(200);
+    expect(choices.body.items.map((c: { id: string }) => c.id)).toEqual(
+      expect.arrayContaining([String(courses[0]), String(courses[1])]),
+    );
+    expect(
+      (await agents.other.get('/api/v1/personal-library/notebook/courses')).body.items.map(
+        (c: { id: string }) => c.id,
+      ),
+    ).not.toContain(String(courses[1]));
+    // Nobody else sees them; CSRF and a session are required.
+    expect(ids(await search({ query: token }, 'other'))).toEqual([]);
+    expect(ids(await search({ query: token }, 'admin'))).toEqual([]);
+    expect(
+      (await agents.student.post(endpoint).set('Origin', origin).send({ query: token })).status,
+    ).toBe(403);
+    expect((await request(app.getHttpServer()).post(endpoint).send({})).status).toBe(403);
+    expect(
+      (await request(app.getHttpServer()).get('/api/v1/personal-library/notebook/courses')).status,
+    ).toBe(401);
+    // Showing the document again lists its note again.
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
+      hidden.id,
+    ]);
+    expect(ids(await search({ query: token }))).toContain(secret.id);
+  });
   it('pins a page note to a point on its page, moves and unpins it (READ-04)', async () => {
     const { path } = await readingFixture();
     const requestId = randomUUID();
