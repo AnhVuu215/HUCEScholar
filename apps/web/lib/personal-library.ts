@@ -1,3 +1,4 @@
+import { isRecord, isNumericId } from './guards';
 import { apiRequest } from './auth';
 import { academicWrite } from './academic';
 import { isLibraryItem, type LibraryItem } from './library';
@@ -11,14 +12,12 @@ export type PersonalEntry = {
   material: LibraryItem | null;
 };
 export type PersonalList = { items: PersonalEntry[]; total: number; page: number; limit: number };
-const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
-const id = (v: unknown) => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 export async function savedStatus(documentId: string, signal?: AbortSignal) {
   return parseState(await apiRequest(`/personal-library/saved/${documentId}`, { signal }));
 }
 async function parseState(response: Response) {
   const body: unknown = await response.json();
-  if (!record(body) || typeof body.saved !== 'boolean') throw new Error('Invalid saved state.');
+  if (!isRecord(body) || typeof body.saved !== 'boolean') throw new Error('Invalid saved state.');
   return body.saved;
 }
 export async function changeSaved(documentId: string, saved: boolean) {
@@ -39,17 +38,17 @@ export async function personalList(
     await apiRequest(`/personal-library/${kind}?page=${page}&limit=12`, { signal })
   ).json();
   if (
-    !record(body) ||
+    !isRecord(body) ||
     !Array.isArray(body.items) ||
     !body.items.every(
       (entry) =>
-        record(entry) &&
-        id(entry.documentId) &&
+        isRecord(entry) &&
+        isNumericId(entry.documentId) &&
         (entry.material === null ||
           (isLibraryItem(entry.material) && entry.material.documentId === entry.documentId)) &&
         (kind === 'saved'
           ? typeof entry.savedAt === 'string'
-          : id(entry.versionId) &&
+          : isNumericId(entry.versionId) &&
             Number.isSafeInteger(entry.pageNumber) &&
             Number(entry.pageNumber) > 0 &&
             typeof entry.readAt === 'string' &&
@@ -84,13 +83,13 @@ export async function reviewLaterList(page: number, signal: AbortSignal): Promis
     await apiRequest(`/personal-library/review-later?page=${page}&limit=12`, { signal })
   ).json();
   if (
-    !record(body) ||
+    !isRecord(body) ||
     !Array.isArray(body.items) ||
     !body.items.every(
       (entry) =>
-        record(entry) &&
-        id(entry.id) &&
-        id(entry.versionId) &&
+        isRecord(entry) &&
+        isNumericId(entry.id) &&
+        isNumericId(entry.versionId) &&
         Number.isSafeInteger(entry.pageNumber) &&
         Number(entry.pageNumber) > 0 &&
         (entry.kind === 'PAGE_NOTE' || entry.kind === 'TEXT_HIGHLIGHT') &&

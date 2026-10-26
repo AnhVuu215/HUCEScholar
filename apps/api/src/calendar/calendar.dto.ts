@@ -1,3 +1,4 @@
+import { trim, integer } from '../dto-transforms';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -20,9 +21,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
-const integer = ({ value }: { value: unknown }) =>
-  typeof value === 'string' && /^\d{1,6}$/.test(value) ? Number(value) : value;
 export const calendarColors = ['blue', 'green', 'orange', 'purple', 'red', 'gray'] as const;
 /** CAL-03 lead times in minutes; 0 reminds at the start (or due time). */
 export const remindMinutes = [0, 5, 10, 15, 30, 60, 120, 1440] as const;

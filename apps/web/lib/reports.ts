@@ -1,3 +1,4 @@
+import { isRecord, isNumericId } from './guards';
 import { ApiError, apiRequest, csrfToken } from './auth';
 
 export const reportCategories = {
@@ -59,14 +60,12 @@ export interface AdminReportList {
   limit: number;
 }
 
-const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
-const id = (v: unknown) => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 const known = (v: unknown, values: object) => typeof v === 'string' && Object.hasOwn(values, v);
 function isMine(v: unknown): v is MyReport {
   return (
-    record(v) &&
-    id(v.id) &&
-    id(v.versionId) &&
+    isRecord(v) &&
+    isNumericId(v.id) &&
+    isNumericId(v.versionId) &&
     known(v.category, reportCategories) &&
     known(v.status, reportStatuses) &&
     typeof v.description === 'string' &&
@@ -76,16 +75,16 @@ function isMine(v: unknown): v is MyReport {
 }
 function isAdmin(v: unknown): v is AdminReport {
   return (
-    record(v) &&
-    id(v.id) &&
-    id(v.documentId) &&
-    id(v.versionId) &&
+    isRecord(v) &&
+    isNumericId(v.id) &&
+    isNumericId(v.documentId) &&
+    isNumericId(v.versionId) &&
     typeof v.title === 'string' &&
     Number.isInteger(v.versionNo) &&
     known(v.category, reportCategories) &&
     known(v.status, reportStatuses) &&
     typeof v.description === 'string' &&
-    record(v.reporter) &&
+    isRecord(v.reporter) &&
     typeof v.reporter.displayName === 'string' &&
     typeof v.reporter.email === 'string' &&
     Number.isInteger(v.revision)
@@ -94,7 +93,7 @@ function isAdmin(v: unknown): v is AdminReport {
 function isDetail(v: unknown): v is AdminReportDetail {
   return (
     isAdmin(v) &&
-    record((v as unknown as Record<string, unknown>).document) &&
+    isRecord((v as unknown as Record<string, unknown>).document) &&
     Array.isArray((v as unknown as Record<string, unknown>).actions)
   );
 }
@@ -117,14 +116,14 @@ export async function createReport(
   const body: unknown = await (
     await send(versionPath(versionId), { category, description })
   ).json();
-  if (record(body) && isMine(body.item)) return body.item;
+  if (isRecord(body) && isMine(body.item)) return body.item;
   throw new Error('Invalid report response.');
 }
 export async function myReports(versionId: string, signal: AbortSignal): Promise<MyReport[]> {
   const body: unknown = await (
     await apiRequest(`${versionPath(versionId)}/mine`, { signal })
   ).json();
-  if (record(body) && Array.isArray(body.items) && body.items.every(isMine)) return body.items;
+  if (isRecord(body) && Array.isArray(body.items) && body.items.every(isMine)) return body.items;
   throw new Error('Invalid reports response.');
 }
 export async function adminReports(
@@ -133,7 +132,7 @@ export async function adminReports(
 ): Promise<AdminReportList> {
   const body: unknown = await (await apiRequest(`/admin/reports?${params}`, { signal })).json();
   if (
-    record(body) &&
+    isRecord(body) &&
     Array.isArray(body.items) &&
     body.items.every(isAdmin) &&
     Number.isInteger(body.total)
@@ -145,7 +144,7 @@ export async function adminReport(reportId: string, signal?: AbortSignal) {
   const body: unknown = await (
     await apiRequest(`/admin/reports/${encodeURIComponent(reportId)}`, { signal })
   ).json();
-  if (record(body) && isDetail(body.item)) return body.item;
+  if (isRecord(body) && isDetail(body.item)) return body.item;
   throw new Error('Invalid report.');
 }
 export async function actOnReport(
@@ -162,7 +161,7 @@ export async function actOnReport(
   const body: unknown = await (
     await send(`/admin/reports/${encodeURIComponent(reportId)}/actions`, data)
   ).json();
-  if (record(body) && isDetail(body.item)) return body.item;
+  if (isRecord(body) && isDetail(body.item)) return body.item;
   throw new Error('Invalid report.');
 }
 export function reportError(error: unknown) {

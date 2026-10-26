@@ -1,3 +1,4 @@
+import { isRecord, isNumericId } from './guards';
 import { ApiError, apiRequest, csrfToken, type Role } from './auth';
 import { formatLongDay, formatTime } from './calendar';
 import { fileFailedLabel } from './materials';
@@ -37,20 +38,18 @@ export type NotificationList = {
   limit: number;
 };
 
-const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
-const id = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 const count = (v: unknown): v is number => Number.isSafeInteger(v) && Number(v) >= 0;
 function valid(v: unknown): v is AppNotification {
   return (
-    record(v) &&
-    id(v.id) &&
+    isRecord(v) &&
+    isNumericId(v.id) &&
     (v.kind === 'CALENDAR_REMINDER'
       ? v.documentId === null &&
         v.versionId === null &&
-        id(v.calendarItemId) &&
+        isNumericId(v.calendarItemId) &&
         typeof v.eventAt === 'string' &&
         !Number.isNaN(Date.parse(v.eventAt))
-      : id(v.documentId) && id(v.versionId)) &&
+      : isNumericId(v.documentId) && isNumericId(v.versionId)) &&
     (notificationKinds as readonly string[]).includes(String(v.kind)) &&
     typeof v.title === 'string' &&
     (v.detail === null || typeof v.detail === 'string') &&
@@ -59,7 +58,7 @@ function valid(v: unknown): v is AppNotification {
   );
 }
 function unreadCount(body: unknown) {
-  if (record(body) && count(body.unread)) return body.unread;
+  if (isRecord(body) && count(body.unread)) return body.unread;
   throw new Error('Invalid notification count.');
 }
 async function send(path: string) {
@@ -77,7 +76,7 @@ export async function notificationList(
 ): Promise<NotificationList> {
   const body: unknown = await (await apiRequest(`/notifications?${params}`, { signal })).json();
   if (
-    record(body) &&
+    isRecord(body) &&
     Array.isArray(body.items) &&
     body.items.every(valid) &&
     count(body.total) &&

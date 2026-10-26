@@ -22,6 +22,8 @@ CITE-01: chọn chữ để sao chép trích dẫn plain text kèm nguồn, tác
 
 LEARN-01 local: sổ ghi chú riêng trên mọi trang của cùng phiên bản, tìm nội dung/chữ đã tô, lọc loại/màu và tải thêm. Mở kết quả tới đúng trang bằng bộ soạn hiện có; duyệt/lọc giữ bản soạn và sửa vẫn kiểm revision. Xem docs/implementation/2026-10-18-reader-notebook.md.
 
+LEARN-03 local: trang Sổ tay tìm ghi chú trang/đoạn tô riêng trên mọi tài liệu còn đọc được, lọc chữ/môn/loại/màu/cần xem lại, mở đúng phiên bản/trang. Tài liệu mất quyền không được liệt kê. Sửa vẫn trong reader. Xem docs/implementation/2026-10-26-library-notebook.md.
+
 READ-01 local: tìm chữ trong PDF theo lô, kết quả trước/tiếp và dấu tạm theo text layer; mục lục chỉ mở đích trang nội bộ qua guard. Đọc tập trung ẩn chrome/panel nhưng giữ bản soạn; mở ghi chú sẽ hiện editor, Escape đóng công cụ trước khi thoát. Chưa OCR/tìm không dấu. Xem docs/implementation/2026-10-18-reader-find-focus.md.
 
 SEARCH-02 local: kho ưu tiên tìm kiếm/môn, thu gọn nguồn/loại inline và có xóa lọc. Bộ lọc công khai và trang ở URL đã kiểm tra giá trị; Back/Forward khôi phục form/kết quả, request cũ bị hủy. Ghi chú riêng không nằm trong URL. Chi tiết và bàn giao palette/zoom cho PREF-01: docs/implementation/2026-10-18-library-catalog.md.

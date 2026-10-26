@@ -5,6 +5,9 @@ import { academicId } from '../academic/academic.service';
 import { Prisma, type annotations } from '../generated/prisma/client';
 import { DraftListDto } from './materials.dto';
 import { available, LibraryService } from './library.service';
+import { NotebookSearchDto } from './annotation-search.dto';
+import { annotationFilter, decodeCursor, encodeCursor } from './annotation-query';
+import { noteItem } from './reading.service';
 /** Short text for a "cần xem lại" row: the owner's note, else the highlighted quote. */
 function excerpt(note: Pick<annotations, 'content' | 'anchor'>) {
   const anchor = note.anchor;
@@ -180,6 +183,82 @@ export class PersonalLibraryService {
         total: await tx.annotations.count({ where }),
         page: query.page,
         limit: query.limit,
+      };
+    });
+  }
+  /** Readable versions the owner has annotated, optionally only those taught in one course. */
+  private async annotatedVersions(tx: Prisma.TransactionClient, user_id: bigint, course?: bigint) {
+    const rows = await tx.document_versions.findMany({
+      where: {
+        AND: [
+          available(),
+          { annotations: { some: { user_id } } },
+          ...(course ? [{ version_courses: { some: { course_id: course } } }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  }
+  /** LEARN-03: courses of the readable documents the owner has notes on, for the filter. */
+  notebookCourses(actor: Profile) {
+    return this.run(actor, false, async (tx, user_id) => {
+      const versions = await this.annotatedVersions(tx, user_id);
+      const courses = await tx.courses.findMany({
+        where: { version_courses: { some: { version_id: { in: versions } } } },
+        orderBy: [{ code: 'asc' }, { id: 'asc' }],
+        select: { id: true, code: true, name: true },
+      });
+      return { items: courses.map((c) => ({ id: String(c.id), code: c.code, name: c.name })) };
+    });
+  }
+  /**
+   * LEARN-03: the owner's notes and highlights on every readable version, newest version first,
+   * then by page, with the per-version notebook's filters plus a course. Notes on versions that
+   * are no longer readable stay stored but are not listed, and their titles are not revealed.
+   */
+  notebook(actor: Profile, query: NotebookSearchDto) {
+    return this.run(actor, false, async (tx, owner) => {
+      const filter = annotationFilter(query, [query.courseId ?? null]);
+      const head = [2, String(owner)];
+      const after = query.cursor
+        ? decodeCursor(query.cursor, head, 3, filter.fingerprint, ([version, page, id]) =>
+            typeof version === 'string' &&
+            Number.isInteger(page) &&
+            (page as number) >= 1 &&
+            typeof id === 'string'
+              ? { version: academicId(version), page: page as number, id: academicId(id) }
+              : null,
+          )
+        : undefined;
+      const limit = query.limit ?? 20;
+      const course = query.courseId ? academicId(query.courseId) : undefined;
+      const versions = await this.annotatedVersions(tx, owner, course);
+      if (!versions.length) return { items: [], nextCursor: null };
+      const rows = await tx.$queryRaw<annotations[]>(Prisma.sql`
+        SELECT * FROM hucescholar.annotations
+        WHERE user_id = ${owner} AND version_id = ANY(${versions}) ${filter.sql}
+          ${after ? Prisma.sql`AND (version_id < ${after.version} OR (version_id = ${after.version} AND (page_number, id) > (${after.page}, ${after.id})))` : Prisma.empty}
+        ORDER BY version_id DESC, page_number ASC, id ASC LIMIT ${limit + 1}
+      `);
+      const page = rows.slice(0, limit),
+        last = page.at(-1);
+      const materials = await this.library.readableItems(tx, [
+        ...new Set(page.map((r) => r.version_id)),
+      ]);
+      return {
+        items: page.map((r) => ({
+          ...noteItem(r),
+          material: materials.get(String(r.version_id)) ?? null,
+        })),
+        nextCursor:
+          rows.length > limit && last
+            ? encodeCursor(
+                head,
+                [String(last.version_id), last.page_number, String(last.id)],
+                filter.fingerprint,
+              )
+            : null,
       };
     });
   }

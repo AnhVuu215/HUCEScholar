@@ -1,3 +1,4 @@
+import { isRecord, isNumericId } from './guards';
 import { ApiError, apiRequest, csrfToken } from './auth';
 
 export type StudyCard = {
@@ -21,15 +22,13 @@ export type StudyCardList = {
   limit: number;
 };
 
-const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
-const id = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 function valid(v: unknown): v is StudyCard {
   return (
-    record(v) &&
-    id(v.id) &&
-    id(v.versionId) &&
+    isRecord(v) &&
+    isNumericId(v.id) &&
+    isNumericId(v.versionId) &&
     Number.isInteger(v.pageNumber) &&
-    (v.highlightId === null || id(v.highlightId)) &&
+    (v.highlightId === null || isNumericId(v.highlightId)) &&
     typeof v.quote === 'string' &&
     typeof v.question === 'string' &&
     typeof v.answer === 'string' &&
@@ -47,14 +46,14 @@ async function send(path: string, method: string, body: object) {
   });
 }
 function item(body: unknown) {
-  if (record(body) && valid(body.item)) return body.item;
+  if (isRecord(body) && valid(body.item)) return body.item;
   throw new Error('Invalid study card.');
 }
 
 export async function studyCards(params: URLSearchParams, signal: AbortSignal) {
   const body: unknown = await (await apiRequest(`/study-cards?${params}`, { signal })).json();
   if (
-    record(body) &&
+    isRecord(body) &&
     Array.isArray(body.items) &&
     body.items.every(valid) &&
     Number.isSafeInteger(body.total) &&

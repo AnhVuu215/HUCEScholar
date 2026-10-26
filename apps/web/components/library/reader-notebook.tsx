@@ -1,18 +1,25 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ApiError } from '../../lib/auth';
 import {
   exportNotes,
   searchAnnotations,
-  setReviewLater,
   type NotesExportFormat,
   type AnnotationFilters,
   type AnnotationItem,
 } from '../../lib/annotations';
-import { highlightColors, highlightColorLabel, isHighlightColor } from '../../lib/highlights';
 import { personalError } from '../../lib/reading';
-import { SelectField } from '../ui/select-field';
+import {
+  AnnotationFilterFields,
+  AnnotationSummary,
+  ReviewMarkButton,
+  emptyFilterState,
+  toAnnotationFilters,
+  usePagedAnnotations,
+  useReviewMark,
+  type FilterState,
+} from './notebook-parts';
 
 type NotebookProps = {
   versionId: string;
@@ -69,10 +76,7 @@ function NotesExport({ versionId }: { versionId: string }) {
   );
 }
 export function ReaderNotebook({ versionId, active, available, onSelect }: NotebookProps) {
-  const [query, setQuery] = useState('');
-  const [kind, setKind] = useState('');
-  const [color, setColor] = useState('');
-  const [reviewOnly, setReviewOnly] = useState(false);
+  const [fields, setFields] = useState<FilterState>(emptyFilterState);
   const [search, setSearch] = useState<{ filters: AnnotationFilters; iteration: number }>({
     filters: {},
     iteration: 0,
@@ -88,65 +92,10 @@ export function ReaderNotebook({ versionId, active, available, onSelect }: Noteb
         className="notebook-filters"
         onSubmit={(event) => {
           event.preventDefault();
-          setSearch({
-            iteration: search.iteration + 1,
-            filters: {
-              query: query.trim(),
-              ...(kind === 'PAGE_NOTE' || kind === 'TEXT_HIGHLIGHT' ? { kind } : {}),
-              ...(kind !== 'PAGE_NOTE' && isHighlightColor(color) ? { color } : {}),
-              ...(reviewOnly ? { reviewLater: true as const } : {}),
-            },
-          });
+          setSearch({ iteration: search.iteration + 1, filters: toAnnotationFilters(fields) });
         }}
       >
-        <div className="form-field">
-          <label htmlFor="notebook-query">Tìm trong ghi chú</label>
-          <input
-            id="notebook-query"
-            type="search"
-            maxLength={100}
-            value={query}
-            autoComplete="off"
-            onChange={(event) => setQuery(event.target.value)}
-            aria-describedby="notebook-search-hint"
-          />
-          <p id="notebook-search-hint" className="field-hint">
-            Tìm cụm chữ có dấu, không phân biệt hoa thường. Tối đa 100 ký tự.
-          </p>
-        </div>
-        <SelectField
-          id="notebook-kind"
-          label="Loại ghi chú"
-          value={kind}
-          options={[
-            { value: '', label: 'Mọi loại' },
-            { value: 'PAGE_NOTE', label: 'Ghi chú trang' },
-            { value: 'TEXT_HIGHLIGHT', label: 'Đoạn tô' },
-          ]}
-          onChange={(value) => {
-            setKind(value);
-            if (value === 'PAGE_NOTE') setColor('');
-          }}
-        />
-        <SelectField
-          id="notebook-color"
-          label="Màu tô"
-          value={color}
-          disabled={kind === 'PAGE_NOTE'}
-          options={[
-            { value: '', label: 'Mọi màu' },
-            ...Object.entries(highlightColors).map(([value, label]) => ({ value, label })),
-          ]}
-          onChange={setColor}
-        />
-        <label className="eligibility-check notebook-review-filter">
-          <input
-            type="checkbox"
-            checked={reviewOnly}
-            onChange={(event) => setReviewOnly(event.target.checked)}
-          />
-          <span>Chỉ mục cần xem lại</span>
-        </label>
+        <AnnotationFilterFields idPrefix="notebook" value={fields} onChange={setFields} />
         <button className="primary-button" type="submit">
           Tìm ghi chú
         </button>
@@ -164,93 +113,32 @@ export function ReaderNotebook({ versionId, active, available, onSelect }: Noteb
     </section>
   );
 }
+/** Losing access clears the list; any other failure keeps it so the page can be retried. */
+function failure(cause: unknown) {
+  const unavailable = cause instanceof ApiError && [401, 403, 404].includes(cause.status);
+  return {
+    clear: unavailable,
+    message: unavailable
+      ? personalError(cause)
+      : 'Chưa tải được danh sách. Thử lại; bản soạn vẫn được giữ.',
+  };
+}
 function NotebookResults({
   versionId,
   filters,
   available,
   onSelect,
 }: Omit<NotebookProps, 'active'> & { filters: AnnotationFilters }) {
-  const [items, setItems] = useState<AnnotationItem[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [marking, setMarking] = useState<string | null>(null);
-  const [markMessage, setMarkMessage] = useState('');
-  const request = useRef<AbortController | null>(null);
-  const failedCursor = useRef<string | null>(null);
-  const load = useCallback(
-    (after: string | null = null) => {
-      request.current?.abort();
-      const controller = new AbortController();
-      request.current = controller;
-      failedCursor.current = after;
-      void searchAnnotations(versionId, filters, after, controller.signal)
-        .then((result) => {
-          if (controller.signal.aborted) return;
-          setItems((old) =>
-            after
-              ? [...new Map([...old, ...result.items].map((item) => [item.id, item])).values()]
-              : result.items,
-          );
-          setCursor(result.nextCursor);
-          setError('');
-        })
-        .catch((cause: unknown) => {
-          if (controller.signal.aborted) return;
-          const unavailable = cause instanceof ApiError && [401, 403, 404].includes(cause.status);
-          if (unavailable) {
-            setItems([]);
-            setCursor(null);
-            failedCursor.current = null;
-          }
-          setError(
-            unavailable
-              ? personalError(cause)
-              : 'Chưa tải được danh sách. Thử lại; bản soạn vẫn được giữ.',
-          );
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setLoading(false);
-        });
-    },
+  const fetchPage = useCallback(
+    (cursor: string | null, signal: AbortSignal) =>
+      searchAnnotations(versionId, filters, cursor, signal),
     [versionId, filters],
   );
-  useEffect(() => {
-    load();
-    return () => request.current?.abort();
-  }, [load]);
-  function start(after: string | null = null) {
-    setLoading(true);
-    setError('');
-    if (!after) {
-      setItems([]);
-      setCursor(null);
-    }
-    load(after);
-  }
-  async function mark(item: AnnotationItem) {
-    if (marking) return;
-    setMarking(item.id);
-    setMarkMessage('');
-    try {
-      const saved = await setReviewLater(versionId, item, !item.reviewLater);
-      // An item unmarked under the "cần xem lại" filter stays until the next search, so focus does not jump.
-      setItems((old) => old.map((entry) => (entry.id === saved.id ? saved : entry)));
-      setMarkMessage(
-        saved.reviewLater
-          ? `Đã đánh dấu cần xem lại · Trang ${saved.pageNumber}.`
-          : `Đã bỏ dấu cần xem lại · Trang ${saved.pageNumber}.`,
-      );
-    } catch (failure) {
-      setMarkMessage(
-        failure instanceof ApiError
-          ? personalError(failure)
-          : 'Chưa lưu được dấu cần xem lại. Kiểm tra kết nối rồi thử lại.',
-      );
-    } finally {
-      setMarking(null);
-    }
-  }
+  const { items, setItems, cursor, loading, error, start, retry } = usePagedAnnotations(
+    fetchPage,
+    failure,
+  );
+  const review = useReviewMark(setItems);
   return (
     <>
       <button className="quiet-button" disabled={loading} onClick={() => start()}>
@@ -261,11 +149,7 @@ function NotebookResults({
       {error && (
         <div role="alert">
           <p>{error}</p>
-          <button
-            className="secondary-button"
-            disabled={loading}
-            onClick={() => start(failedCursor.current)}
-          >
+          <button className="secondary-button" disabled={loading} onClick={retry}>
             Thử lại tìm kiếm
           </button>
         </div>
@@ -275,23 +159,15 @@ function NotebookResults({
           Không có ghi chú phù hợp. Thử đổi bộ lọc hoặc viết ghi chú ở trang đang đọc.
         </p>
       )}
-      {markMessage && (
+      {review.message && (
         <p role="status" className="field-hint">
-          {markMessage}
+          {review.message}
         </p>
       )}
       <div className="notebook-results">
         {items.map((item) => (
           <article key={item.id} aria-label={`Mục ghi chú ${item.id}`}>
-            <p className="field-hint">
-              {item.kind === 'PAGE_NOTE'
-                ? 'Ghi chú trang'
-                : `Đoạn tô · ${highlightColorLabel(item.color)}`}{' '}
-              · Trang {item.pageNumber}
-              {item.reviewLater && <strong className="review-later-tag"> · Cần xem lại</strong>}
-            </p>
-            {item.kind === 'TEXT_HIGHLIGHT' && <blockquote>{item.anchor.quote}</blockquote>}
-            {item.content && <p className="note-content">{item.content}</p>}
+            <AnnotationSummary item={item} />
             <button
               className="secondary-button"
               disabled={!available}
@@ -299,18 +175,11 @@ function NotebookResults({
             >
               {item.kind === 'PAGE_NOTE' ? 'Mở ghi chú' : 'Mở đoạn tô'} · Trang {item.pageNumber}
             </button>
-            {/* Not disabled while saving, so keyboard focus stays on the button. */}
-            <button
-              className="text-button"
-              aria-busy={marking === item.id}
-              onClick={() => void mark(item)}
-            >
-              {marking === item.id
-                ? 'Đang lưu…'
-                : item.reviewLater
-                  ? 'Bỏ dấu cần xem lại'
-                  : 'Đánh dấu cần xem lại'}
-            </button>
+            <ReviewMarkButton
+              item={item}
+              busy={review.marking === item.id}
+              onClick={() => void review.mark(item)}
+            />
           </article>
         ))}
       </div>

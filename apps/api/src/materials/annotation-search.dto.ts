@@ -1,3 +1,4 @@
+import { trim } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
@@ -11,7 +12,6 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { highlightColors } from './highlight.dto';
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export class AnnotationSearchDto {
   @ValidateIf((_, value: unknown) => value !== undefined)
   @IsIn(['PAGE_NOTE', 'TEXT_HIGHLIGHT'])
@@ -38,4 +38,11 @@ export class AnnotationSearchDto {
   @Min(1)
   @Max(50)
   limit?: number;
+}
+/** LEARN-03: the same filters across every readable document, optionally one course. */
+export class NotebookSearchDto extends AnnotationSearchDto {
+  @ValidateIf((_, value: unknown) => value !== undefined)
+  @IsString()
+  @Matches(/^[1-9]\d{0,18}$/)
+  courseId?: string;
 }

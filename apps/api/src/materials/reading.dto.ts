@@ -1,3 +1,4 @@
+import { trim } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
@@ -15,7 +16,6 @@ import {
   ValidatorConstraint,
   type ValidatorConstraintInterface,
 } from 'class-validator';
-const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 export class NotesQueryDto {
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' && /^\d{1,9}$/.test(value) ? Number(value) : value,
