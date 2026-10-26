@@ -39,3 +39,10 @@ export class AnnotationSearchDto {
   @Max(50)
   limit?: number;
 }
+/** LEARN-03: the same filters across every readable document, optionally one course. */
+export class NotebookSearchDto extends AnnotationSearchDto {
+  @ValidateIf((_, value: unknown) => value !== undefined)
+  @IsString()
+  @Matches(/^[1-9]\d{0,18}$/)
+  courseId?: string;
+}

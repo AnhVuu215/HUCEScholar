@@ -1,10 +1,18 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
 import { academicId } from '../academic/academic.service';
 import { Prisma, type annotations } from '../generated/prisma/client';
 import { DraftListDto } from './materials.dto';
 import { available, LibraryService } from './library.service';
+import { NotebookSearchDto } from './annotation-search.dto';
+import { noteItem } from './reading.service';
 /** Short text for a "cần xem lại" row: the owner's note, else the highlighted quote. */
 function excerpt(note: Pick<annotations, 'content' | 'anchor'>) {
   const anchor = note.anchor;
@@ -180,6 +188,123 @@ export class PersonalLibraryService {
         total: await tx.annotations.count({ where }),
         page: query.page,
         limit: query.limit,
+      };
+    });
+  }
+  /** Readable versions the owner has annotated, optionally only those taught in one course. */
+  private async annotatedVersions(tx: Prisma.TransactionClient, user_id: bigint, course?: bigint) {
+    const rows = await tx.document_versions.findMany({
+      where: {
+        AND: [
+          available(),
+          { annotations: { some: { user_id } } },
+          ...(course ? [{ version_courses: { some: { course_id: course } } }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  }
+  /** LEARN-03: courses of the readable documents the owner has notes on, for the filter. */
+  notebookCourses(actor: Profile) {
+    return this.run(actor, false, async (tx, user_id) => {
+      const versions = await this.annotatedVersions(tx, user_id);
+      const courses = await tx.courses.findMany({
+        where: { version_courses: { some: { version_id: { in: versions } } } },
+        orderBy: [{ code: 'asc' }, { id: 'asc' }],
+        select: { id: true, code: true, name: true },
+      });
+      return { items: courses.map((c) => ({ id: String(c.id), code: c.code, name: c.name })) };
+    });
+  }
+  /**
+   * LEARN-03: the owner's notes and highlights on every readable version, newest version first,
+   * then by page, with the per-version notebook's filters plus a course. Notes on versions that
+   * are no longer readable stay stored but are not listed, and their titles are not revealed.
+   */
+  notebook(actor: Profile, query: NotebookSearchDto) {
+    return this.run(actor, false, async (tx, owner) => {
+      if (query.kind === 'PAGE_NOTE' && query.color)
+        throw new BadRequestException('Màu chỉ áp dụng cho đoạn tô.');
+      const kind = query.color ? 'TEXT_HIGHLIGHT' : query.kind;
+      const term = query.query ?? '';
+      const reviewLater = query.reviewLater === true;
+      const course = query.courseId ? academicId(query.courseId) : undefined;
+      const fingerprint = createHash('sha256')
+        .update(
+          JSON.stringify([
+            kind ?? null,
+            query.color ?? null,
+            term,
+            reviewLater,
+            query.courseId ?? null,
+          ]),
+        )
+        .digest('base64url');
+      const prefix = [2, String(owner)];
+      let after: { version: bigint; page: number; id: bigint } | undefined;
+      if (query.cursor) {
+        try {
+          const decoded = Buffer.from(query.cursor, 'base64url');
+          const tuple: unknown = JSON.parse(decoded.toString('utf8'));
+          if (
+            decoded.toString('base64url') !== query.cursor ||
+            !Array.isArray(tuple) ||
+            tuple.length !== 6 ||
+            !prefix.every((value, index) => tuple[index] === value) ||
+            typeof tuple[2] !== 'string' ||
+            !Number.isInteger(tuple[3]) ||
+            tuple[3] < 1 ||
+            typeof tuple[4] !== 'string' ||
+            tuple[5] !== fingerprint
+          )
+            throw new Error('Invalid cursor');
+          after = {
+            version: academicId(tuple[2]),
+            page: tuple[3] as number,
+            id: academicId(tuple[4]),
+          };
+        } catch {
+          throw new BadRequestException('Lượt tải tiếp không hợp lệ. Tìm lại từ đầu.');
+        }
+      }
+      const limit = query.limit ?? 20;
+      const versions = await this.annotatedVersions(tx, owner, course);
+      if (!versions.length) return { items: [], nextCursor: null };
+      // Treat SQL wildcard characters as literal text, including the escape character itself.
+      const pattern = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
+      const rows = await tx.$queryRaw<annotations[]>(Prisma.sql`
+        SELECT * FROM hucescholar.annotations
+        WHERE user_id = ${owner} AND version_id = ANY(${versions})
+          ${kind ? Prisma.sql`AND kind = ${kind}` : Prisma.empty}
+          ${query.color ? Prisma.sql`AND color = ${query.color}` : Prisma.empty}
+          ${reviewLater ? Prisma.sql`AND review_later` : Prisma.empty}
+          ${term ? Prisma.sql`AND (content ILIKE ${pattern} ESCAPE ${'\\'} OR anchor->>'quote' ILIKE ${pattern} ESCAPE ${'\\'})` : Prisma.empty}
+          ${after ? Prisma.sql`AND (version_id < ${after.version} OR (version_id = ${after.version} AND (page_number, id) > (${after.page}, ${after.id})))` : Prisma.empty}
+        ORDER BY version_id DESC, page_number ASC, id ASC LIMIT ${limit + 1}
+      `);
+      const page = rows.slice(0, limit),
+        last = page.at(-1);
+      const materials = await this.library.readableItems(tx, [
+        ...new Set(page.map((r) => r.version_id)),
+      ]);
+      return {
+        items: page.map((r) => ({
+          ...noteItem(r),
+          material: materials.get(String(r.version_id)) ?? null,
+        })),
+        nextCursor:
+          rows.length > limit && last
+            ? Buffer.from(
+                JSON.stringify([
+                  ...prefix,
+                  String(last.version_id),
+                  last.page_number,
+                  String(last.id),
+                  fingerprint,
+                ]),
+              ).toString('base64url')
+            : null,
       };
     });
   }

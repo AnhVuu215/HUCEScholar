@@ -1,6 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Put, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { SessionGuard } from '../auth/session.guard';
+import { NotebookSearchDto } from './annotation-search.dto';
 import { PersonalListDto, SaveDocumentDto } from './personal-library.dto';
 import { PersonalLibraryService } from './personal-library.service';
 @Controller('personal-library')
@@ -18,6 +30,15 @@ export class PersonalLibraryController {
     @Query() query: PersonalListDto,
   ) {
     return this.library.reviewLater(req.user, query);
+  }
+  @Get('notebook/courses') notebookCourses(@Req() req: AuthenticatedRequest) {
+    return this.library.notebookCourses(req.user);
+  }
+  @Post('notebook/search') notebook(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: NotebookSearchDto,
+  ) {
+    return this.library.notebook(req.user, body);
   }
   @Get('saved/:id') status(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.library.status(req.user, id);
