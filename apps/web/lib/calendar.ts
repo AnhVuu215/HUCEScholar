@@ -1,3 +1,4 @@
+import { isRecord, isNumericId } from './guards';
 import { ApiError, apiRequest, csrfToken } from './auth';
 
 export const calendarColors = ['blue', 'green', 'orange', 'purple', 'red', 'gray'] as const;
@@ -62,12 +63,10 @@ export type CalendarFields = {
 export type CalendarRange = { items: CalendarItem[]; truncated: boolean };
 export type CalendarTasks = { items: CalendarItem[]; total: number; page: number; limit: number };
 
-const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
-const id = (v: unknown): v is string => typeof v === 'string' && /^[1-9]\d*$/.test(v);
 const time = (v: unknown) => v === null || (typeof v === 'string' && !Number.isNaN(Date.parse(v)));
 const repeat = (v: unknown) =>
   v === null ||
-  (record(v) &&
+  (isRecord(v) &&
     Array.isArray(v.weekdays) &&
     v.weekdays.every((d) => Number.isInteger(d) && d >= 1 && d <= 7) &&
     typeof v.until === 'string' &&
@@ -78,8 +77,8 @@ const repeat = (v: unknown) =>
     time(v.endsAt));
 function valid(v: unknown): v is CalendarItem {
   return (
-    record(v) &&
-    id(v.id) &&
+    isRecord(v) &&
+    isNumericId(v.id) &&
     (v.kind === 'EVENT' || v.kind === 'TASK') &&
     typeof v.title === 'string' &&
     typeof v.details === 'string' &&
@@ -89,14 +88,14 @@ function valid(v: unknown): v is CalendarItem {
     calendarColors.includes(v.color as CalendarColor) &&
     typeof v.done === 'boolean' &&
     (v.material === null ||
-      (record(v.material) &&
-        id(v.material.versionId) &&
+      (isRecord(v.material) &&
+        isNumericId(v.material.versionId) &&
         Number.isInteger(v.material.pageNumber) &&
         typeof v.material.title === 'string')) &&
     typeof v.materialUnavailable === 'boolean' &&
     repeat(v.repeat) &&
     (v.reminder === null ||
-      (record(v.reminder) &&
+      (isRecord(v.reminder) &&
         (remindOptions as readonly unknown[]).includes(v.reminder.minutes) &&
         typeof v.reminder.email === 'boolean')) &&
     time(v.occurrenceStart) &&
@@ -119,7 +118,7 @@ async function send(path: string, method: string, body: object) {
   });
 }
 function item(body: unknown) {
-  if (record(body) && valid(body.item)) return body.item;
+  if (isRecord(body) && valid(body.item)) return body.item;
   throw new Error('Invalid calendar item.');
 }
 
@@ -127,7 +126,7 @@ export async function calendarRange(from: Date, to: Date, signal?: AbortSignal) 
   const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
   const body: unknown = await (await apiRequest(`/calendar/items?${params}`, { signal })).json();
   if (
-    record(body) &&
+    isRecord(body) &&
     Array.isArray(body.items) &&
     body.items.every(valid) &&
     typeof body.truncated === 'boolean'
@@ -138,7 +137,7 @@ export async function calendarRange(from: Date, to: Date, signal?: AbortSignal) 
 export async function openTasks(signal?: AbortSignal) {
   const body: unknown = await (await apiRequest('/calendar/tasks?limit=100', { signal })).json();
   if (
-    record(body) &&
+    isRecord(body) &&
     Array.isArray(body.items) &&
     body.items.every(valid) &&
     Number.isSafeInteger(body.total) &&

@@ -1,4 +1,5 @@
 import { AnnotationSearchDto } from './annotation-search.dto';
+import { annotationFilter, decodeCursor, encodeCursor } from './annotation-query';
 import {
   BadRequestException,
   ConflictException,
@@ -11,7 +12,6 @@ import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { LibraryService } from './library.service';
 import { isDeepStrictEqual } from 'node:util';
-import { createHash } from 'node:crypto';
 import { CreateHighlightDto, UpdateHighlightDto } from './highlight.dto';
 import { exportAnnotations, MAX_EXPORT_ANNOTATIONS, type ExportFormat } from './annotation-export';
 import {
@@ -103,47 +103,22 @@ export class ReadingService {
   }
   search(actor: Profile, id: string, query: AnnotationSearchDto) {
     return this.run(actor, id, false, async (tx, owner, version, pages) => {
-      if (query.kind === 'PAGE_NOTE' && query.color)
-        throw new BadRequestException('Màu chỉ áp dụng cho đoạn tô.');
-      const kind = query.color ? 'TEXT_HIGHLIGHT' : query.kind;
-      const term = query.query ?? '';
-      const reviewLater = query.reviewLater === true;
-      const fingerprint = createHash('sha256')
-        .update(JSON.stringify([kind ?? null, query.color ?? null, term, reviewLater]))
-        .digest('base64url');
-      const prefix = [1, String(owner), String(version)];
-      let after: { page: number; id: bigint } | undefined;
-      if (query.cursor) {
-        try {
-          const decoded = Buffer.from(query.cursor, 'base64url');
-          const tuple: unknown = JSON.parse(decoded.toString('utf8'));
-          if (
-            decoded.toString('base64url') !== query.cursor ||
-            !Array.isArray(tuple) ||
-            tuple.length !== 6 ||
-            !prefix.every((value, index) => tuple[index] === value) ||
-            !Number.isInteger(tuple[3]) ||
-            tuple[3] < 1 ||
-            tuple[3] > (pages ?? 0) ||
-            typeof tuple[4] !== 'string' ||
-            tuple[5] !== fingerprint
+      const filter = annotationFilter(query);
+      const head = [1, String(owner), String(version)];
+      const after = query.cursor
+        ? decodeCursor(query.cursor, head, 2, filter.fingerprint, ([page, id]) =>
+            Number.isInteger(page) &&
+            (page as number) >= 1 &&
+            (page as number) <= (pages ?? 0) &&
+            typeof id === 'string'
+              ? { page: page as number, id: academicId(id) }
+              : null,
           )
-            throw new Error('Invalid cursor');
-          after = { page: tuple[3] as number, id: academicId(tuple[4]) };
-        } catch {
-          throw new BadRequestException('Lượt tải tiếp không hợp lệ. Tìm lại từ đầu.');
-        }
-      }
+        : undefined;
       const limit = query.limit ?? 20;
-      // Treat SQL wildcard characters as literal text, including the escape character itself.
-      const pattern = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
       const rows = await tx.$queryRaw<annotations[]>(Prisma.sql`
         SELECT * FROM hucescholar.annotations
-        WHERE user_id = ${owner} AND version_id = ${version}
-          ${kind ? Prisma.sql`AND kind = ${kind}` : Prisma.empty}
-          ${query.color ? Prisma.sql`AND color = ${query.color}` : Prisma.empty}
-          ${reviewLater ? Prisma.sql`AND review_later` : Prisma.empty}
-          ${term ? Prisma.sql`AND (content ILIKE ${pattern} ESCAPE ${'\\'} OR anchor->>'quote' ILIKE ${pattern} ESCAPE ${'\\'})` : Prisma.empty}
+        WHERE user_id = ${owner} AND version_id = ${version} ${filter.sql}
           ${after ? Prisma.sql`AND (page_number, id) > (${after.page}, ${after.id})` : Prisma.empty}
         ORDER BY page_number ASC, id ASC LIMIT ${limit + 1}
       `);
@@ -153,9 +128,7 @@ export class ReadingService {
         items: items.map(noteItem),
         nextCursor:
           rows.length > limit && last
-            ? Buffer.from(
-                JSON.stringify([...prefix, last.page_number, String(last.id), fingerprint]),
-              ).toString('base64url')
+            ? encodeCursor(head, [last.page_number, String(last.id)], filter.fingerprint)
             : null,
       };
     });

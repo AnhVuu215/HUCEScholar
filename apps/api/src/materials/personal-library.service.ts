@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
 import { academicId } from '../academic/academic.service';
@@ -12,6 +6,7 @@ import { Prisma, type annotations } from '../generated/prisma/client';
 import { DraftListDto } from './materials.dto';
 import { available, LibraryService } from './library.service';
 import { NotebookSearchDto } from './annotation-search.dto';
+import { annotationFilter, decodeCursor, encodeCursor } from './annotation-query';
 import { noteItem } from './reading.service';
 /** Short text for a "cần xem lại" row: the owner's note, else the highlighted quote. */
 function excerpt(note: Pick<annotations, 'content' | 'anchor'>) {
@@ -224,62 +219,25 @@ export class PersonalLibraryService {
    */
   notebook(actor: Profile, query: NotebookSearchDto) {
     return this.run(actor, false, async (tx, owner) => {
-      if (query.kind === 'PAGE_NOTE' && query.color)
-        throw new BadRequestException('Màu chỉ áp dụng cho đoạn tô.');
-      const kind = query.color ? 'TEXT_HIGHLIGHT' : query.kind;
-      const term = query.query ?? '';
-      const reviewLater = query.reviewLater === true;
-      const course = query.courseId ? academicId(query.courseId) : undefined;
-      const fingerprint = createHash('sha256')
-        .update(
-          JSON.stringify([
-            kind ?? null,
-            query.color ?? null,
-            term,
-            reviewLater,
-            query.courseId ?? null,
-          ]),
-        )
-        .digest('base64url');
-      const prefix = [2, String(owner)];
-      let after: { version: bigint; page: number; id: bigint } | undefined;
-      if (query.cursor) {
-        try {
-          const decoded = Buffer.from(query.cursor, 'base64url');
-          const tuple: unknown = JSON.parse(decoded.toString('utf8'));
-          if (
-            decoded.toString('base64url') !== query.cursor ||
-            !Array.isArray(tuple) ||
-            tuple.length !== 6 ||
-            !prefix.every((value, index) => tuple[index] === value) ||
-            typeof tuple[2] !== 'string' ||
-            !Number.isInteger(tuple[3]) ||
-            tuple[3] < 1 ||
-            typeof tuple[4] !== 'string' ||
-            tuple[5] !== fingerprint
+      const filter = annotationFilter(query, [query.courseId ?? null]);
+      const head = [2, String(owner)];
+      const after = query.cursor
+        ? decodeCursor(query.cursor, head, 3, filter.fingerprint, ([version, page, id]) =>
+            typeof version === 'string' &&
+            Number.isInteger(page) &&
+            (page as number) >= 1 &&
+            typeof id === 'string'
+              ? { version: academicId(version), page: page as number, id: academicId(id) }
+              : null,
           )
-            throw new Error('Invalid cursor');
-          after = {
-            version: academicId(tuple[2]),
-            page: tuple[3] as number,
-            id: academicId(tuple[4]),
-          };
-        } catch {
-          throw new BadRequestException('Lượt tải tiếp không hợp lệ. Tìm lại từ đầu.');
-        }
-      }
+        : undefined;
       const limit = query.limit ?? 20;
+      const course = query.courseId ? academicId(query.courseId) : undefined;
       const versions = await this.annotatedVersions(tx, owner, course);
       if (!versions.length) return { items: [], nextCursor: null };
-      // Treat SQL wildcard characters as literal text, including the escape character itself.
-      const pattern = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
       const rows = await tx.$queryRaw<annotations[]>(Prisma.sql`
         SELECT * FROM hucescholar.annotations
-        WHERE user_id = ${owner} AND version_id = ANY(${versions})
-          ${kind ? Prisma.sql`AND kind = ${kind}` : Prisma.empty}
-          ${query.color ? Prisma.sql`AND color = ${query.color}` : Prisma.empty}
-          ${reviewLater ? Prisma.sql`AND review_later` : Prisma.empty}
-          ${term ? Prisma.sql`AND (content ILIKE ${pattern} ESCAPE ${'\\'} OR anchor->>'quote' ILIKE ${pattern} ESCAPE ${'\\'})` : Prisma.empty}
+        WHERE user_id = ${owner} AND version_id = ANY(${versions}) ${filter.sql}
           ${after ? Prisma.sql`AND (version_id < ${after.version} OR (version_id = ${after.version} AND (page_number, id) > (${after.page}, ${after.id})))` : Prisma.empty}
         ORDER BY version_id DESC, page_number ASC, id ASC LIMIT ${limit + 1}
       `);
@@ -295,15 +253,11 @@ export class PersonalLibraryService {
         })),
         nextCursor:
           rows.length > limit && last
-            ? Buffer.from(
-                JSON.stringify([
-                  ...prefix,
-                  String(last.version_id),
-                  last.page_number,
-                  String(last.id),
-                  fingerprint,
-                ]),
-              ).toString('base64url')
+            ? encodeCursor(
+                head,
+                [String(last.version_id), last.page_number, String(last.id)],
+                filter.fingerprint,
+              )
             : null,
       };
     });
