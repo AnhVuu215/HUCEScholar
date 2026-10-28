@@ -14,7 +14,20 @@ export function groupBySection(items: ReadingItem[]) {
   return groups;
 }
 
-export function ReadingListItems({ items }: { items: ReadingItem[] }) {
+/** Readable items marked read, out of the readable ones (COURSE-02). */
+export function readCount(items: ReadingItem[]) {
+  const readable = items.filter((i) => i.material);
+  return { read: readable.filter((i) => i.read).length, total: readable.length };
+}
+
+/** `onRead` adds the reader's own "Đã đọc" box to each readable item. */
+export function ReadingListItems({
+  items,
+  onRead,
+}: {
+  items: ReadingItem[];
+  onRead?: (item: ReadingItem, read: boolean) => void;
+}) {
   if (!items.length) return <p className="field-hint">Danh sách chưa có tài liệu.</p>;
   return (
     <>
@@ -23,7 +36,7 @@ export function ReadingListItems({ items }: { items: ReadingItem[] }) {
           {group.section && <h4>{group.section}</h4>}
           <ol className="reading-items">
             {group.items.map((item) => (
-              <li key={item.position}>
+              <li key={item.position} data-read={item.read || undefined}>
                 {item.material ? (
                   <>
                     <Link href={`/workspace/library/versions/${item.versionId}`}>
@@ -42,6 +55,17 @@ export function ReadingListItems({ items }: { items: ReadingItem[] }) {
                         </Link>
                         . Giảng viên chọn phiên bản {item.material.versionNo}.
                       </p>
+                    )}
+                    {onRead && (
+                      <label className="eligibility-check reading-read">
+                        <input
+                          type="checkbox"
+                          checked={item.read}
+                          aria-label={`Đã đọc: ${item.material.title}`}
+                          onChange={(e) => onRead(item, e.target.checked)}
+                        />{' '}
+                        Đã đọc
+                      </label>
                     )}
                   </>
                 ) : (

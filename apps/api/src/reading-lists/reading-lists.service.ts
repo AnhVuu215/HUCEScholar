@@ -14,6 +14,7 @@ import { available } from '../materials/library.service';
 import {
   FollowReadingListsDto,
   ReadingDeadlinesDto,
+  ReadMarkDto,
   SaveReadingListDto,
 } from './reading-lists.dto';
 
@@ -96,9 +97,20 @@ export class ReadingListsService {
       throw fail('ASSIGNMENT_REQUIRED', 'Cần phân công hiện hành cho môn này để soạn danh sách.');
     return user;
   }
-  /** Title, authors and links only for versions the viewer can read right now. */
-  private async serialize(tx: Prisma.TransactionClient, list: ListRow) {
+  /**
+   * Title, authors and links only for versions the viewer can read right now, and the viewer's
+   * own "đã đọc" marks (COURSE-02) on those; a mark on a hidden version reads as unread.
+   */
+  private async serialize(tx: Prisma.TransactionClient, list: ListRow, viewerId: bigint) {
     const ids = list.reading_list_items.map((i) => i.version_id);
+    const marked = new Set(
+      (
+        await tx.reading_marks.findMany({
+          where: { user_id: viewerId, version_id: { in: ids } },
+          select: { version_id: true },
+        })
+      ).map((m) => m.version_id),
+    );
     const readable = await tx.document_versions.findMany({
       where: { AND: [{ id: { in: ids } }, available()] },
       select: {
@@ -141,6 +153,7 @@ export class ReadingListsService {
           note: item.note,
           dueOn: item.due_on ? formatDate(item.due_on) : null,
           versionId: String(item.version_id),
+          read: !!v && marked.has(item.version_id),
           material: v
             ? {
                 title: v.title,
@@ -170,7 +183,7 @@ export class ReadingListsService {
           orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
         });
         const items = [];
-        for (const list of lists) items.push(await this.serialize(tx, list));
+        for (const list of lists) items.push(await this.serialize(tx, list, user.id));
         const following = await tx.reading_list_follows.count({
           where: { user_id: user.id, course_id: courseId },
         });
@@ -193,7 +206,7 @@ export class ReadingListsService {
           where: { course_id_owner_id: { course_id: courseId, owner_id: user.id } },
           select: listSelect,
         });
-        return { item: list ? await this.serialize(tx, list) : null };
+        return { item: list ? await this.serialize(tx, list, user.id) : null };
       },
       { isolationLevel: 'RepeatableRead' },
     );
@@ -272,7 +285,7 @@ export class ReadingListsService {
         where: { id: list.id },
         select: listSelect,
       });
-      return { item: await this.serialize(tx, saved) };
+      return { item: await this.serialize(tx, saved, user.id) };
     });
   }
 
@@ -293,6 +306,37 @@ export class ReadingListsService {
           where: { user_id: user.id, course_id: courseId },
         });
       return { following: body.following };
+    });
+  }
+
+  /**
+   * COURSE-02. The reader's private "đã đọc" mark on a version that a shown list of this active
+   * course names and that the reader can open now; anything else is the same 404, so the
+   * endpoint never confirms a hidden version. Unmarking is allowed under the same check.
+   */
+  async markRead(actor: Profile, rawCourseId: string, rawVersionId: string, body: ReadMarkDto) {
+    const courseId = academicId(rawCourseId);
+    const versionId = academicId(rawVersionId);
+    return this.db.$transaction(async (tx) => {
+      const user = await this.reader(tx, actor);
+      await this.activeCourse(tx, courseId);
+      const listed = await tx.reading_list_items.count({
+        where: {
+          version_id: versionId,
+          document_versions: available(),
+          reading_lists: { course_id: courseId, ...shown(courseId) },
+        },
+      });
+      if (!listed) throw new NotFoundException('Không tìm thấy mục này trong danh sách đọc.');
+      if (body.read)
+        await tx.reading_marks.upsert({
+          where: { user_id_version_id: { user_id: user.id, version_id: versionId } },
+          create: { user_id: user.id, version_id: versionId },
+          update: {},
+        });
+      else
+        await tx.reading_marks.deleteMany({ where: { user_id: user.id, version_id: versionId } });
+      return { versionId: String(versionId), read: body.read };
     });
   }
 

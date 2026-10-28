@@ -9,6 +9,8 @@ export type ReadingItem = {
   /** CAL-04b due date as a calendar day (`YYYY-MM-DD`), or null. */
   dueOn: string | null;
   versionId: string;
+  /** COURSE-02: the viewer's own "đã đọc" mark; always false when `material` is null. */
+  read: boolean;
   /** null when the viewer can no longer read this version; its title is then withheld. */
   material: {
     title: string;
@@ -54,7 +56,8 @@ function validItem(v: unknown): v is ReadingItem {
     typeof v.section !== 'string' ||
     typeof v.note !== 'string' ||
     !(v.dueOn === null || day(v.dueOn)) ||
-    !isNumericId(v.versionId)
+    !isNumericId(v.versionId) ||
+    typeof v.read !== 'boolean'
   )
     return false;
   if (v.material === null) return true;
@@ -142,6 +145,20 @@ export async function followReadingLists(courseId: string, following: boolean) {
   ).json();
   if (isRecord(body) && typeof body.following === 'boolean') return body.following;
   throw new Error('Invalid follow state.');
+}
+/** COURSE-02: mark or unmark a listed version as read; only the signed-in reader sees it. */
+export async function markRead(courseId: string, versionId: string, read: boolean) {
+  const token = await csrfToken();
+  const body: unknown = await (
+    await apiRequest(`${path(courseId)}/read/${encodeURIComponent(versionId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+      body: JSON.stringify({ read }),
+    })
+  ).json();
+  if (isRecord(body) && body.versionId === versionId && typeof body.read === 'boolean')
+    return body.read;
+  throw new Error('Invalid read mark.');
 }
 function validDeadline(v: unknown): v is ReadingDeadline {
   return (
