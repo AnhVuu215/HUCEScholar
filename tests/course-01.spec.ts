@@ -6,10 +6,10 @@ import { parseEnv } from 'node:util';
 import { readerHeaders, readerLogout } from './helpers/reader-session';
 import { readerPdf } from './helpers/reader-pdf';
 
-async function login(page: Page, role: 'admin' | 'lecturer' | 'student') {
+async function login(page: Page, role: 'admin' | 'lecturer' | 'student', account = 'course1') {
   const response = await page.request.post('/api/v1/auth/login', {
     headers: await readerHeaders(page),
-    data: { email: `e2e-course1-${role}@example.test`, password: process.env.E2E_PASSWORD! },
+    data: { email: `e2e-${account}-${role}@example.test`, password: process.env.E2E_PASSWORD! },
   });
   expect(response.status()).toBe(200);
 }
@@ -32,9 +32,9 @@ async function markSafe(documentId: string) {
 }
 
 /** A course with an assigned lecturer and two published materials. */
-async function courseWithMaterials(page: Page) {
+async function courseWithMaterials(page: Page, account = 'course1') {
   const code = `CL1-${randomBytes(5).toString('hex').toUpperCase()}`;
-  await login(page, 'admin');
+  await login(page, 'admin', account);
   let headers = await readerHeaders(page);
   const faculty = await page.request.post('/api/v1/admin/catalog/faculties', {
     headers,
@@ -49,7 +49,7 @@ async function courseWithMaterials(page: Page) {
   const lecturer = (
     await (
       await page.request.get(
-        `/api/v1/admin/users?search=${encodeURIComponent('e2e-course1-lecturer@example.test')}`,
+        `/api/v1/admin/users?search=${encodeURIComponent(`e2e-${account}-lecturer@example.test`)}`,
       )
     ).json()
   ).items[0];
@@ -62,7 +62,7 @@ async function courseWithMaterials(page: Page) {
     ).status(),
   ).toBe(201);
   await readerLogout(page);
-  await login(page, 'student');
+  await login(page, 'student', account);
   headers = await readerHeaders(page);
   const titles = [`Giáo trình chương 1 ${code}`, `Bài tập chương 2 ${code}`];
   for (const title of titles) {
@@ -104,7 +104,7 @@ async function courseWithMaterials(page: Page) {
     ).toBe(201);
   }
   await readerLogout(page);
-  await login(page, 'admin');
+  await login(page, 'admin', account);
   headers = await readerHeaders(page);
   const pending = (
     await (
@@ -255,4 +255,71 @@ test('CAL-04b: a due date set by the lecturer shows on calendars of students who
   await page.getByRole('button', { name: 'Lịch biểu', exact: true }).click();
   await expect(page.getByRole('heading', { name: /^Từ / })).toBeVisible();
   await expect(deadline).toHaveCount(0);
+});
+
+test('COURSE-02: a student marks listed materials as read and sees progress only for themselves', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const { code, courseId, titles } = await courseWithMaterials(page, 'course2');
+  await login(page, 'lecturer', 'course2');
+  const found = (await (await page.request.get(`/api/v1/library?search=${code}`)).json()).items as {
+    versionId: string;
+    title: string;
+  }[];
+  const versionOf = (title: string) => found.find((i) => i.title === title)!.versionId;
+  expect(
+    (
+      await page.request.put(`/api/v1/courses/${courseId}/reading-lists/mine`, {
+        headers: await readerHeaders(page),
+        data: {
+          title: 'Danh sách theo dõi đọc',
+          published: true,
+          revision: 0,
+          items: titles.map((title) => ({ section: '', versionId: versionOf(title), note: '' })),
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  await readerLogout(page);
+
+  await login(page, 'student', 'course2');
+  await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
+  const list = page.getByRole('article', { name: 'Danh sách theo dõi đọc' });
+  await expect(list.getByText('Đã đọc 0/2 tài liệu')).toBeVisible();
+  const first = list.getByRole('checkbox', { name: `Đã đọc: ${titles[0]}`, exact: true });
+  await first.check();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã đánh dấu đã đọc' })).toHaveText(
+    `Đã đánh dấu đã đọc: ${titles[0]}.`,
+  );
+  await expect(list.getByText('Đã đọc 1/2 tài liệu')).toBeVisible();
+  await page.reload();
+  await expect(first).toBeChecked();
+  await expect(list.getByText('Đã đọc 1/2 tài liệu')).toBeVisible();
+  for (const width of [320, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  // A failed save puts the box back and says why.
+  const second = list.getByRole('checkbox', { name: `Đã đọc: ${titles[1]}`, exact: true });
+  await page.route('**/reading-lists/read/*', (route) => route.abort('failed'), { times: 1 });
+  await second.check();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Chưa kết nối được máy chủ' }),
+  ).toBeVisible();
+  await expect(second).not.toBeChecked();
+  await expect(list.getByText('Đã đọc 1/2 tài liệu')).toBeVisible();
+  await first.uncheck();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã bỏ dấu đã đọc' })).toBeVisible();
+  await expect(list.getByText('Đã đọc 0/2 tài liệu')).toBeVisible();
+  await first.check();
+  await expect(list.getByText('Đã đọc 1/2 tài liệu')).toBeVisible();
+  await readerLogout(page);
+
+  // The mark is private: the lecturer reading the same list sees none of it.
+  await login(page, 'lecturer', 'course2');
+  await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
+  await expect(list.getByText('Đã đọc 0/2 tài liệu')).toBeVisible();
 });

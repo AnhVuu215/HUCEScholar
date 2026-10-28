@@ -185,6 +185,9 @@ describe('private material drafts', () => {
           'DELETE FROM hucescholar.reading_list_follows WHERE user_id=ANY($1::bigint[])',
           [ids],
         );
+        await db.query('DELETE FROM hucescholar.reading_marks WHERE user_id=ANY($1::bigint[])', [
+          ids,
+        ]);
         await db.query('DELETE FROM hucescholar.reading_lists WHERE owner_id=ANY($1::bigint[])', [
           ids,
         ]);
@@ -786,6 +789,7 @@ describe('private material drafts', () => {
       note: '',
       dueOn: null,
       versionId: second.versionId,
+      read: false,
       material: null,
     });
     await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
@@ -937,6 +941,88 @@ describe('private material drafts', () => {
       .expect(401);
     expect((await follow('student', false)).body).toEqual({ following: false });
     expect(await titles()).toEqual([]);
+  });
+  it('COURSE-02: readers keep private read marks on listed, readable versions', async () => {
+    const first = await readingFixture();
+    const second = await readingFixture();
+    const stray = await readingFixture();
+    const course = courses[0];
+    const revision =
+      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+        ?.revision ?? 0;
+    const list = {
+      title: 'Danh sách theo dõi đọc',
+      published: true,
+      revision,
+      items: [first, second].map((f) => ({ section: '', versionId: f.versionId, note: '' })),
+    };
+    const saved = await listWrite('lecturer', course, list);
+    expect(saved.status).toBe(200);
+    const mark = async (name: string, versionId: string, read: unknown, id = course) => {
+      const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+      return agents[name]
+        .put(`/api/v1/courses/${id}/reading-lists/read/${versionId}`)
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send({ read });
+    };
+    const reads = async (name: string) =>
+      (
+        (
+          await agents[name].get(`/api/v1/courses/${course}/reading-lists`).expect(200)
+        ).body.items.find((l: { id: string }) => l.id === saved.body.item.id).items as {
+          read: boolean;
+        }[]
+      ).map((i) => i.read);
+    expect(await reads('student')).toEqual([false, false]);
+    expect((await mark('student', first.versionId, true)).body).toEqual({
+      versionId: first.versionId,
+      read: true,
+    });
+    // Idempotent, and private: the lecturer and other readers do not see it.
+    expect((await mark('student', first.versionId, true)).status).toBe(200);
+    expect(await reads('student')).toEqual([true, false]);
+    expect(await reads('other')).toEqual([false, false]);
+    expect(await reads('lecturer')).toEqual([false, false]);
+    // The mark follows the version, so it survives the lecturer reordering the list.
+    const reordered = await listWrite('lecturer', course, {
+      ...list,
+      revision: saved.body.item.revision,
+      items: [...list.items].reverse(),
+    });
+    expect(reordered.status).toBe(200);
+    expect(await reads('student')).toEqual([false, true]);
+    // A hidden version reads as unread and cannot be marked, without revealing why.
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [first.id]);
+    try {
+      expect(await reads('student')).toEqual([false, false]);
+      expect((await mark('student', first.versionId, false)).status).toBe(404);
+    } finally {
+      await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
+        first.id,
+      ]);
+    }
+    expect(await reads('student')).toEqual([false, true]);
+    // Only versions on a shown list of this course; same 404 for the rest.
+    expect((await mark('student', stray.versionId, true)).status).toBe(404);
+    expect((await mark('student', '999999999', true)).status).toBe(404);
+    expect((await mark('student', first.versionId, true, '999999999')).status).toBe(404);
+    expect((await mark('student', 'abc', true)).status).toBe(400);
+    for (const read of ['true', null, undefined])
+      expect((await mark('student', first.versionId, read)).status).toBe(400);
+    await agents.student
+      .put(`/api/v1/courses/${course}/reading-lists/read/${first.versionId}`)
+      .send({ read: true })
+      .expect(403);
+    expect((await mark('student', first.versionId, false)).body.read).toBe(false);
+    expect(await reads('student')).toEqual([false, false]);
+    // A draft list no longer accepts marks.
+    await listWrite('lecturer', course, {
+      ...list,
+      published: false,
+      revision: reordered.body.item.revision,
+    });
+    expect((await mark('student', first.versionId, true)).status).toBe(404);
   });
   describe('CAL-01 private study calendar', () => {
     const items = '/api/v1/calendar/items';

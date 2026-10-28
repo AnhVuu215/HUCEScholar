@@ -427,6 +427,14 @@
   color: var(--muted);
   white-space: pre-wrap;
 }
+/* COURSE-02: the reader's own read marks. */
+.reading-items .reading-read {
+  margin-top: 4px;
+}
+.reading-progress-count {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
 .reading-editor {
   display: grid;
   gap: 12px;
