@@ -7,6 +7,7 @@ import {
   calendarError,
   calendarRange,
   createCalendarItem,
+  dateKey,
   detachOccurrence,
   droppedTimes,
   resizedTimes,
@@ -35,6 +36,7 @@ import {
   type CalendarRange,
   type CalendarTasks,
 } from '../../lib/calendar';
+import { readingDeadlines, type ReadingDeadline } from '../../lib/reading-lists';
 import { CalendarEditor, type CalendarDraft } from './calendar-editor';
 import { ReviewLaterPanel } from './review-later-panel';
 
@@ -136,6 +138,27 @@ function lanes(items: CalendarItem[], day: Date) {
   return segments;
 }
 
+/** CAL-04b: a lecturer's due date on a followed course's reading list; read-only here. */
+function Deadline({ deadline }: { deadline: ReadingDeadline }) {
+  const label = `Hạn đọc: ${deadline.title}`;
+  return (
+    <div className="calendar-chip calendar-deadline">
+      <Link
+        href={`/workspace/library/versions/${deadline.versionId}`}
+        title={`${label} · ${deadline.course.code} · ${deadline.listTitle}${
+          deadline.section ? ` · ${deadline.section}` : ''
+        }`}
+      >
+        {label}
+      </Link>
+    </div>
+  );
+}
+const deadlinesOn = (deadlines: ReadingDeadline[], day: Date) => {
+  const key = dateKey(day);
+  return deadlines.filter((d) => d.dueOn === key);
+};
+
 function TaskCheck({
   item,
   toggle,
@@ -196,6 +219,8 @@ export function CalendarBoard() {
   );
   const [range, setRange] = useState<CalendarRange | null>(null);
   const [tasks, setTasks] = useState<CalendarTasks | null>(null);
+  const [deadlines, setDeadlines] = useState<ReadingDeadline[]>([]);
+  const [deadlineError, setDeadlineError] = useState(false);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [editor, setEditor] = useState<{
@@ -232,6 +257,20 @@ export function CalendarBoard() {
       })
       .catch((failure) => {
         if (!controller.signal.aborted) setError(calendarError(failure));
+      });
+    return () => controller.abort();
+  }, [from, to, attempt]);
+  // Reading-list due dates load on their own, so a failure there leaves the calendar usable.
+  useEffect(() => {
+    const controller = new AbortController();
+    readingDeadlines(dateKey(from), dateKey(to), controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setDeadlines(result.items);
+        setDeadlineError(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setDeadlineError(true);
       });
     return () => controller.abort();
   }, [from, to, attempt]);
@@ -524,6 +563,14 @@ export function CalendarBoard() {
             />
           </div>
         )}
+        {deadlineError && (
+          <p className="field-hint" role="status">
+            Chưa tải được hạn danh sách đọc.{' '}
+            <button type="button" className="text-button" onClick={reload}>
+              Thử lại
+            </button>
+          </p>
+        )}
         {range?.truncated && (
           <p className="field-hint">Khoảng này có quá nhiều mục; chỉ hiện 500 mục đầu.</p>
         )}
@@ -548,6 +595,9 @@ export function CalendarBoard() {
                   className={dropClass(day).trim() || undefined}
                   {...dropZone(day, false)}
                 >
+                  {deadlinesOn(deadlines, day).map((d) => (
+                    <Deadline key={`${d.listId}-${d.position}`} deadline={d} />
+                  ))}
                   {items.filter((i) => !timed(i) && onDay(i, day)).map((i) => chip(i))}
                 </div>
               ))}
@@ -635,6 +685,8 @@ export function CalendarBoard() {
             ))}
             {days.map((day) => {
               const list = items.filter((i) => onDay(i, day));
+              const due = deadlinesOn(deadlines, day);
+              const hidden = list.length + due.length - MONTH_CHIPS;
               const outside = day.getMonth() !== anchor.getMonth();
               return (
                 <div
@@ -653,8 +705,11 @@ export function CalendarBoard() {
                   >
                     {day.getDate()}
                   </button>
-                  {list.slice(0, MONTH_CHIPS).map((i) => chip(i))}
-                  {list.length > MONTH_CHIPS && (
+                  {due.slice(0, MONTH_CHIPS).map((d) => (
+                    <Deadline key={`${d.listId}-${d.position}`} deadline={d} />
+                  ))}
+                  {list.slice(0, Math.max(MONTH_CHIPS - due.length, 0)).map((i) => chip(i))}
+                  {hidden > 0 && (
                     <button
                       type="button"
                       className="text-button calendar-more"
@@ -663,7 +718,7 @@ export function CalendarBoard() {
                         setView('agenda');
                       }}
                     >
-                      +{list.length - MONTH_CHIPS} mục nữa
+                      +{hidden} mục nữa
                     </button>
                   )}
                 </div>
@@ -672,14 +727,17 @@ export function CalendarBoard() {
           </div>
         ) : (
           <div className="calendar-agenda">
-            {days.every((day) => !items.some((i) => onDay(i, day))) ? (
+            {days.every(
+              (day) => !items.some((i) => onDay(i, day)) && !deadlinesOn(deadlines, day).length,
+            ) ? (
               <p className="users-list-message">
                 Không có lịch trong {AGENDA_DAYS} ngày tính từ {formatLongDay(from)}.
               </p>
             ) : (
               days.map((day) => {
                 const list = items.filter((i) => onDay(i, day));
-                if (!list.length) return null;
+                const due = deadlinesOn(deadlines, day);
+                if (!list.length && !due.length) return null;
                 return (
                   <section key={day.getTime()} aria-label={formatLongDay(day)}>
                     <h3 className={sameDay(day, today) ? 'is-today' : undefined}>
@@ -687,6 +745,22 @@ export function CalendarBoard() {
                       {sameDay(day, today) ? ' · Hôm nay' : ''}
                     </h3>
                     <ul>
+                      {due.map((d) => (
+                        <li key={`${d.listId}-${d.position}`} className="calendar-deadline">
+                          <Link href={`/workspace/library/versions/${d.versionId}`}>
+                            Hạn đọc: {d.title}
+                          </Link>
+                          <span className="field-hint">
+                            {d.course.code} · {d.listTitle}
+                            {d.section ? ` · ${d.section}` : ''}
+                          </span>
+                          <Link
+                            href={`/workspace/library/reading-lists?courseId=${encodeURIComponent(d.course.id)}`}
+                          >
+                            Xem danh sách đọc
+                          </Link>
+                        </li>
+                      ))}
                       {list.map((i) => (
                         <li
                           key={itemKey(i)}

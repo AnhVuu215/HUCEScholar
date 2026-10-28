@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -8,10 +9,41 @@ import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
 import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
+import { formatDate, parseDate } from '../calendar/calendar-repeat';
 import { available } from '../materials/library.service';
-import { SaveReadingListDto } from './reading-lists.dto';
+import {
+  FollowReadingListsDto,
+  ReadingDeadlinesDto,
+  SaveReadingListDto,
+} from './reading-lists.dto';
 
 const fail = (code: string, message: string) => new ConflictException({ code, message });
+const invalid = (message: string) =>
+  new BadRequestException({ code: 'READING_LIST_INVALID', message });
+const DAY = 86_400_000;
+const MAX_DEADLINE_DAYS = 62;
+const MAX_DEADLINES = 500;
+const FIRST_DUE = Date.UTC(2000, 0, 1);
+const LAST_DUE = Date.UTC(2100, 11, 31);
+/** A real calendar day inside the range the database CHECK allows. */
+function dueDate(value: string | null) {
+  if (value === null) return null;
+  const date = parseDate(value);
+  if (!date || date.getTime() < FIRST_DUE || date.getTime() > LAST_DUE)
+    throw invalid('Hạn đọc phải là một ngày hợp lệ.');
+  return date;
+}
+/** Published lists of a course whose owner is still active and assigned to that course. */
+const shown = (courseId: bigint) =>
+  ({
+    published: true,
+    users: {
+      status: 'ACTIVE',
+      lecturer_assignments_lecturer_assignments_lecturer_idTousers: {
+        some: { course_id: courseId, revoked_at: null },
+      },
+    },
+  }) satisfies Prisma.reading_listsWhereInput;
 const listSelect = {
   id: true,
   course_id: true,
@@ -21,7 +53,7 @@ const listSelect = {
   updated_at: true,
   users: { select: { id: true, display_name: true } },
   reading_list_items: {
-    select: { position: true, section: true, note: true, version_id: true },
+    select: { position: true, section: true, note: true, version_id: true, due_on: true },
     orderBy: { position: 'asc' },
   },
 } satisfies Prisma.reading_listsSelect;
@@ -107,6 +139,7 @@ export class ReadingListsService {
           position: item.position,
           section: item.section,
           note: item.note,
+          dueOn: item.due_on ? formatDate(item.due_on) : null,
           versionId: String(item.version_id),
           material: v
             ? {
@@ -129,25 +162,23 @@ export class ReadingListsService {
     const courseId = academicId(rawCourseId);
     return this.db.$transaction(
       async (tx) => {
-        await this.reader(tx, actor);
+        const user = await this.reader(tx, actor);
         const course = await this.activeCourse(tx, courseId);
         const lists = await tx.reading_lists.findMany({
-          where: {
-            course_id: courseId,
-            published: true,
-            users: {
-              status: 'ACTIVE',
-              lecturer_assignments_lecturer_assignments_lecturer_idTousers: {
-                some: { course_id: courseId, revoked_at: null },
-              },
-            },
-          },
+          where: { course_id: courseId, ...shown(courseId) },
           select: listSelect,
           orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
         });
         const items = [];
         for (const list of lists) items.push(await this.serialize(tx, list));
-        return { course: { id: String(course.id), code: course.code, name: course.name }, items };
+        const following = await tx.reading_list_follows.count({
+          where: { user_id: user.id, course_id: courseId },
+        });
+        return {
+          course: { id: String(course.id), code: course.code, name: course.name },
+          following: following > 0,
+          items,
+        };
       },
       { isolationLevel: 'RepeatableRead' },
     );
@@ -179,6 +210,7 @@ export class ReadingListsService {
       if ((existing?.revision ?? 0) !== body.revision)
         throw fail('STALE_REVISION', 'Danh sách đã thay đổi ở lượt khác. Tải lại trước khi lưu.');
       const versionIds = body.items.map((i) => academicId(i.versionId));
+      const dues = body.items.map((i) => dueDate(i.dueOn));
       const distinct = [...new Set(versionIds)];
       if (distinct.length !== versionIds.length)
         throw fail('DUPLICATE_ITEM', 'Mỗi phiên bản chỉ xuất hiện một lần trong danh sách.');
@@ -225,6 +257,7 @@ export class ReadingListsService {
             section: item.section,
             version_id: versionIds[index],
             note: item.note,
+            due_on: dues[index],
           })),
         });
       await tx.audit_events.create({
@@ -241,5 +274,93 @@ export class ReadingListsService {
       });
       return { item: await this.serialize(tx, saved) };
     });
+  }
+
+  /** CAL-04b. A private opt-in to see this course's due dates on one's own calendar. */
+  async follow(actor: Profile, rawCourseId: string, body: FollowReadingListsDto) {
+    const courseId = academicId(rawCourseId);
+    return this.db.$transaction(async (tx) => {
+      const user = await this.reader(tx, actor);
+      if (body.following) {
+        await this.activeCourse(tx, courseId);
+        await tx.reading_list_follows.upsert({
+          where: { user_id_course_id: { user_id: user.id, course_id: courseId } },
+          create: { user_id: user.id, course_id: courseId },
+          update: {},
+        });
+      } else
+        await tx.reading_list_follows.deleteMany({
+          where: { user_id: user.id, course_id: courseId },
+        });
+      return { following: body.following };
+    });
+  }
+
+  /**
+   * Due dates in [from, to) on the published lists of active courses the reader follows. Items
+   * the reader cannot open are left out, so a deadline never reveals a hidden title.
+   */
+  async deadlines(actor: Profile, query: ReadingDeadlinesDto) {
+    const from = parseDate(query.from),
+      to = parseDate(query.to);
+    if (!from || !to || to <= from || to.getTime() - from.getTime() > MAX_DEADLINE_DAYS * DAY)
+      throw invalid(`Khoảng xem phải từ 1 tới ${MAX_DEADLINE_DAYS} ngày.`);
+    return this.db.$transaction(
+      async (tx) => {
+        const user = await this.reader(tx, actor);
+        const followed = await tx.reading_list_follows.findMany({
+          where: {
+            user_id: user.id,
+            courses: { is_active: true, faculties: { is_active: true } },
+          },
+          select: { course_id: true },
+        });
+        const rows = followed.length
+          ? await tx.reading_list_items.findMany({
+              where: {
+                due_on: { gte: from, lt: to },
+                document_versions: available(),
+                reading_lists: {
+                  OR: followed.map((f) => ({ course_id: f.course_id, ...shown(f.course_id) })),
+                },
+              },
+              select: {
+                due_on: true,
+                position: true,
+                section: true,
+                version_id: true,
+                document_versions: { select: { title: true } },
+                reading_lists: {
+                  select: {
+                    id: true,
+                    title: true,
+                    courses: { select: { id: true, code: true, name: true } },
+                  },
+                },
+              },
+              orderBy: [{ due_on: 'asc' }, { list_id: 'asc' }, { position: 'asc' }],
+              take: MAX_DEADLINES + 1,
+            })
+          : [];
+        return {
+          items: rows.slice(0, MAX_DEADLINES).map((r) => ({
+            dueOn: formatDate(r.due_on!),
+            listId: String(r.reading_lists.id),
+            listTitle: r.reading_lists.title,
+            course: {
+              id: String(r.reading_lists.courses.id),
+              code: r.reading_lists.courses.code,
+              name: r.reading_lists.courses.name,
+            },
+            position: r.position,
+            section: r.section,
+            versionId: String(r.version_id),
+            title: r.document_versions.title,
+          })),
+          truncated: rows.length > MAX_DEADLINES,
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
 }

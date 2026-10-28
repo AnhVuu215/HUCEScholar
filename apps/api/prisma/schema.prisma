@@ -157,6 +157,7 @@ model courses {
   program_courses      program_courses[]
   version_courses      version_courses[]
   reading_lists reading_lists[]
+  reading_list_follows reading_list_follows[]
 
   @@schema("hucescholar")
 }
@@ -501,6 +502,7 @@ model users {
   other_users                                                   users[]                 @relation("usersTousers")
   visibility_events                                             visibility_events[]
   reading_lists reading_lists[]
+  reading_list_follows reading_list_follows[]
   study_cards study_cards[]
   calendar_items calendar_items[]
 
@@ -549,10 +551,21 @@ model reading_list_items {
   section String @default("") @db.VarChar(120)
   version_id BigInt
   note String @default("") @db.VarChar(500)
+  due_on DateTime? @db.Date
   reading_lists reading_lists @relation(fields: [list_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document_versions document_versions @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   @@id([list_id, position])
   @@index([version_id], map: "ix_reading_item_version")
+  @@schema("hucescholar")
+}
+
+model reading_list_follows {
+  user_id BigInt
+  course_id BigInt
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  courses courses @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  @@id([user_id, course_id])
   @@schema("hucescholar")
 }
 

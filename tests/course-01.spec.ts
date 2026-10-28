@@ -175,3 +175,84 @@ test('a lecturer arranges published materials by week and students open the chos
     true,
   );
 });
+
+test('CAL-04b: a due date set by the lecturer shows on calendars of students who follow the course', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const { code, courseId, titles } = await courseWithMaterials(page);
+  // Three days ahead stays inside the agenda (today + 30 days).
+  const due = new Date();
+  due.setDate(due.getDate() + 3);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dueKey = `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}`;
+  await login(page, 'lecturer');
+  await page.goto('/workspace/lecturer/reading-lists');
+  await page.getByRole('combobox', { name: 'Môn được phân công', exact: true }).click();
+  await page.getByRole('option', { name: `${code} · Môn có danh sách đọc`, exact: true }).click();
+  await page.getByLabel('Tên danh sách', { exact: true }).fill('Danh sách có hạn');
+  await page.getByLabel('Tìm tài liệu của môn để thêm', { exact: true }).fill(code);
+  await page.getByRole('button', { name: 'Tìm tài liệu', exact: true }).click();
+  await page.getByRole('button', { name: `Thêm vào danh sách: ${titles[0]}`, exact: true }).click();
+  await page.getByLabel('Tuần hoặc chủ đề').first().fill('Tuần 1');
+  await page.getByLabel('Hạn đọc (không bắt buộc)').first().fill(dueKey);
+  await page.getByLabel('Công bố cho người đọc của môn').check();
+  await page.getByRole('button', { name: 'Lưu danh sách', exact: true }).click();
+  await expect(page.getByText('Đã lưu. Người đọc của môn thấy danh sách này.')).toBeVisible();
+  await expect(page.getByLabel('Hạn đọc (không bắt buộc)').first()).toHaveValue(dueKey);
+  await readerLogout(page);
+
+  await login(page, 'student');
+  await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
+  const list = page.getByRole('article', { name: 'Danh sách có hạn' });
+  await expect(list.getByText(`Hạn đọc: ${due.toLocaleDateString('vi-VN')}`)).toBeVisible();
+  const follow = page.getByLabel('Hiện hạn đọc của môn này trên Lịch học');
+  await expect(follow).not.toBeChecked();
+  // Not followed yet: the calendar has no deadline for this course.
+  await page.goto('/workspace/calendar');
+  await page.getByRole('button', { name: 'Lịch biểu', exact: true }).click();
+  const deadlineName = `Hạn đọc: ${titles[0]}`;
+  const deadline = page.getByRole('link', { name: deadlineName, exact: true });
+  await expect(page.getByRole('heading', { name: /^Từ / })).toBeVisible();
+  await expect(deadline).toHaveCount(0);
+
+  await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
+  await follow.check();
+  await expect(page.getByText('Hạn đọc của môn này sẽ hiện trên Lịch học.')).toBeVisible();
+  await page.reload();
+  await expect(follow).toBeChecked();
+  await page.getByRole('link', { name: 'Mở Lịch học', exact: true }).click();
+  await page.getByRole('button', { name: 'Lịch biểu', exact: true }).click();
+  await expect(deadline).toHaveCount(1);
+  const entry = page.locator('.calendar-agenda li').filter({ has: deadline });
+  await expect(entry).toContainText(`${code} · Danh sách có hạn · Tuần 1`);
+  await expect(entry.getByRole('link', { name: 'Xem danh sách đọc' })).toHaveAttribute(
+    'href',
+    `/workspace/library/reading-lists?courseId=${courseId}`,
+  );
+  // The month view shows the same date as a read-only chip.
+  await page.getByRole('button', { name: 'Tháng', exact: true }).click();
+  if (due.getMonth() !== new Date().getMonth())
+    await page.getByRole('button', { name: 'Khoảng sau', exact: true }).click();
+  await expect(
+    page.locator('.calendar-month').getByRole('link', { name: deadlineName }),
+  ).toHaveCount(1);
+  for (const width of [320, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await deadline.click();
+  await expect(page).toHaveURL(/\/workspace\/library\/versions\/\d+$/);
+  await expect(page.getByRole('heading', { name: titles[0] })).toBeVisible({ timeout: 15_000 });
+
+  // Unfollowing removes the date again.
+  await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
+  await follow.uncheck();
+  await expect(page.getByText('Đã bỏ hạn đọc khỏi Lịch học.')).toBeVisible();
+  await page.goto('/workspace/calendar');
+  await page.getByRole('button', { name: 'Lịch biểu', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /^Từ / })).toBeVisible();
+  await expect(deadline).toHaveCount(0);
+});
