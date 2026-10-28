@@ -3472,6 +3472,56 @@ describe('private material drafts', () => {
     quote: 'Original selected text',
     quads: [[0.1, 0.8, 0.6, 0.8, 0.6, 0.75, 0.1, 0.75]],
   });
+  it('LEARN-03c: text typed without diacritics matches either way; with them, it stays exact', async () => {
+    const { path } = await readingFixture();
+    const tag = `zq${randomUUID().slice(0, 6)}`;
+    const ids: Record<string, string> = {};
+    for (const [key, content] of [
+      ['law', `${tag} Định luật Ôm`],
+      ['cheek', `${tag} Cái má`],
+      ['which', `${tag} Cái mà`],
+      // Decomposed characters, as some keyboards and pasted text produce.
+      ['calculus', `${tag} Giải tích`.normalize('NFD')],
+    ]) {
+      const created = await readingWrite('student', `${path}/notes`, {
+        pageNumber: 1,
+        content,
+        requestId: randomUUID(),
+      });
+      expect(created.status).toBe(201);
+      ids[key] = created.body.item.id;
+    }
+    const curve = await readingWrite('student', `${path}/highlights`, {
+      pageNumber: 2,
+      content: '',
+      color: '#FFF59D',
+      requestId: randomUUID(),
+      anchor: { ...highlightAnchor(), quote: `${tag} Đường cong 5%_` },
+    });
+    expect(curve.status).toBe(201);
+    ids.curve = curve.body.item.id;
+    const find = async (endpoint: string, query: string) =>
+      (await readingWrite('student', endpoint, { query, limit: 50 })).body.items
+        .map((n: { id: string }) => Object.keys(ids).find((key) => ids[key] === n.id))
+        .filter(Boolean)
+        .sort();
+    const endpoint = `${path}/annotations/search`;
+    expect(await find(endpoint, 'DINH LUAT om')).toEqual(['law']);
+    expect(await find(endpoint, `${tag} cai ma`)).toEqual(['cheek', 'which']);
+    expect(await find(endpoint, 'Cái má')).toEqual(['cheek']);
+    expect(await find(endpoint, 'cái MÀ')).toEqual(['which']);
+    expect(await find(endpoint, 'giai tich')).toEqual(['calculus']);
+    expect(await find(endpoint, 'Giải'.normalize('NFC'))).toEqual(['calculus']);
+    expect(await find(endpoint, 'Giải'.normalize('NFD'))).toEqual(['calculus']);
+    expect(await find(endpoint, 'duong cong 5%_')).toEqual(['curve']);
+    // Wildcards stay literal when folded too.
+    expect(await find(endpoint, 'cong 5_')).toEqual([]);
+    expect(await find(endpoint, 'dương')).toEqual([]);
+    // The library notebook (LEARN-03) shares the same filter.
+    expect(await find('/api/v1/personal-library/notebook/search', `${tag} dinh luat`)).toEqual([
+      'law',
+    ]);
+  });
   it('annotation notebook searches only owner/version with literal filters and bounded keyset cursors', async () => {
     const { path, id, versionId } = await readingFixture();
     const endpoint = `${path}/annotations/search`;

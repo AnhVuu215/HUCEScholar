@@ -2,28 +2,41 @@ import { BadRequestException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Prisma } from '../generated/prisma/client';
 import { AnnotationSearchDto } from './annotation-search.dto';
+import { foldVietnamese } from './search-fold';
+
+const searched = [Prisma.sql`content`, Prisma.sql`(anchor->>'quote')`];
 
 /**
  * The owner-chosen filters of a notebook search (LEARN-01/02/03) as an SQL fragment of `AND …`
  * conditions on `hucescholar.annotations`, plus a fingerprint that binds cursors to them.
  * `extra` adds caller-specific filters (such as a course) to the fingerprint.
+ *
+ * LEARN-03c: text typed without diacritics matches with or without them ("dinh luat" finds
+ * "Định luật"); text typed with any keeps them ("má" does not find "mà"). Both sides are compared
+ * in one Unicode form, so a note stored as decomposed characters is still found. Folding is
+ * SEARCH-01's `fold_vi`/`foldVietnamese`; it runs per row, but only over one owner's notes.
  */
 export function annotationFilter(query: AnnotationSearchDto, extra: unknown[] = []) {
   if (query.kind === 'PAGE_NOTE' && query.color)
     throw new BadRequestException('Màu chỉ áp dụng cho đoạn tô.');
   const kind = query.color ? 'TEXT_HIGHLIGHT' : query.kind;
-  const term = query.query ?? '';
+  const term = (query.query ?? '').normalize('NFC');
+  const plain = foldVietnamese(term) === term.toLowerCase();
   const reviewLater = query.reviewLater === true;
   const fingerprint = createHash('sha256')
     .update(JSON.stringify([kind ?? null, query.color ?? null, term, reviewLater, ...extra]))
     .digest('base64url');
   // Treat SQL wildcard characters as literal text, including the escape character itself.
-  const pattern = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
+  const literal = (value: string) => `%${value.replace(/[\\%_]/g, '\\$&')}%`;
+  const match = (column: Prisma.Sql) =>
+    plain
+      ? Prisma.sql`hucescholar.fold_vi(normalize(${column}, NFC)) LIKE ${literal(foldVietnamese(term))} ESCAPE ${'\\'}`
+      : Prisma.sql`normalize(${column}, NFC) ILIKE ${literal(term)} ESCAPE ${'\\'}`;
   const sql = Prisma.sql`
     ${kind ? Prisma.sql`AND kind = ${kind}` : Prisma.empty}
     ${query.color ? Prisma.sql`AND color = ${query.color}` : Prisma.empty}
     ${reviewLater ? Prisma.sql`AND review_later` : Prisma.empty}
-    ${term ? Prisma.sql`AND (content ILIKE ${pattern} ESCAPE ${'\\'} OR anchor->>'quote' ILIKE ${pattern} ESCAPE ${'\\'})` : Prisma.empty}
+    ${term ? Prisma.sql`AND (${Prisma.join(searched.map(match), ' OR ')})` : Prisma.empty}
   `;
   return { sql, fingerprint };
 }
