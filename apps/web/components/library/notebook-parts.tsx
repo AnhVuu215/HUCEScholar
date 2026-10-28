@@ -58,7 +58,8 @@ export function AnnotationFilterFields({
           aria-describedby={`${idPrefix}-search-hint`}
         />
         <p id={`${idPrefix}-search-hint`} className="field-hint">
-          Tìm cụm chữ có dấu, không phân biệt hoa thường. Tối đa 100 ký tự.
+          Gõ không dấu để tìm cả chữ có dấu; gõ có dấu thì khớp đúng dấu. Không phân biệt hoa
+          thường, tối đa 100 ký tự.
         </p>
       </div>
       {children}
