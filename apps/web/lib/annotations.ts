@@ -1,6 +1,12 @@
 import { apiRequest, csrfToken } from './auth';
-import { isNote, type PageNote } from './reading';
-import { isHighlight, type HighlightColor, type TextHighlight } from './highlights';
+import { isNote, removeNote, updateNote, type PageNote } from './reading';
+import {
+  isHighlight,
+  removeHighlight,
+  writeHighlight,
+  type HighlightColor,
+  type TextHighlight,
+} from './highlights';
 
 export type AnnotationItem = PageNote | TextHighlight;
 export type AnnotationFilters = {
@@ -79,6 +85,29 @@ export async function setReviewLater(
   )
     throw new Error('Invalid review mark response');
   return body.item;
+}
+/**
+ * LEARN-03b: edits a note's text, or a highlight's text and colour, at the revision the caller
+ * last saw; a pinned note keeps its pin and a highlight keeps its anchor.
+ */
+export async function editAnnotation(
+  item: AnnotationItem,
+  content: string,
+  color: HighlightColor | null,
+): Promise<AnnotationItem> {
+  if (item.kind === 'PAGE_NOTE') return updateNote(item.versionId, item, content);
+  return writeHighlight(item.versionId, item, {
+    pageNumber: item.pageNumber,
+    content,
+    color: color ?? (item.color as HighlightColor),
+    anchor: item.anchor,
+    // Only a create sends these; an edit sends content, colour and revision.
+    requestId: '',
+  });
+}
+export async function deleteAnnotation(item: AnnotationItem) {
+  if (item.kind === 'PAGE_NOTE') await removeNote(item.versionId, item);
+  else await removeHighlight(item.versionId, item);
 }
 export type NotesExportFormat = 'markdown' | 'text';
 /** The owner's notes for one version as a file; the API re-checks read access each time. */

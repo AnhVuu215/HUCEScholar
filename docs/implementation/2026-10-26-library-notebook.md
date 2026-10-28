@@ -57,5 +57,5 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 ## Chưa làm
 
 - Mở một mục từ sổ tay chỉ tới đúng trang, chưa tự mở editor của ghi chú đó như sổ ghi chú trong reader.
-- Chưa sửa/xóa ngay trên sổ tay. Xuất cả sổ tay đã có ở [EXPORT-02](2026-10-28-notebook-export.md).
+- Sửa/xóa ngay trên sổ tay đã có ở [LEARN-03b](2026-10-28-notebook-edit.md). Xuất cả sổ tay đã có ở [EXPORT-02](2026-10-28-notebook-export.md).
 - Chưa tìm không dấu, chưa nhóm tùy ý, chưa "buổi ôn tập" duyệt lần lượt.
