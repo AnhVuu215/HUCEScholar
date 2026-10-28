@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import type { ReadingItem } from '../../lib/reading-lists';
+import { formatDue, type ReadingItem } from '../../lib/reading-lists';
 import { materialTypes } from '../../lib/materials';
 
 /** Items grouped by their section label, in the lecturer's order. */
@@ -47,6 +47,7 @@ export function ReadingListItems({ items }: { items: ReadingItem[] }) {
                 ) : (
                   <p>Tài liệu không còn khả dụng với tài khoản của bạn.</p>
                 )}
+                {item.dueOn && <p className="reading-due">Hạn đọc: {formatDue(item.dueOn)}</p>}
                 {item.note && <p className="reading-note">{item.note}</p>}
               </li>
             ))}
