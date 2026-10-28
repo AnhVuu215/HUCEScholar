@@ -1,4 +1,4 @@
-/** Owner-only export of one version's notes and highlights (EXPORT-01). No PDF bytes. */
+/** Owner-only export of notes and highlights: one version (EXPORT-01) or the notebook (EXPORT-02). No PDF bytes. */
 export type ExportFormat = 'markdown' | 'text';
 export type ExportSource = {
   title: string;
@@ -15,7 +15,7 @@ export type ExportAnnotation = {
 };
 
 export const MAX_EXPORT_ANNOTATIONS = 5000;
-const colorNames: Record<string, string> = {
+export const colorNames: Record<string, string> = {
   '#FFF59D': 'vàng',
   '#A5D6A7': 'xanh lá',
   '#90CAF9': 'xanh dương',
@@ -62,47 +62,29 @@ function stamp(date: Date) {
   return date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 }
 
-export function exportAnnotations(
-  source: ExportSource,
-  rows: ExportAnnotation[],
-  format: ExportFormat,
-) {
+function byPage(rows: ExportAnnotation[]) {
   const pages = new Map<number, ExportAnnotation[]>();
   for (const row of rows) pages.set(row.page_number, [...(pages.get(row.page_number) ?? []), row]);
-  const ordered = [...pages.entries()].sort(([a], [b]) => a - b);
-  const notice = 'Chỉ gồm ghi chú và đoạn tô riêng của bạn trên phiên bản này. Không kèm file PDF.';
-  if (format === 'text') {
-    const out = [
-      `Ghi chú: ${clean(source.title)}`,
-      `Tác giả: ${clean(source.authors)}`,
-      `Phiên bản ${source.versionNo} · Xuất lúc ${stamp(source.exportedAt)}`,
-      notice,
-    ];
-    if (!rows.length) out.push('', 'Chưa có ghi chú hoặc đoạn tô nào.');
-    for (const [page, items] of ordered) {
-      out.push('', `TRANG ${page}`);
-      for (const item of items) {
-        if (item.kind === 'TEXT_HIGHLIGHT') {
-          out.push(
-            `- Đoạn tô (${colorNames[item.color] ?? 'màu khác'}): “${clean(quoteOf(item.anchor))}”`,
-          );
-          if (item.content.trim())
-            out.push(`  Ghi chú: ${clean(item.content).replace(/\n/g, '\n  ')}`);
-        } else out.push(`- Ghi chú trang: ${clean(item.content).replace(/\n/g, '\n  ')}`);
-      }
+  return [...pages.entries()].sort(([a], [b]) => a - b);
+}
+function textPages(rows: ExportAnnotation[], out: string[]) {
+  for (const [page, items] of byPage(rows)) {
+    out.push('', `TRANG ${page}`);
+    for (const item of items) {
+      if (item.kind === 'TEXT_HIGHLIGHT') {
+        out.push(
+          `- Đoạn tô (${colorNames[item.color] ?? 'màu khác'}): “${clean(quoteOf(item.anchor))}”`,
+        );
+        if (item.content.trim())
+          out.push(`  Ghi chú: ${clean(item.content).replace(/\n/g, '\n  ')}`);
+      } else out.push(`- Ghi chú trang: ${clean(item.content).replace(/\n/g, '\n  ')}`);
     }
-    return `${out.join('\n')}\n`;
   }
-  const out = [
-    `# Ghi chú — ${escapeMarkdown(source.title)}`,
-    '',
-    `- Tác giả: ${escapeMarkdown(source.authors)}`,
-    `- Phiên bản ${source.versionNo} · Xuất lúc ${escapeMarkdown(stamp(source.exportedAt))}`,
-    `- ${escapeMarkdown(notice)}`,
-  ];
-  if (!rows.length) out.push('', escapeMarkdown('Chưa có ghi chú hoặc đoạn tô nào.'));
-  for (const [page, items] of ordered) {
-    out.push('', `## Trang ${page}`);
+}
+/** Pages as Markdown headings of the given level (2 for one document, 3 inside a notebook). */
+function markdownPages(rows: ExportAnnotation[], out: string[], level: number) {
+  for (const [page, items] of byPage(rows)) {
+    out.push('', `${'#'.repeat(level)} Trang ${page}`);
     for (const item of items) {
       out.push('');
       if (item.kind === 'TEXT_HIGHLIGHT') {
@@ -114,6 +96,87 @@ export function exportAnnotations(
         if (item.content.trim()) out.push('', lines(item.content));
       } else out.push('**Ghi chú trang**', '', lines(item.content));
     }
+  }
+}
+const empty = 'Chưa có ghi chú hoặc đoạn tô nào.';
+
+export function exportAnnotations(
+  source: ExportSource,
+  rows: ExportAnnotation[],
+  format: ExportFormat,
+) {
+  const notice = 'Chỉ gồm ghi chú và đoạn tô riêng của bạn trên phiên bản này. Không kèm file PDF.';
+  if (format === 'text') {
+    const out = [
+      `Ghi chú: ${clean(source.title)}`,
+      `Tác giả: ${clean(source.authors)}`,
+      `Phiên bản ${source.versionNo} · Xuất lúc ${stamp(source.exportedAt)}`,
+      notice,
+    ];
+    if (!rows.length) out.push('', empty);
+    textPages(rows, out);
+    return `${out.join('\n')}\n`;
+  }
+  const out = [
+    `# Ghi chú — ${escapeMarkdown(source.title)}`,
+    '',
+    `- Tác giả: ${escapeMarkdown(source.authors)}`,
+    `- Phiên bản ${source.versionNo} · Xuất lúc ${escapeMarkdown(stamp(source.exportedAt))}`,
+    `- ${escapeMarkdown(notice)}`,
+  ];
+  if (!rows.length) out.push('', escapeMarkdown(empty));
+  markdownPages(rows, out, 2);
+  return `${out.join('\n')}\n`;
+}
+
+/** EXPORT-02: one document of a notebook export, with its notes in page order. */
+export type NotebookDocument = Omit<ExportSource, 'exportedAt'> & { rows: ExportAnnotation[] };
+
+/**
+ * EXPORT-02: the library notebook (LEARN-03) under the owner's filters, one section per document
+ * in the order given. `filters` describes the filters in words, so the file says what it holds.
+ */
+export function exportNotebook(
+  documents: NotebookDocument[],
+  meta: { filters: string; exportedAt: Date },
+  format: ExportFormat,
+) {
+  const notice =
+    'Chỉ gồm ghi chú và đoạn tô riêng của bạn trên các tài liệu còn mở được. Không kèm file PDF.';
+  if (format === 'text') {
+    const out = [
+      'SỔ TAY GHI CHÚ',
+      `Xuất lúc ${stamp(meta.exportedAt)}`,
+      `Bộ lọc: ${clean(meta.filters)}`,
+      notice,
+    ];
+    if (!documents.length) out.push('', empty);
+    for (const doc of documents) {
+      out.push(
+        '',
+        `=== ${clean(doc.title)} · Phiên bản ${doc.versionNo} ===`,
+        `Tác giả: ${clean(doc.authors)}`,
+      );
+      textPages(doc.rows, out);
+    }
+    return `${out.join('\n')}\n`;
+  }
+  const out = [
+    '# Sổ tay ghi chú',
+    '',
+    `- Xuất lúc ${escapeMarkdown(stamp(meta.exportedAt))}`,
+    `- Bộ lọc: ${escapeMarkdown(meta.filters)}`,
+    `- ${escapeMarkdown(notice)}`,
+  ];
+  if (!documents.length) out.push('', escapeMarkdown(empty));
+  for (const doc of documents) {
+    out.push(
+      '',
+      `## ${escapeMarkdown(doc.title)} · phiên bản ${doc.versionNo}`,
+      '',
+      `- Tác giả: ${escapeMarkdown(doc.authors)}`,
+    );
+    markdownPages(doc.rows, out, 3);
   }
   return `${out.join('\n')}\n`;
 }

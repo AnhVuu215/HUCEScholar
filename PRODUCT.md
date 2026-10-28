@@ -24,6 +24,8 @@ LEARN-01 local: sổ ghi chú riêng trên mọi trang của cùng phiên bản,
 
 CAL-04b local: giảng viên đặt hạn (ngày) cho từng mục danh sách đọc; người đọc tự bật theo dõi từng môn để hạn hiện trên Lịch học riêng, chỉ đọc, chỉ với tài liệu còn đọc được. Theo dõi không phải đăng ký môn và không mở thêm quyền. Xem docs/implementation/2026-10-28-reading-list-deadlines.md.
 
+EXPORT-02 local: trang Sổ tay tải một file Markdown/văn bản gồm mọi ghi chú khớp lượt tìm gần nhất (chữ/môn/loại/màu/cần xem lại), chia theo tài liệu rồi theo trang, có dòng mô tả bộ lọc. Chỉ ghi chú của mình trên tài liệu còn đọc được; bộ lọc đi trong body POST. Xem docs/implementation/2026-10-28-notebook-export.md.
+
 LEARN-03 local: trang Sổ tay tìm ghi chú trang/đoạn tô riêng trên mọi tài liệu còn đọc được, lọc chữ/môn/loại/màu/cần xem lại, mở đúng phiên bản/trang. Tài liệu mất quyền không được liệt kê. Sửa vẫn trong reader. Xem docs/implementation/2026-10-26-library-notebook.md.
 
 READ-01 local: tìm chữ trong PDF theo lô, kết quả trước/tiếp và dấu tạm theo text layer; mục lục chỉ mở đích trang nội bộ qua guard. Đọc tập trung ẩn chrome/panel nhưng giữ bản soạn; mở ghi chú sẽ hiện editor, Escape đóng công cụ trước khi thoát. Chưa OCR/tìm không dấu. Xem docs/implementation/2026-10-18-reader-find-focus.md.
