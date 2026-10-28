@@ -1,6 +1,11 @@
 import { isNumericId } from './guards';
 import { apiRequest, csrfToken } from './auth';
-import type { AnnotationFilters, AnnotationItem } from './annotations';
+import {
+  downloadedFile,
+  type AnnotationFilters,
+  type AnnotationItem,
+  type NotesExportFormat,
+} from './annotations';
 import { isHighlight } from './highlights';
 import { isLibraryItem, type LibraryItem } from './library';
 import { isNote } from './reading';
@@ -72,4 +77,19 @@ export async function notebookCourses(signal: AbortSignal): Promise<NotebookCour
   )
     throw new Error('Invalid notebook courses');
   return body.items as NotebookCourse[];
+}
+
+/** EXPORT-02: every note the filters match, as one file; the filters go in a POST body. */
+export async function exportNotebook(filters: NotebookFilters, format: NotesExportFormat) {
+  const token = await csrfToken();
+  const response = await apiRequest(
+    '/personal-library/notebook/export',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+      body: JSON.stringify({ ...filters, format }),
+    },
+    20_000,
+  );
+  return downloadedFile(response, 'so-tay-ghi-chu', format);
 }

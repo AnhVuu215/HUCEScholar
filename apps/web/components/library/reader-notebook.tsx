@@ -5,7 +5,6 @@ import { ApiError } from '../../lib/auth';
 import {
   exportNotes,
   searchAnnotations,
-  type NotesExportFormat,
   type AnnotationFilters,
   type AnnotationItem,
 } from '../../lib/annotations';
@@ -13,6 +12,7 @@ import { personalError } from '../../lib/reading';
 import {
   AnnotationFilterFields,
   AnnotationSummary,
+  NotesExport,
   ReviewMarkButton,
   emptyFilterState,
   toAnnotationFilters,
@@ -27,54 +27,6 @@ type NotebookProps = {
   available: boolean;
   onSelect: (item: AnnotationItem) => void;
 };
-function NotesExport({ versionId }: { versionId: string }) {
-  const [pending, setPending] = useState<NotesExportFormat | null>(null);
-  const [message, setMessage] = useState('');
-  async function download(format: NotesExportFormat) {
-    setPending(format);
-    setMessage('');
-    try {
-      const file = await exportNotes(versionId, format);
-      const url = URL.createObjectURL(file.blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = file.name;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-      setMessage('Đã tạo file ghi chú.');
-    } catch (failure) {
-      setMessage(
-        failure instanceof ApiError && failure.code === 'EXPORT_TOO_LARGE'
-          ? 'Phiên bản có quá nhiều ghi chú để xuất một lần.'
-          : failure instanceof ApiError
-            ? personalError(failure)
-            : 'Chưa tải được file ghi chú. Kiểm tra kết nối rồi thử lại.',
-      );
-    } finally {
-      setPending(null);
-    }
-  }
-  return (
-    <div className="notebook-export" role="group" aria-label="Tải ghi chú của bạn">
-      <span>Tải ghi chú của bạn:</span>
-      <button
-        className="text-button"
-        disabled={!!pending}
-        onClick={() => void download('markdown')}
-      >
-        {pending === 'markdown' ? 'Đang tạo…' : 'Markdown (.md)'}
-      </button>
-      <button className="text-button" disabled={!!pending} onClick={() => void download('text')}>
-        {pending === 'text' ? 'Đang tạo…' : 'Văn bản (.txt)'}
-      </button>
-      {message && (
-        <p role="status" className="field-hint">
-          {message}
-        </p>
-      )}
-    </div>
-  );
-}
 export function ReaderNotebook({ versionId, active, available, onSelect }: NotebookProps) {
   const [fields, setFields] = useState<FilterState>(emptyFilterState);
   const [search, setSearch] = useState<{ filters: AnnotationFilters; iteration: number }>({
@@ -86,7 +38,10 @@ export function ReaderNotebook({ versionId, active, available, onSelect }: Noteb
       <p className="field-hint">
         Ghi chú riêng trên mọi trang của phiên bản này. Tìm trong nội dung và chữ đã tô.
       </p>
-      <NotesExport versionId={versionId} />
+      <NotesExport
+        download={(format) => exportNotes(versionId, format)}
+        tooLarge="Phiên bản có quá nhiều ghi chú để xuất một lần."
+      />
       <form
         method="post"
         className="notebook-filters"

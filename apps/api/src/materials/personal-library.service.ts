@@ -1,11 +1,22 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
 import { academicId } from '../academic/academic.service';
 import { Prisma, type annotations } from '../generated/prisma/client';
 import { DraftListDto } from './materials.dto';
 import { available, LibraryService } from './library.service';
-import { NotebookSearchDto } from './annotation-search.dto';
+import { NotebookExportDto, NotebookSearchDto } from './annotation-search.dto';
+import {
+  colorNames,
+  exportNotebook,
+  MAX_EXPORT_ANNOTATIONS,
+  type NotebookDocument,
+} from './annotation-export';
 import { annotationFilter, decodeCursor, encodeCursor } from './annotation-query';
 import { noteItem } from './reading.service';
 /** Short text for a "cần xem lại" row: the owner's note, else the highlighted quote. */
@@ -260,6 +271,69 @@ export class PersonalLibraryService {
               )
             : null,
       };
+    });
+  }
+  /**
+   * EXPORT-02: every note the notebook search would list under the same filters, as one file,
+   * newest version first like the notebook. Unreadable versions are left out, as in the search.
+   */
+  notebookExport(actor: Profile, query: NotebookExportDto) {
+    return this.run(actor, false, async (tx, owner) => {
+      const filter = annotationFilter(query);
+      const course = query.courseId ? academicId(query.courseId) : undefined;
+      const versions = await this.annotatedVersions(tx, owner, course);
+      const rows = versions.length
+        ? await tx.$queryRaw<annotations[]>(Prisma.sql`
+            SELECT * FROM hucescholar.annotations
+            WHERE user_id = ${owner} AND version_id = ANY(${versions}) ${filter.sql}
+            ORDER BY version_id DESC, page_number ASC, id ASC LIMIT ${MAX_EXPORT_ANNOTATIONS + 1}
+          `)
+        : [];
+      if (rows.length > MAX_EXPORT_ANNOTATIONS)
+        throw new BadRequestException({
+          code: 'EXPORT_TOO_LARGE',
+          message: `Sổ tay có hơn ${MAX_EXPORT_ANNOTATIONS} mục; thu hẹp bộ lọc rồi xuất lại.`,
+        });
+      const sources = new Map(
+        (
+          await tx.document_versions.findMany({
+            where: { id: { in: [...new Set(rows.map((r) => r.version_id))] } },
+            select: { id: true, title: true, authors: true, version_no: true },
+          })
+        ).map((v) => [v.id, v]),
+      );
+      // Rows arrive sorted by version, so consecutive rows share one document.
+      const documents: (NotebookDocument & { versionId: bigint })[] = [];
+      for (const row of rows) {
+        const last = documents.at(-1);
+        if (last?.versionId === row.version_id) last.rows.push(row);
+        else {
+          const v = sources.get(row.version_id)!;
+          documents.push({
+            versionId: row.version_id,
+            title: v.title,
+            authors: v.authors,
+            versionNo: v.version_no,
+            rows: [row],
+          });
+        }
+      }
+      const courseRow = course
+        ? await tx.courses.findUnique({ where: { id: course }, select: { code: true, name: true } })
+        : null;
+      const kind = query.color ? 'TEXT_HIGHLIGHT' : query.kind;
+      const filters = [
+        course ? `môn ${courseRow ? `${courseRow.code} · ${courseRow.name}` : 'không còn'}` : '',
+        kind === 'PAGE_NOTE' ? 'chỉ ghi chú trang' : kind === 'TEXT_HIGHLIGHT' ? 'chỉ đoạn tô' : '',
+        query.color ? `màu ${colorNames[query.color] ?? query.color}` : '',
+        query.reviewLater ? 'cần xem lại' : '',
+        query.query ? `có chữ “${query.query}”` : '',
+      ].filter(Boolean);
+      return exportNotebook(
+        documents,
+        { filters: filters.length ? filters.join(' · ') : 'không lọc', exportedAt: new Date() },
+        query.format,
+      );
     });
   }
 }
