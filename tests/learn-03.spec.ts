@@ -77,3 +77,63 @@ test('the notebook finds notes across documents, filters by course and opens the
     page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 2 / 2' }),
   ).toBeVisible();
 });
+
+test('EXPORT-02: the notebook downloads what the last search filtered as one file', async ({
+  page,
+}) => {
+  const token = randomUUID().slice(0, 8);
+  const first = await openReaderFixture(page, 'learn03');
+  const second = await openReaderFixture(page, 'learn03');
+  const headers = await readerHeaders(page);
+  for (const [path, pageNumber, content] of [
+    [first.path, 2, `${token} ý thứ nhất [link](https://x.test)`],
+    [second.path, 1, `${token} ý thứ hai`],
+  ] as const)
+    expect(
+      (
+        await page.request.post(`${path}/notes`, {
+          headers,
+          data: { pageNumber, content, requestId: randomUUID() },
+        })
+      ).status(),
+    ).toBe(201);
+  await page.goto('/workspace/notebook');
+  await search(page, token);
+  await expect(notebook(page).getByRole('region')).toHaveCount(2);
+  // Text typed after the search is not exported until searched.
+  await notebook(page).getByLabel('Tìm trong ghi chú', { exact: true }).fill('khác');
+  const group = notebook(page).getByRole('group', {
+    name: 'Tải sổ tay theo bộ lọc đang xem',
+    exact: true,
+  });
+  const markdown = page.waitForEvent('download');
+  await group.getByRole('button', { name: 'Markdown (.md)', exact: true }).click();
+  const md = await markdown;
+  expect(md.suggestedFilename()).toBe('so-tay-ghi-chu.md');
+  const content = Buffer.concat(await (await md.createReadStream()).toArray()).toString('utf8');
+  expect(content).toContain(`- Bộ lọc: có chữ “${token}”`);
+  expect(content.indexOf('ý thứ hai')).toBeLessThan(content.indexOf('ý thứ nhất'));
+  expect(content).toContain(String.raw`ý thứ nhất \[link\]\(https\://x.test\)`);
+  await expect(group.getByRole('status')).toHaveText('Đã tạo file ghi chú.');
+  const text = page.waitForEvent('download');
+  await group.getByRole('button', { name: 'Văn bản (.txt)', exact: true }).click();
+  expect((await text).suggestedFilename()).toBe('so-tay-ghi-chu.txt');
+  // Too many notes is a sentence, not an error page saved as a file.
+  await page.route('**/personal-library/notebook/export', (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'EXPORT_TOO_LARGE', message: 'x' }),
+    }),
+  );
+  await group.getByRole('button', { name: 'Markdown (.md)', exact: true }).click();
+  await expect(group.getByRole('status')).toHaveText(
+    'Sổ tay có quá nhiều mục để xuất một lần. Thu hẹp bộ lọc rồi thử lại.',
+  );
+  for (const width of [320, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+});

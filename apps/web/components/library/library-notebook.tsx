@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../../lib/auth';
 import { readerHref } from '../../lib/calendar';
 import {
+  exportNotebook,
   notebookCourses,
   searchNotebook,
   type NotebookCourse,
@@ -16,6 +17,7 @@ import { SelectField } from '../ui/select-field';
 import {
   AnnotationFilterFields,
   AnnotationSummary,
+  NotesExport,
   ReviewMarkButton,
   emptyFilterState,
   toAnnotationFilters,
@@ -83,6 +85,12 @@ export function LibraryNotebook() {
           Tìm ghi chú
         </button>
       </form>
+      {/* Exports what the last search filtered, not fields edited since. */}
+      <NotesExport
+        label="Tải sổ tay theo bộ lọc đang xem"
+        download={(format) => exportNotebook(search.filters, format)}
+        tooLarge="Sổ tay có quá nhiều mục để xuất một lần. Thu hẹp bộ lọc rồi thử lại."
+      />
       {/* A new result session per search, so an old cursor or late response cannot mix in. */}
       <NotebookResults key={search.iteration} filters={search.filters} />
     </section>
