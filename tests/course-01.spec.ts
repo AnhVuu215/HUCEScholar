@@ -247,6 +247,16 @@ test('CAL-04b: a due date set by the lecturer shows on calendars of students who
   await expect(page).toHaveURL(/\/workspace\/library\/versions\/\d+$/);
   await expect(page.getByRole('heading', { name: titles[0] })).toBeVisible({ timeout: 15_000 });
 
+  // CAL-04c: once marked read, the deadline says so and is struck through.
+  await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
+  await list.getByRole('checkbox', { name: `Đã đọc: ${titles[0]}`, exact: true }).check();
+  await expect(list.getByText('Đã đọc 1/1 tài liệu')).toBeVisible();
+  await page.goto('/workspace/calendar');
+  await page.getByRole('button', { name: 'Lịch biểu', exact: true }).click();
+  const done = page.getByRole('link', { name: `${deadlineName} · Đã đọc`, exact: true });
+  await expect(done).toHaveCount(1);
+  await expect(done).toHaveCSS('text-decoration-line', 'line-through');
+  await expect(deadline).toHaveCount(0);
   // Unfollowing removes the date again.
   await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
   await follow.uncheck();

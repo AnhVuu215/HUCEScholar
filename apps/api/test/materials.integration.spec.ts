@@ -893,8 +893,31 @@ describe('private material drafts', () => {
         section: 'Tuần 1',
         versionId: first.versionId,
         title: expect.any(String),
+        read: false,
       },
     ]);
+    // CAL-04c: the reader's own read mark shows on the deadline, and only for that reader.
+    const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+    await agents.student
+      .put(`/api/v1/courses/${course}/reading-lists/read/${first.versionId}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send({ read: true })
+      .expect(200);
+    const readOf = async () =>
+      (await range().expect(200)).body.items
+        .filter((i: { versionId: string }) =>
+          [first.versionId, second.versionId].includes(i.versionId),
+        )
+        .map((i: { read: boolean }) => i.read);
+    expect(await readOf()).toEqual([true, false]);
+    await agents.student
+      .put(`/api/v1/courses/${course}/reading-lists/read/${first.versionId}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send({ read: false })
+      .expect(200);
+    expect(await readOf()).toEqual([false, false]);
     expect(await titles()).toEqual(['2026-11-03', '2026-11-10']);
     // `to` is exclusive.
     expect(await titles('2026-11-03', '2026-11-10')).toEqual(['2026-11-03']);
