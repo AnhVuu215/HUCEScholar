@@ -6,6 +6,8 @@ export type ReadingItem = {
   position: number;
   section: string;
   note: string;
+  /** CAL-04b due date as a calendar day (`YYYY-MM-DD`), or null. */
+  dueOn: string | null;
   versionId: string;
   /** null when the viewer can no longer read this version; its title is then withheld. */
   material: {
@@ -26,7 +28,24 @@ export type ReadingList = {
   owner: { id: string; name: string };
   items: ReadingItem[];
 };
-export type ReadingDraftItem = { section: string; versionId: string; note: string };
+export type ReadingDraftItem = {
+  section: string;
+  versionId: string;
+  note: string;
+  dueOn: string | null;
+};
+/** CAL-04b: one due date on a followed course's published list, for the calendar. */
+export type ReadingDeadline = {
+  dueOn: string;
+  listId: string;
+  listTitle: string;
+  course: { id: string; code: string; name: string };
+  position: number;
+  section: string;
+  versionId: string;
+  title: string;
+};
+const day = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 function validItem(v: unknown): v is ReadingItem {
   if (
@@ -34,6 +53,7 @@ function validItem(v: unknown): v is ReadingItem {
     !Number.isInteger(v.position) ||
     typeof v.section !== 'string' ||
     typeof v.note !== 'string' ||
+    !(v.dueOn === null || day(v.dueOn)) ||
     !isNumericId(v.versionId)
   )
     return false;
@@ -73,10 +93,15 @@ export async function publishedReadingLists(courseId: string, signal: AbortSigna
     isRecord(body.course) &&
     typeof body.course.code === 'string' &&
     typeof body.course.name === 'string' &&
+    typeof body.following === 'boolean' &&
     Array.isArray(body.items) &&
     body.items.every(validList)
   )
-    return body as { course: { id: string; code: string; name: string }; items: ReadingList[] };
+    return body as {
+      course: { id: string; code: string; name: string };
+      following: boolean;
+      items: ReadingList[];
+    };
   throw new Error('Invalid reading lists.');
 }
 export async function myReadingList(courseId: string, signal: AbortSignal) {
@@ -99,6 +124,56 @@ export async function saveReadingList(
   if (isRecord(body) && validList(body.item)) return body.item;
   throw new Error('Invalid reading list.');
 }
+/** A `YYYY-MM-DD` day as local midnight, so it lands on that day in the calendar. */
+export function dueDay(dueOn: string) {
+  const [y, m, d] = dueOn.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+export const formatDue = (dueOn: string) => dueDay(dueOn).toLocaleDateString('vi-VN');
+/** Show or hide this course's due dates on the signed-in reader's calendar. */
+export async function followReadingLists(courseId: string, following: boolean) {
+  const token = await csrfToken();
+  const body: unknown = await (
+    await apiRequest(`${path(courseId)}/follow`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+      body: JSON.stringify({ following }),
+    })
+  ).json();
+  if (isRecord(body) && typeof body.following === 'boolean') return body.following;
+  throw new Error('Invalid follow state.');
+}
+function validDeadline(v: unknown): v is ReadingDeadline {
+  return (
+    isRecord(v) &&
+    day(v.dueOn) &&
+    isNumericId(v.listId) &&
+    typeof v.listTitle === 'string' &&
+    isRecord(v.course) &&
+    isNumericId(v.course.id) &&
+    typeof v.course.code === 'string' &&
+    typeof v.course.name === 'string' &&
+    Number.isInteger(v.position) &&
+    typeof v.section === 'string' &&
+    isNumericId(v.versionId) &&
+    typeof v.title === 'string'
+  );
+}
+/** Due dates on calendar days [from, to) of the courses the reader follows. */
+export async function readingDeadlines(from: string, to: string, signal: AbortSignal) {
+  const query = new URLSearchParams({ from, to });
+  const body: unknown = await (
+    await apiRequest(`/calendar/reading-deadlines?${query}`, { signal })
+  ).json();
+  if (
+    isRecord(body) &&
+    typeof body.truncated === 'boolean' &&
+    Array.isArray(body.items) &&
+    body.items.every(validDeadline)
+  )
+    return body as { items: ReadingDeadline[]; truncated: boolean };
+  throw new Error('Invalid reading deadlines.');
+}
 export function readingListError(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 401) {
@@ -115,7 +190,7 @@ export function readingListError(error: unknown) {
     if (error.code && codes[error.code]) return codes[error.code];
     if (error.status === 404) return 'Không tìm thấy môn học hoặc môn đã ngừng hoạt động.';
     if (error.status === 403) return 'Bạn không có quyền với danh sách này.';
-    if (error.status === 400) return 'Kiểm tra tiêu đề, phần và ghi chú (tối đa 100 mục).';
+    if (error.status === 400) return 'Kiểm tra tiêu đề, phần, ghi chú và hạn đọc (tối đa 100 mục).';
   }
   return 'Chưa kết nối được máy chủ. Kiểm tra mạng rồi thử lại.';
 }

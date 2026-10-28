@@ -10,7 +10,15 @@ import {
 } from '../../lib/reading-lists';
 import { SelectField } from '../ui/select-field';
 
-type Row = { key: string; section: string; note: string; versionId: string; label: string };
+type Row = {
+  key: string;
+  section: string;
+  note: string;
+  /** `YYYY-MM-DD` from the date input, or '' for no due date. */
+  dueOn: string;
+  versionId: string;
+  label: string;
+};
 type Loaded = { revision: number; title: string; published: boolean; rows: Row[] };
 const MAX_ITEMS = 100;
 
@@ -23,6 +31,7 @@ function fromList(list: ReadingList | null): Loaded {
       key: `${i.versionId}-${i.position}`,
       section: i.section,
       note: i.note,
+      dueOn: i.dueOn ?? '',
       versionId: i.versionId,
       label: i.material
         ? `${i.material.title} · phiên bản ${i.material.versionNo}`
@@ -109,7 +118,12 @@ export function ReadingListEditor() {
         title: form.title,
         published: form.published,
         revision: form.revision,
-        items: form.rows.map((r) => ({ section: r.section, note: r.note, versionId: r.versionId })),
+        items: form.rows.map((r) => ({
+          section: r.section,
+          note: r.note,
+          versionId: r.versionId,
+          dueOn: r.dueOn || null,
+        })),
       });
       setForm(fromList(saved));
       setNotice(
@@ -129,7 +143,8 @@ export function ReadingListEditor() {
       <h2 id="reading-editor-title">Soạn danh sách đọc</h2>
       <p className="field-hint">
         Mỗi môn bạn được phân công có một danh sách. Mỗi mục giữ đúng phiên bản bạn chọn; khi tài
-        liệu có bản mới, người đọc thấy gợi ý và bạn tự quyết định đổi.
+        liệu có bản mới, người đọc thấy gợi ý và bạn tự quyết định đổi. Hạn đọc hiện trên lịch học
+        của người đọc đã chọn theo dõi môn.
       </p>
       {!courses ? (
         error ? (
@@ -219,6 +234,21 @@ export function ReadingListEditor() {
                       onChange={(e) =>
                         update((rows) =>
                           rows.map((r, i) => (i === index ? { ...r, note: e.target.value } : r)),
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor={`due-${row.key}`}>Hạn đọc (không bắt buộc)</label>
+                    <input
+                      id={`due-${row.key}`}
+                      type="date"
+                      min="2000-01-01"
+                      max="2100-12-31"
+                      value={row.dueOn}
+                      onChange={(e) =>
+                        update((rows) =>
+                          rows.map((r, i) => (i === index ? { ...r, dueOn: e.target.value } : r)),
                         )
                       }
                     />
@@ -319,6 +349,7 @@ export function ReadingListEditor() {
                           key: `${item.versionId}-new`,
                           section: rows.at(-1)?.section ?? '',
                           note: '',
+                          dueOn: '',
                           versionId: item.versionId,
                           label: `${item.title} · phiên bản ${item.versionNo}`,
                         },
