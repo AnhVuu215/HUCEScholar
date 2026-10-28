@@ -43,4 +43,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 ## Chưa làm
 
 - Xuất ra PDF/DOCX; chọn gộp theo môn thay vì theo tài liệu.
-- Sửa/xóa ghi chú ngay trên Sổ tay; tìm không dấu trong Sổ tay.
+- Tìm không dấu trong Sổ tay. Sửa/xóa ngay trên Sổ tay đã có ở [LEARN-03b](2026-10-28-notebook-edit.md).

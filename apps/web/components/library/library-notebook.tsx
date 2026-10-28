@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../lib/auth';
 import { readerHref } from '../../lib/calendar';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../../lib/notebook';
 import { personalError } from '../../lib/reading';
 import { SelectField } from '../ui/select-field';
+import { NotebookEntryEdit } from './notebook-entry-edit';
 import {
   AnnotationFilterFields,
   AnnotationSummary,
@@ -28,7 +29,8 @@ import {
 
 /**
  * LEARN-03: the signed-in user's notes and highlights across every readable document, with the
- * reader notebook's filters plus a course. Editing stays in the reader; each entry links there.
+ * reader notebook's filters plus a course. Entries are edited or deleted in place (LEARN-03b);
+ * moving a pin or reshaping a highlight stays in the reader, which each entry links to.
  */
 export function LibraryNotebook() {
   const [fields, setFields] = useState<FilterState>(emptyFilterState);
@@ -52,8 +54,8 @@ export function LibraryNotebook() {
     <section className="content-section library-notebook" aria-labelledby="notebook-title">
       <h2 id="notebook-title">Ghi chú trên mọi tài liệu</h2>
       <p className="field-hint">
-        Ghi chú trang và đoạn tô riêng của bạn trên các tài liệu còn mở được. Sửa nội dung trong
-        trình đọc.
+        Ghi chú trang và đoạn tô riêng của bạn trên các tài liệu còn mở được. Sửa chữ, đổi màu hay
+        xóa ngay tại đây; đổi chỗ ghim hay vùng tô trong trình đọc.
       </p>
       <form
         method="post"
@@ -115,6 +117,8 @@ function NotebookResults({ filters }: { filters: NotebookFilters }) {
     failure,
   );
   const review = useReviewMark(setItems);
+  const [removed, setRemoved] = useState('');
+  const removedNotice = useRef<HTMLParagraphElement>(null);
   // Results arrive sorted by version, so consecutive entries share one document heading.
   const groups: {
     versionId: string;
@@ -149,6 +153,10 @@ function NotebookResults({ filters }: { filters: NotebookFilters }) {
           <Link href="/workspace/library">kho học liệu</Link> để ghi chú khi đọc.
         </p>
       )}
+      {/* Focus lands here after a delete, since the entry and its buttons are gone. */}
+      <p ref={removedNotice} role="status" className="field-hint" tabIndex={-1}>
+        {removed}
+      </p>
       {review.message && (
         <p role="status" className="field-hint">
           {review.message}
@@ -181,6 +189,27 @@ function NotebookResults({ filters }: { filters: NotebookFilters }) {
                     busy={review.marking === item.id}
                     onClick={() => void review.mark(item)}
                   />
+                  {group.material && (
+                    <NotebookEntryEdit
+                      item={item}
+                      onSaved={(saved) =>
+                        setItems((old) =>
+                          old.map((entry) =>
+                            entry.id === saved.id
+                              ? ({ ...entry, ...saved } as NotebookEntry)
+                              : entry,
+                          ),
+                        )
+                      }
+                      onDeleted={(gone) => {
+                        setItems((old) => old.filter((entry) => entry.id !== gone.id));
+                        setRemoved(
+                          `Đã xóa ${gone.kind === 'TEXT_HIGHLIGHT' ? 'vùng tô' : 'ghi chú'} · Trang ${gone.pageNumber} · ${title}.`,
+                        );
+                        requestAnimationFrame(() => removedNotice.current?.focus());
+                      }}
+                    />
+                  )}
                 </article>
               ))}
             </div>
