@@ -46,6 +46,8 @@ export type ReadingDeadline = {
   section: string;
   versionId: string;
   title: string;
+  /** CAL-04c: the reader has marked this version read (COURSE-02). */
+  read: boolean;
 };
 const day = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
@@ -173,7 +175,8 @@ function validDeadline(v: unknown): v is ReadingDeadline {
     Number.isInteger(v.position) &&
     typeof v.section === 'string' &&
     isNumericId(v.versionId) &&
-    typeof v.title === 'string'
+    typeof v.title === 'string' &&
+    typeof v.read === 'boolean'
   );
 }
 /** Due dates on calendar days [from, to) of the courses the reader follows. */
