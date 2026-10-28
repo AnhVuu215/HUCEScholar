@@ -643,7 +643,8 @@
 .calendar-chip button span {
   font-weight: 600;
 }
-.is-done > button {
+.is-done > button,
+.calendar-deadline.is-done > a:first-child {
   text-decoration: line-through;
   opacity: 0.75;
 }

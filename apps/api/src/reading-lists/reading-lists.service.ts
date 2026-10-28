@@ -386,8 +386,18 @@ export class ReadingListsService {
               take: MAX_DEADLINES + 1,
             })
           : [];
+        const shownRows = rows.slice(0, MAX_DEADLINES);
+        // CAL-04c: the reader's own COURSE-02 marks, so a read item looks done on the calendar.
+        const marked = new Set(
+          (
+            await tx.reading_marks.findMany({
+              where: { user_id: user.id, version_id: { in: shownRows.map((r) => r.version_id) } },
+              select: { version_id: true },
+            })
+          ).map((m) => m.version_id),
+        );
         return {
-          items: rows.slice(0, MAX_DEADLINES).map((r) => ({
+          items: shownRows.map((r) => ({
             dueOn: formatDate(r.due_on!),
             listId: String(r.reading_lists.id),
             listTitle: r.reading_lists.title,
@@ -400,6 +410,7 @@ export class ReadingListsService {
             section: r.section,
             versionId: String(r.version_id),
             title: r.document_versions.title,
+            read: marked.has(r.version_id),
           })),
           truncated: rows.length > MAX_DEADLINES,
         };
