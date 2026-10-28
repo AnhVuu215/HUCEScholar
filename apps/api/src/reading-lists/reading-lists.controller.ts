@@ -4,6 +4,7 @@ import { SessionGuard } from '../auth/session.guard';
 import {
   FollowReadingListsDto,
   ReadingDeadlinesDto,
+  ReadMarkDto,
   SaveReadingListDto,
 } from './reading-lists.dto';
 import { ReadingListsService } from './reading-lists.service';
@@ -31,6 +32,14 @@ export class ReadingListsController {
     @Body() body: FollowReadingListsDto,
   ) {
     return this.lists.follow(req.user, courseId, body);
+  }
+  @Put('read/:versionId') markRead(
+    @Req() req: AuthenticatedRequest,
+    @Param('courseId') courseId: string,
+    @Param('versionId') versionId: string,
+    @Body() body: ReadMarkDto,
+  ) {
+    return this.lists.markRead(req.user, courseId, versionId, body);
   }
 }
 

@@ -62,5 +62,5 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 ## Chưa làm
 
 - Kéo thả để sắp xếp, sao chép danh sách từ học kỳ trước, nhiều danh sách mỗi môn.
-- Sinh viên đánh dấu đã đọc từng mục; nối với "Học tiếp" ở trang đầu.
+- Đánh dấu đã đọc từng mục đã có ở [COURSE-02](2026-10-28-reading-marks.md). Chưa nối với "Học tiếp" ở trang đầu.
 - Thông báo cho người đọc khi danh sách đổi (NOTIFY-01 chưa có loại này).
