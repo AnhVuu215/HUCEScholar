@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { libraryCourses } from '../../lib/library';
 import {
   followReadingLists,
+  markRead,
   publishedReadingLists,
   readingListError,
+  type ReadingItem,
   type ReadingList,
 } from '../../lib/reading-lists';
 import { SelectField } from '../ui/select-field';
-import { ReadingListItems } from './reading-list-view';
+import { ReadingListItems, readCount } from './reading-list-view';
 
 type Courses = { id: string; code: string; name: string }[];
 
@@ -25,6 +27,8 @@ export function ReadingListBrowser({ initialCourse }: { initialCourse?: string }
   const [saving, setSaving] = useState(false);
   const [followNotice, setFollowNotice] = useState('');
   const [followError, setFollowError] = useState('');
+  const [readNotice, setReadNotice] = useState('');
+  const [readError, setReadError] = useState('');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -75,11 +79,44 @@ export function ReadingListBrowser({ initialCourse }: { initialCourse?: string }
       setSaving(false);
     }
   }
+  /** The mark is per version, so every list naming it flips together. */
+  function setRead(versionId: string, read: boolean) {
+    setLists(
+      (v) =>
+        v && {
+          ...v,
+          items: v.items.map((list) => ({
+            ...list,
+            items: list.items.map((i) =>
+              i.versionId === versionId && i.material ? { ...i, read } : i,
+            ),
+          })),
+        },
+    );
+  }
+  async function toggleRead(item: ReadingItem, read: boolean) {
+    // The box flips at once; a failed request puts it back.
+    setRead(item.versionId, read);
+    setReadNotice('');
+    setReadError('');
+    try {
+      const saved = await markRead(courseId, item.versionId, read);
+      setRead(item.versionId, saved);
+      setReadNotice(
+        `${saved ? 'Đã đánh dấu đã đọc' : 'Đã bỏ dấu đã đọc'}: ${item.material?.title ?? ''}.`,
+      );
+    } catch (failure) {
+      setRead(item.versionId, !read);
+      setReadError(readingListError(failure));
+    }
+  }
   function choose(value: string) {
     setLists(null);
     setError('');
     setFollowNotice('');
     setFollowError('');
+    setReadNotice('');
+    setReadError('');
     setCourseId(value);
     const url = new URL(window.location.href);
     if (value) url.searchParams.set('courseId', value);
@@ -159,6 +196,16 @@ export function ReadingListBrowser({ initialCourse }: { initialCourse?: string }
               {followError}
             </p>
           )}
+          <p className="field-hint">
+            Đánh dấu &quot;Đã đọc&quot; ở từng tài liệu để theo dõi tiến độ; giảng viên không thấy
+            dấu này.
+          </p>
+          {readNotice && <p role="status">{readNotice}</p>}
+          {readError && (
+            <p role="alert" className="form-error">
+              {readError}
+            </p>
+          )}
         </div>
       )}
       {!courseId || error || !lists ? null : lists.items.length === 0 ? (
@@ -166,15 +213,23 @@ export function ReadingListBrowser({ initialCourse }: { initialCourse?: string }
           Môn {lists.course} chưa có danh sách đọc nào được công bố.
         </p>
       ) : (
-        lists.items.map((list) => (
-          <article key={list.id} className="reading-list" aria-label={list.title}>
-            <h3>{list.title}</h3>
-            <p className="field-hint">
-              {list.owner.name} · Cập nhật {new Date(list.updatedAt).toLocaleDateString('vi-VN')}
-            </p>
-            <ReadingListItems items={list.items} />
-          </article>
-        ))
+        lists.items.map((list) => {
+          const progress = readCount(list.items);
+          return (
+            <article key={list.id} className="reading-list" aria-label={list.title}>
+              <h3>{list.title}</h3>
+              <p className="field-hint">
+                {list.owner.name} · Cập nhật {new Date(list.updatedAt).toLocaleDateString('vi-VN')}
+              </p>
+              {progress.total > 0 && (
+                <p className="reading-progress-count">
+                  Đã đọc {progress.read}/{progress.total} tài liệu
+                </p>
+              )}
+              <ReadingListItems items={list.items} onRead={(i, r) => void toggleRead(i, r)} />
+            </article>
+          );
+        })
       )}
     </section>
   );

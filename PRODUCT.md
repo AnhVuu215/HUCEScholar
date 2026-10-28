@@ -32,6 +32,8 @@ LEARN-03b local: sửa chữ (và màu vùng tô) hay xóa từng mục ngay tr�
 
 LEARN-03c local: tìm ghi chú (reader, Sổ tay, file xuất) không dấu: gõ không dấu khớp cả chữ có dấu, gõ có dấu thì khớp đúng dấu; so ở cùng dạng Unicode. Dùng lại fold_vi của SEARCH-01, không đổi API/schema. Xem docs/implementation/2026-10-28-notebook-unaccent-search.md.
 
+COURSE-02 local: người đọc tự đánh dấu "Đã đọc" từng tài liệu trong danh sách đọc và thấy "Đã đọc X/Y tài liệu" mỗi danh sách. Dấu gắn với phiên bản, riêng tư (giảng viên không thấy), chỉ trên tài liệu của danh sách đã công bố và còn đọc được. Bảng mới reading_marks. Xem docs/implementation/2026-10-28-reading-marks.md.
+
 READ-01 local: tìm chữ trong PDF theo lô, kết quả trước/tiếp và dấu tạm theo text layer; mục lục chỉ mở đích trang nội bộ qua guard. Đọc tập trung ẩn chrome/panel nhưng giữ bản soạn; mở ghi chú sẽ hiện editor, Escape đóng công cụ trước khi thoát. Chưa OCR/tìm không dấu. Xem docs/implementation/2026-10-18-reader-find-focus.md.
 
 SEARCH-02 local: kho ưu tiên tìm kiếm/môn, thu gọn nguồn/loại inline và có xóa lọc. Bộ lọc công khai và trang ở URL đã kiểm tra giá trị; Back/Forward khôi phục form/kết quả, request cũ bị hủy. Ghi chú riêng không nằm trong URL. Chi tiết và bàn giao palette/zoom cho PREF-01: docs/implementation/2026-10-18-library-catalog.md.

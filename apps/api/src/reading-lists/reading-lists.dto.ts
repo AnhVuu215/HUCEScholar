@@ -35,6 +35,10 @@ export class SaveReadingListDto {
   @Type(() => ReadingItemDto)
   items!: ReadingItemDto[];
 }
+/** COURSE-02: the reader's own "đã đọc" mark. */
+export class ReadMarkDto {
+  @IsBoolean() read!: boolean;
+}
 export class FollowReadingListsDto {
   @IsBoolean() following!: boolean;
 }
