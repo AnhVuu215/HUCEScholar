@@ -38,4 +38,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test`:
 ## Chưa làm
 
 - Dời ghim, chọn lại vùng tô từ Sổ tay; sửa nhiều mục một lúc.
-- Tìm không dấu trong Sổ tay.
+- Tìm không dấu đã có ở [LEARN-03c](2026-10-28-notebook-unaccent-search.md).

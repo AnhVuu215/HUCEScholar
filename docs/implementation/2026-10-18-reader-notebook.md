@@ -1,6 +1,6 @@
 # LEARN-01 — Sổ ghi chú toàn phiên bản
 
-Trong reader, chọn **Toàn tài liệu** để tìm lại ghi chú trang hoặc đoạn tô của chính mình trên mọi trang PDF của phiên bản đang mở. Tìm trong nội dung và chữ đã tô; lọc loại và tám màu. Tìm cụm chữ có dấu, không phân biệt hoa thường; `%`, `_`, `\` là ký tự thường. Không có tìm không dấu hoặc sổ tay toàn kho.
+Trong reader, chọn **Toàn tài liệu** để tìm lại ghi chú trang hoặc đoạn tô của chính mình trên mọi trang PDF của phiên bản đang mở. Tìm trong nội dung và chữ đã tô; lọc loại và tám màu. Tìm cụm chữ có dấu, không phân biệt hoa thường; `%`, `_`, `\` là ký tự thường. Không có tìm không dấu hoặc sổ tay toàn kho (nay đã có ở [LEARN-03c](2026-10-28-notebook-unaccent-search.md) và [LEARN-03](2026-10-26-library-notebook.md)).
 
 **Trang này** và **Toàn tài liệu** giữ cả hai editor mounted. Duyệt/lọc không bỏ bản soạn. Chọn kết quả đi qua guard một lần, chuyển đúng trang và focus editor sau khi PDF render. Ghi chú được mở bằng ID/revision đã nhận; anchor không đổi. Nếu tab khác sửa/xóa, API CAS hiện hữu chặn ghi đè và giữ bản soạn. Có thể quay lại sổ, làm mới và mở bản hiện hành.
 
