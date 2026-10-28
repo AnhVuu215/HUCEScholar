@@ -138,11 +138,13 @@ function lanes(items: CalendarItem[], day: Date) {
   return segments;
 }
 
+/** CAL-04c: the name says when the reader has already marked the item read. */
+const deadlineLabel = (d: ReadingDeadline) => `Hạn đọc: ${d.title}${d.read ? ' · Đã đọc' : ''}`;
 /** CAL-04b: a lecturer's due date on a followed course's reading list; read-only here. */
 function Deadline({ deadline }: { deadline: ReadingDeadline }) {
-  const label = `Hạn đọc: ${deadline.title}`;
+  const label = deadlineLabel(deadline);
   return (
-    <div className="calendar-chip calendar-deadline">
+    <div className={`calendar-chip calendar-deadline${deadline.read ? ' is-done' : ''}`}>
       <Link
         href={`/workspace/library/versions/${deadline.versionId}`}
         title={`${label} · ${deadline.course.code} · ${deadline.listTitle}${
@@ -746,9 +748,12 @@ export function CalendarBoard() {
                     </h3>
                     <ul>
                       {due.map((d) => (
-                        <li key={`${d.listId}-${d.position}`} className="calendar-deadline">
+                        <li
+                          key={`${d.listId}-${d.position}`}
+                          className={`calendar-deadline${d.read ? ' is-done' : ''}`}
+                        >
                           <Link href={`/workspace/library/versions/${d.versionId}`}>
-                            Hạn đọc: {d.title}
+                            {deadlineLabel(d)}
                           </Link>
                           <span className="field-hint">
                             {d.course.code} · {d.listTitle}
