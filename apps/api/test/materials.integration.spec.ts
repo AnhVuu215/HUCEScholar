@@ -181,6 +181,10 @@ describe('private material drafts', () => {
         await db.query('DELETE FROM hucescholar.calendar_items WHERE user_id=ANY($1::bigint[])', [
           ids,
         ]);
+        await db.query(
+          'DELETE FROM hucescholar.reading_list_follows WHERE user_id=ANY($1::bigint[])',
+          [ids],
+        );
         await db.query('DELETE FROM hucescholar.reading_lists WHERE owner_id=ANY($1::bigint[])', [
           ids,
         ]);
@@ -780,6 +784,7 @@ describe('private material drafts', () => {
       position: 2,
       section: 'Tuần 2',
       note: '',
+      dueOn: null,
       versionId: second.versionId,
       material: null,
     });
@@ -803,6 +808,135 @@ describe('private material drafts', () => {
       );
     }
     expect((await listed()).items.filter(mine)).toHaveLength(1);
+  });
+  it('CAL-04b: due dates show on the calendar only for followed courses and readable items', async () => {
+    const first = await readingFixture();
+    const second = await readingFixture();
+    const course = courses[0];
+    const mineList = async () =>
+      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item;
+    const revision = (await mineList())?.revision ?? 0;
+    const items = [
+      { section: 'Tuần 1', versionId: first.versionId, note: '', dueOn: '2026-11-03' },
+      { section: 'Tuần 2', versionId: second.versionId, note: '', dueOn: '2026-11-10' },
+    ];
+    const list = { title: 'Danh sách có hạn', published: true, revision, items };
+    for (const dueOn of ['2026-02-30', '1999-12-31', '3/11/2026'])
+      expect(
+        (
+          await listWrite('lecturer', course, {
+            ...list,
+            items: [{ ...items[0], dueOn }],
+          })
+        ).status,
+      ).toBe(400);
+    const saved = await listWrite('lecturer', course, list);
+    expect(saved.status).toBe(200);
+    expect(saved.body.item.items.map((i: { dueOn: string }) => i.dueOn)).toEqual([
+      '2026-11-03',
+      '2026-11-10',
+    ]);
+    // Absent dueOn keeps working for older clients and clears the date.
+    const { dueOn: _omit, ...plain } = items[1];
+    void _omit;
+    const cleared = await listWrite('lecturer', course, {
+      ...list,
+      revision: revision + 1,
+      items: [items[0], plain],
+    });
+    expect(cleared.body.item.items[1].dueOn).toBeNull();
+    await listWrite('lecturer', course, { ...list, revision: revision + 2 });
+
+    const deadlines = '/api/v1/calendar/reading-deadlines';
+    const range = (from = '2026-11-01', to = '2026-12-01') =>
+      agents.student.get(deadlines).query({ from, to });
+    const follow = async (name: string, following: boolean, id = course) => {
+      const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+      return agents[name]
+        .put(`/api/v1/courses/${id}/reading-lists/follow`)
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send({ following });
+    };
+    const titles = async (from?: string, to?: string) =>
+      ((await range(from, to).expect(200)).body.items as { versionId: string; dueOn: string }[])
+        .filter((i) => [first.versionId, second.versionId].includes(i.versionId))
+        .map((i) => i.dueOn);
+    await follow('student', false);
+    expect(await titles()).toEqual([]);
+    expect(
+      (await agents.student.get(`/api/v1/courses/${course}/reading-lists`)).body.following,
+    ).toBe(false);
+    await agents.student
+      .put(`/api/v1/courses/${course}/reading-lists/follow`)
+      .send({ following: true })
+      .expect(403);
+    expect((await follow('student', true)).body).toEqual({ following: true });
+    expect((await follow('student', true)).status).toBe(200);
+    expect(
+      (await agents.student.get(`/api/v1/courses/${course}/reading-lists`)).body.following,
+    ).toBe(true);
+    const shown = (await range().expect(200)).body.items.filter(
+      (i: { versionId: string }) => i.versionId === first.versionId,
+    );
+    expect(shown).toEqual([
+      {
+        dueOn: '2026-11-03',
+        listId: saved.body.item.id,
+        listTitle: 'Danh sách có hạn',
+        course: { id: course, code: expect.any(String), name: expect.any(String) },
+        position: 1,
+        section: 'Tuần 1',
+        versionId: first.versionId,
+        title: expect.any(String),
+      },
+    ]);
+    expect(await titles()).toEqual(['2026-11-03', '2026-11-10']);
+    // `to` is exclusive.
+    expect(await titles('2026-11-03', '2026-11-10')).toEqual(['2026-11-03']);
+    // Following is per reader: the lecturer has not followed this course.
+    expect(
+      (await agents.lecturer.get(deadlines).query({ from: '2026-11-01', to: '2026-12-01' })).body
+        .items,
+    ).toEqual([]);
+    // Hidden material drops out without revealing its title, and returns when shown again.
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [second.id]);
+    expect(await titles()).toEqual(['2026-11-03']);
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
+      second.id,
+    ]);
+    // A draft list or a revoked assignment withdraws its deadlines.
+    await listWrite('lecturer', course, { ...list, published: false, revision: revision + 3 });
+    expect(await titles()).toEqual([]);
+    await listWrite('lecturer', course, { ...list, revision: revision + 4 });
+    await db.query(
+      'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2 WHERE lecturer_id=$1 AND course_id=$3 AND revoked_at IS NULL',
+      [users.lecturer, users.admin, course],
+    );
+    try {
+      expect(await titles()).toEqual([]);
+    } finally {
+      await db.query(
+        'UPDATE hucescholar.lecturer_assignments SET revoked_at=NULL,revoked_by=NULL WHERE lecturer_id=$1 AND course_id=$2',
+        [users.lecturer, course],
+      );
+    }
+    expect(await titles()).toEqual(['2026-11-03', '2026-11-10']);
+    // Bad ranges and unknown courses.
+    for (const [from, to] of [
+      ['2026-11-01', '2026-11-01'],
+      ['2026-11-01', '2027-01-03'],
+      ['2026-02-30', '2026-03-05'],
+      ['2026-11-01', 'x'],
+    ])
+      expect((await range(from, to)).status).toBe(400);
+    expect((await follow('student', true, '999999999')).status).toBe(404);
+    await request(app.getHttpServer())
+      .get(deadlines)
+      .query({ from: '2026-11-01', to: '2026-12-01' })
+      .expect(401);
+    expect((await follow('student', false)).body).toEqual({ following: false });
+    expect(await titles()).toEqual([]);
   });
   describe('CAL-01 private study calendar', () => {
     const items = '/api/v1/calendar/items';

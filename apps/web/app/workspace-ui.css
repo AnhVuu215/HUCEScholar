@@ -420,6 +420,9 @@
 .reading-editor-items > li {
   overflow-wrap: anywhere;
 }
+.reading-due {
+  font-weight: 600;
+}
 .reading-note {
   color: var(--muted);
   white-space: pre-wrap;
@@ -611,6 +614,23 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+}
+/* CAL-04b: reading-list due dates are read-only links with a dashed outline. */
+.calendar-deadline {
+  --cal-bg: #fff;
+  --cal-ink: #7d2a22;
+  --cal-bar: #b8433a;
+  outline: 1px dashed var(--cal-bar);
+  outline-offset: -1px;
+}
+.calendar-chip a {
+  min-width: 0;
+  padding: 5px 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .calendar-chip button span {
   font-weight: 600;
