@@ -88,9 +88,17 @@ export async function exportNotes(versionId: string, format: NotesExportFormat) 
     {},
     20_000,
   );
+  return downloadedFile(response, 'ghi-chu', format);
+}
+/** The file an export response carries, named by its header or a fallback. */
+export async function downloadedFile(
+  response: Response,
+  fallback: string,
+  format: NotesExportFormat,
+) {
   const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1];
   return {
     blob: await response.blob(),
-    name: name ?? `ghi-chu.${format === 'text' ? 'txt' : 'md'}`,
+    name: name ?? `${fallback}.${format === 'text' ? 'txt' : 'md'}`,
   };
 }

@@ -10,7 +10,12 @@ import {
   type SetStateAction,
 } from 'react';
 import { ApiError } from '../../lib/auth';
-import { setReviewLater, type AnnotationFilters, type AnnotationItem } from '../../lib/annotations';
+import {
+  setReviewLater,
+  type AnnotationFilters,
+  type AnnotationItem,
+  type NotesExportFormat,
+} from '../../lib/annotations';
 import { highlightColors, highlightColorLabel, isHighlightColor } from '../../lib/highlights';
 import { personalError } from '../../lib/reading';
 import { SelectField } from '../ui/select-field';
@@ -227,5 +232,62 @@ export function AnnotationSummary({ item }: { item: AnnotationItem }) {
       {item.kind === 'TEXT_HIGHLIGHT' && <blockquote>{item.anchor.quote}</blockquote>}
       {item.content && <p className="note-content">{item.content}</p>}
     </>
+  );
+}
+
+/**
+ * EXPORT-01/02: Markdown and text download buttons. `download` builds the file; the API
+ * re-checks access, and an error becomes a sentence here instead of a saved error page.
+ */
+export function NotesExport({
+  download,
+  tooLarge,
+  label = 'Tải ghi chú của bạn',
+}: {
+  download: (format: NotesExportFormat) => Promise<{ blob: Blob; name: string }>;
+  tooLarge: string;
+  label?: string;
+}) {
+  const [pending, setPending] = useState<NotesExportFormat | null>(null);
+  const [message, setMessage] = useState('');
+  async function save(format: NotesExportFormat) {
+    setPending(format);
+    setMessage('');
+    try {
+      const file = await download(format);
+      const url = URL.createObjectURL(file.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      setMessage('Đã tạo file ghi chú.');
+    } catch (failure) {
+      setMessage(
+        failure instanceof ApiError && failure.code === 'EXPORT_TOO_LARGE'
+          ? tooLarge
+          : failure instanceof ApiError
+            ? personalError(failure)
+            : 'Chưa tải được file ghi chú. Kiểm tra kết nối rồi thử lại.',
+      );
+    } finally {
+      setPending(null);
+    }
+  }
+  return (
+    <div className="notebook-export" role="group" aria-label={label}>
+      <span>{label}:</span>
+      <button className="text-button" disabled={!!pending} onClick={() => void save('markdown')}>
+        {pending === 'markdown' ? 'Đang tạo…' : 'Markdown (.md)'}
+      </button>
+      <button className="text-button" disabled={!!pending} onClick={() => void save('text')}>
+        {pending === 'text' ? 'Đang tạo…' : 'Văn bản (.txt)'}
+      </button>
+      {message && (
+        <p role="status" className="field-hint">
+          {message}
+        </p>
+      )}
+    </div>
   );
 }

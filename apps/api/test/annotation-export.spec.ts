@@ -1,4 +1,8 @@
-import { escapeMarkdown, exportAnnotations } from '../src/materials/annotation-export';
+import {
+  escapeMarkdown,
+  exportAnnotations,
+  exportNotebook,
+} from '../src/materials/annotation-export';
 
 const source = {
   title: 'Giáo trình # [Cơ học](javascript:x)',
@@ -66,5 +70,23 @@ describe('annotation export', () => {
     expect(exportAnnotations(source, [], 'markdown')).toContain(
       'Chưa có ghi chú hoặc đoạn tô nào.',
     );
+  });
+  it('EXPORT-02: writes one section per document in the given order with the filters', () => {
+    const documents = [
+      { ...source, rows },
+      { title: 'Bài tập', authors: 'B', versionNo: 1, rows: [rows[0]] },
+    ];
+    const meta = { filters: 'có chữ “[x](y)”', exportedAt: source.exportedAt };
+    const md = exportNotebook(documents, meta, 'markdown');
+    expect(md.startsWith('# Sổ tay ghi chú\n')).toBe(true);
+    expect(md).toContain('- Bộ lọc: có chữ “\\[x\\]\\(y\\)”');
+    expect(md).toContain('## Giáo trình \\# \\[Cơ học\\]\\(javascript:x\\) · phiên bản 3');
+    expect(md.indexOf('### Trang 2')).toBeLessThan(md.indexOf('### Trang 4'));
+    expect(md.indexOf('· phiên bản 3')).toBeLessThan(md.indexOf('## Bài tập · phiên bản 1'));
+    expect(md).not.toMatch(/<script>|\]\(https:/);
+    const text = exportNotebook(documents, meta, 'text');
+    expect(text).toContain('Bộ lọc: có chữ “[x](y)”');
+    expect(text).toContain('=== Bài tập · Phiên bản 1 ===\nTác giả: B\n\nTRANG 4\n- Ghi chú trang');
+    expect(exportNotebook([], meta, 'text')).toContain('Chưa có ghi chú hoặc đoạn tô nào.');
   });
 });

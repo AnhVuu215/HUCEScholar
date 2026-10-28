@@ -46,3 +46,7 @@ export class NotebookSearchDto extends AnnotationSearchDto {
   @Matches(/^[1-9]\d{0,18}$/)
   courseId?: string;
 }
+/** EXPORT-02: the notebook's filters (paging fields are ignored) and a file format. */
+export class NotebookExportDto extends NotebookSearchDto {
+  @IsIn(['markdown', 'text']) format: 'markdown' | 'text' = 'markdown';
+}

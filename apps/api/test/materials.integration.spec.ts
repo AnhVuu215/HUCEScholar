@@ -3917,11 +3917,50 @@ describe('private material drafts', () => {
     expect(
       (await request(app.getHttpServer()).get('/api/v1/personal-library/notebook/courses')).status,
     ).toBe(401);
+    // EXPORT-02: the same filters as one file, newest document first, hidden one left out.
+    const exportNotes = (body: object, who = 'student') =>
+      readingWrite(who, '/api/v1/personal-library/notebook/export', body);
+    const md = await exportNotes({ query: token, format: 'markdown' });
+    expect(md.status).toBe(200);
+    expect(md.headers['content-type']).toBe('text/markdown; charset=utf-8');
+    expect(md.headers['content-disposition']).toBe('attachment; filename="so-tay-ghi-chu.md"');
+    expect(md.headers['cache-control']).toContain('no-store');
+    expect(md.text).toContain(`- Bộ lọc: có chữ “${token}”`);
+    expect(md.text.indexOf(`${token} ý chính`)).toBeLessThan(md.text.indexOf(`${token} đầu`));
+    expect(md.text.indexOf('### Trang 1')).toBeLessThan(md.text.indexOf('### Trang 3'));
+    expect(md.text).toContain(`${token} cuối 100%\\_ off`);
+    expect(md.text).not.toContain('tài liệu ẩn');
+    expect(md.text).not.toContain('không chứa mã tìm');
+    const text = await exportNotes({
+      query: token,
+      kind: 'PAGE_NOTE',
+      reviewLater: true,
+      courseId: String(courses[0]),
+      format: 'text',
+    });
+    expect(text.headers['content-type']).toBe('text/plain; charset=utf-8');
+    expect(text.text).toMatch(/Bộ lọc: môn .+ · chỉ ghi chú trang · cần xem lại · có chữ/);
+    expect(text.text).toContain(`- Ghi chú trang: ${token} đầu`);
+    expect(text.text).not.toContain(`${token} cuối`);
+    expect((await exportNotes({ query: token, format: 'markdown' }, 'other')).text).toContain(
+      'Chưa có ghi chú hoặc đoạn tô nào.',
+    );
+    for (const body of [{ format: 'pdf' }, { kind: 'PAGE_NOTE', color: '#A5D6A7' }, { owner: '1' }])
+      expect((await exportNotes(body)).status).toBe(400);
+    expect(
+      (
+        await agents.student
+          .post('/api/v1/personal-library/notebook/export')
+          .set('Origin', origin)
+          .send({})
+      ).status,
+    ).toBe(403);
     // Showing the document again lists its note again.
     await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
       hidden.id,
     ]);
     expect(ids(await search({ query: token }))).toContain(secret.id);
+    expect((await exportNotes({ query: token })).text).toContain(`${token} tài liệu ẩn`);
   });
   it('pins a page note to a point on its page, moves and unpins it (READ-04)', async () => {
     const { path } = await readingFixture();
