@@ -322,6 +322,17 @@
 .notebook-group .notebook-results {
   margin-top: 8px;
 }
+/* LEARN-03b: edit or delete an entry in place. */
+.notebook-entry-actions {
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+.notebook-entry-editor {
+  margin: 12px 0;
+}
+.notebook-entry-editor .field-hint {
+  margin: 8px 0;
+}
 @media (min-width: 768px) {
   .library-notebook .notebook-filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));

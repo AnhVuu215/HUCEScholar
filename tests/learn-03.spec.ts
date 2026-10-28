@@ -137,3 +137,112 @@ test('EXPORT-02: the notebook downloads what the last search filtered as one fil
     );
   }
 });
+
+test('LEARN-03b: notes and highlights are edited and deleted in place, at the searched revision', async ({
+  page,
+}) => {
+  const token = randomUUID().slice(0, 8);
+  const first = await openReaderFixture(page, 'learn03b');
+  const second = await openReaderFixture(page, 'learn03b');
+  const headers = await readerHeaders(page);
+  const created = await page.request.post(`${first.path}/notes`, {
+    headers,
+    data: {
+      pageNumber: 2,
+      content: `${token} ghi chú gốc`,
+      position: { x: 0.4, y: 0.6 },
+      requestId: randomUUID(),
+    },
+  });
+  expect(created.status()).toBe(201);
+  const note = (await created.json()).item;
+  const marked = await page.request.post(`${second.path}/highlights`, {
+    headers,
+    data: {
+      pageNumber: 1,
+      content: `${token} đoạn tô gốc`,
+      color: '#FFF59D',
+      requestId: randomUUID(),
+      anchor: {
+        coordinateSpace: 'normalized-pdf-v1',
+        quote: 'HUCEScholar reader fixture',
+        quads: [[0.1, 0.9, 0.5, 0.9, 0.5, 0.87, 0.1, 0.87]],
+      },
+    },
+  });
+  expect(marked.status()).toBe(201);
+  const highlight = (await marked.json()).item;
+  const title = (
+    await (await page.request.get(`/api/v1/library/versions/${second.versionId}`)).json()
+  ).item.title;
+  await page.goto('/workspace/notebook');
+  await search(page, token);
+  await expect(notebook(page).getByRole('article')).toHaveCount(2);
+  const noteEntry = notebook(page).getByRole('article', { name: `Mục ghi chú ${note.id}` });
+  const markEntry = notebook(page).getByRole('article', { name: `Mục ghi chú ${highlight.id}` });
+
+  // Edit a page note's text; its pin on the page stays where it was.
+  await noteEntry.getByRole('button', { name: 'Sửa', exact: true }).click();
+  const noteText = noteEntry.getByLabel('Nội dung ghi chú', { exact: true });
+  await expect(noteText).toBeFocused();
+  await expect(noteEntry.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled();
+  await noteText.fill(`${token} ghi chú đã sửa`);
+  for (const width of [320, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await noteEntry.getByRole('button', { name: 'Lưu thay đổi' }).click();
+  await expect(noteEntry.getByRole('status')).toHaveText('Đã lưu ghi chú · Trang 2.');
+  await expect(noteEntry).toContainText('ghi chú đã sửa');
+  await expect(noteEntry.getByRole('button', { name: 'Sửa', exact: true })).toBeFocused();
+  const saved = (
+    await (await page.request.get(`${first.path}/notes?pageNumber=2`)).json()
+  ).items.find((item: { id: string }) => item.id === note.id);
+  expect(saved).toMatchObject({ content: `${token} ghi chú đã sửa`, position: { x: 0.4, y: 0.6 } });
+
+  // Edit a highlight's colour and text; its quote stays.
+  await markEntry.getByRole('button', { name: 'Sửa', exact: true }).click();
+  await markEntry.getByLabel('Ghi chú kèm đoạn tô (không bắt buộc)').fill('');
+  await markEntry.getByRole('combobox', { name: 'Màu tô', exact: true }).click();
+  await page.getByRole('option', { name: 'Xanh dương', exact: true }).click();
+  await markEntry.getByRole('button', { name: 'Lưu thay đổi' }).click();
+  await expect(markEntry.getByRole('status')).toHaveText('Đã lưu vùng tô · Trang 1.');
+  await expect(markEntry).toContainText('Đoạn tô · Xanh dương');
+  await expect(markEntry).toContainText('HUCEScholar reader fixture');
+  await expect(markEntry).not.toContainText('đoạn tô gốc');
+
+  // A change made elsewhere since the search keeps the draft and asks for a new search.
+  expect(
+    (
+      await page.request.patch(`${first.path}/notes/${note.id}`, {
+        headers,
+        data: { revision: saved.revision, content: `${token} sửa trong trình đọc` },
+      })
+    ).status(),
+  ).toBe(200);
+  await noteEntry.getByRole('button', { name: 'Sửa', exact: true }).click();
+  await noteText.fill(`${token} bản soạn cũ`);
+  await noteEntry.getByRole('button', { name: 'Lưu thay đổi' }).click();
+  await expect(noteEntry.getByRole('alert')).toContainText('đã được sửa ở nơi khác');
+  await expect(noteText).toHaveValue(`${token} bản soạn cũ`);
+  await noteEntry.getByRole('button', { name: 'Hủy', exact: true }).click();
+  await expect(noteEntry.getByRole('button', { name: 'Sửa', exact: true })).toBeFocused();
+
+  // Deleting asks first; keeping it returns focus, confirming removes the entry everywhere.
+  await markEntry.getByRole('button', { name: 'Xóa', exact: true }).click();
+  await expect(markEntry).toContainText('Xóa vùng tô và ghi chú kèm theo?');
+  await markEntry.getByRole('button', { name: 'Giữ lại', exact: true }).click();
+  await expect(markEntry.getByRole('button', { name: 'Xóa', exact: true })).toBeFocused();
+  await markEntry.getByRole('button', { name: 'Xóa', exact: true }).click();
+  await markEntry.getByRole('button', { name: 'Xác nhận xóa', exact: true }).click();
+  await expect(markEntry).toHaveCount(0);
+  const removed = notebook(page)
+    .getByRole('status')
+    .filter({ hasText: `Đã xóa vùng tô · Trang 1 · ${title}.` });
+  await expect(removed).toBeFocused();
+  await search(page, token);
+  await expect(notebook(page).getByRole('article')).toHaveCount(1);
+  await expect(noteEntry).toContainText('sửa trong trình đọc');
+});
