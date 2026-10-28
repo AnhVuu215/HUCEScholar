@@ -176,6 +176,9 @@ test('LEARN-03b: notes and highlights are edited and deleted in place, at the se
     await (await page.request.get(`/api/v1/library/versions/${second.versionId}`)).json()
   ).item.title;
   await page.goto('/workspace/notebook');
+  // LEARN-03c: typed without diacritics, the search still finds the note written with them.
+  await search(page, `${token} ghi chu goc`);
+  await expect(notebook(page).getByRole('article')).toHaveCount(1);
   await search(page, token);
   await expect(notebook(page).getByRole('article')).toHaveCount(2);
   const noteEntry = notebook(page).getByRole('article', { name: `Mục ghi chú ${note.id}` });
