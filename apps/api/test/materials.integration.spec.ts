@@ -1047,6 +1047,77 @@ describe('private material drafts', () => {
     });
     expect((await mark('student', first.versionId, true)).status).toBe(404);
   });
+  it('home: followed courses show the reader own progress and nearest unread due date', async () => {
+    const [first, second, third] = [
+      await readingFixture(),
+      await readingFixture(),
+      await readingFixture(),
+    ];
+    const course = courses[0];
+    const revision =
+      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+        ?.revision ?? 0;
+    const list = {
+      title: 'Danh sách trang đầu',
+      published: true,
+      revision,
+      items: [
+        { section: '', versionId: first.versionId, note: '', dueOn: '2026-11-10' },
+        { section: '', versionId: second.versionId, note: '', dueOn: '2026-11-03' },
+        { section: '', versionId: third.versionId, note: '' },
+      ],
+    };
+    expect((await listWrite('lecturer', course, list)).status).toBe(200);
+    const put = async (name: string, path: string, data: object) => {
+      const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+      return agents[name]
+        .put(`/api/v1/courses/${course}/reading-lists/${path}`)
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send(data)
+        .expect(200);
+    };
+    const following = '/api/v1/reading-lists/following';
+    const progress = async (name = 'student') =>
+      (await agents[name].get(following).expect(200)).body.items.find(
+        (i: { course: { id: string } }) => i.course.id === course,
+      );
+    await put('student', 'follow', { following: false });
+    expect(await progress()).toBeUndefined();
+    await put('student', 'follow', { following: true });
+    expect(await progress()).toEqual({
+      course: { id: course, code: expect.any(String), name: expect.any(String) },
+      total: 3,
+      read: 0,
+      next: { dueOn: '2026-11-03', versionId: second.versionId, title: expect.any(String) },
+    });
+    // Reading the earliest item moves "next" to the following unread due date.
+    await put('student', `read/${second.versionId}`, { read: true });
+    expect(await progress()).toMatchObject({
+      total: 3,
+      read: 1,
+      next: { dueOn: '2026-11-10', versionId: first.versionId },
+    });
+    // Hidden material leaves both the count and "next" without revealing its title.
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [first.id]);
+    expect(await progress()).toMatchObject({ total: 2, read: 1, next: null });
+    await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [first.id]);
+    // Marks and follows are private: the lecturer does not follow, so sees nothing here.
+    expect(await progress('lecturer')).toBeUndefined();
+    // A draft list withdraws everything; the course stays listed with nothing to read.
+    await listWrite('lecturer', course, { ...list, published: false, revision: revision + 1 });
+    expect(await progress()).toMatchObject({ total: 0, read: 0, next: null });
+    await listWrite('lecturer', course, { ...list, revision: revision + 2 });
+    await db.query('UPDATE hucescholar.courses SET is_active=false WHERE id=$1', [course]);
+    try {
+      expect(await progress()).toBeUndefined();
+    } finally {
+      await db.query('UPDATE hucescholar.courses SET is_active=true WHERE id=$1', [course]);
+    }
+    await request(app.getHttpServer()).get(following).expect(401);
+    await put('student', 'follow', { following: false });
+    expect(await progress()).toBeUndefined();
+  });
   describe('CAL-01 private study calendar', () => {
     const items = '/api/v1/calendar/items';
     const event = (overrides: object = {}) => ({

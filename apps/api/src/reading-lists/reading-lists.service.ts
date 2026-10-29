@@ -341,6 +341,75 @@ export class ReadingListsService {
   }
 
   /**
+   * The home "Danh sách đọc đang theo dõi": for each active course the reader follows, how many
+   * distinct listed versions they have marked read out of those they can open now, and the
+   * earliest due date among the unread ones. Hidden versions are left out of both, as in COURSE-02.
+   */
+  async following(actor: Profile) {
+    return this.db.$transaction(
+      async (tx) => {
+        const user = await this.reader(tx, actor);
+        const followed = await tx.reading_list_follows.findMany({
+          where: {
+            user_id: user.id,
+            courses: { is_active: true, faculties: { is_active: true } },
+          },
+          select: { courses: { select: { id: true, code: true, name: true } } },
+          orderBy: { courses: { code: 'asc' } },
+        });
+        const rows = followed.length
+          ? await tx.reading_list_items.findMany({
+              where: {
+                document_versions: available(),
+                reading_lists: {
+                  OR: followed.map((f) => ({ course_id: f.courses.id, ...shown(f.courses.id) })),
+                },
+              },
+              select: {
+                due_on: true,
+                version_id: true,
+                document_versions: { select: { title: true } },
+                reading_lists: { select: { course_id: true } },
+              },
+              orderBy: [{ list_id: 'asc' }, { position: 'asc' }],
+            })
+          : [];
+        const marked = new Set(
+          (
+            await tx.reading_marks.findMany({
+              where: { user_id: user.id, version_id: { in: rows.map((r) => r.version_id) } },
+              select: { version_id: true },
+            })
+          ).map((m) => m.version_id),
+        );
+        return {
+          items: followed.map(({ courses: course }) => {
+            const own = rows.filter((r) => r.reading_lists.course_id === course.id);
+            const versions = new Set(own.map((r) => r.version_id));
+            let next: (typeof own)[number] | undefined;
+            for (const r of own)
+              if (r.due_on && !marked.has(r.version_id) && (!next || r.due_on < next.due_on!))
+                next = r;
+            return {
+              course: { id: String(course.id), code: course.code, name: course.name },
+              total: versions.size,
+              read: [...versions].filter((v) => marked.has(v)).length,
+              next: next
+                ? {
+                    dueOn: formatDate(next.due_on!),
+                    versionId: String(next.version_id),
+                    title: next.document_versions.title,
+                  }
+                : null,
+            };
+          }),
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+
+  /**
    * Due dates in [from, to) on the published lists of active courses the reader follows. Items
    * the reader cannot open are left out, so a deadline never reveals a hidden title.
    */
