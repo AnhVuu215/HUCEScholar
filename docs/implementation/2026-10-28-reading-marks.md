@@ -49,5 +49,5 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test`:
 ## Chưa làm
 
 - Hiện tài liệu đã đọc khác đi trên Lịch học: đã có ở [CAL-04c](2026-10-28-read-deadlines.md).
-- Nối với "Học tiếp" ở trang đầu; tiến độ của mọi môn ở một chỗ.
+- Tiến độ của mọi môn ở một chỗ: đã có ở [COURSE-02b](2026-10-29-followed-reading-progress.md).
 - Giảng viên xem tiến độ tổng hợp của lớp: cần mô hình lớp và đồng ý của người học.

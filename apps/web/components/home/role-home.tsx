@@ -7,6 +7,13 @@ import { draftList, materialError, type DraftList } from '../../lib/materials';
 import { reviewError, reviewList, type ReviewList } from '../../lib/moderation';
 import { personalList, type PersonalList } from '../../lib/personal-library';
 import {
+  dueDay,
+  followedReadingLists,
+  formatDue,
+  readingListError,
+  type FollowedCourse,
+} from '../../lib/reading-lists';
+import {
   adminReports,
   reportCategories,
   reportError,
@@ -126,6 +133,62 @@ function ContinueReading() {
             </>
           );
         }}
+      </SectionState>
+    </section>
+  );
+}
+
+const loadFollowed = (signal: AbortSignal) => followedReadingLists(signal);
+
+function FollowedReadingLists() {
+  const followed = useSection<FollowedCourse[]>(loadFollowed, readingListError);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return (
+    <section className="content-section home-section" aria-labelledby="home-reading">
+      <h2 id="home-reading">Danh sách đọc đang theo dõi</h2>
+      <SectionState
+        section={followed}
+        loading="Đang tải tiến độ đọc…"
+        retryLabel="Tải lại tiến độ đọc"
+      >
+        {(items) =>
+          items.length ? (
+            <ul className="home-list home-reading" aria-label="Tiến độ theo môn">
+              {items.map(({ course, total, read, next }) => (
+                <li key={course.id}>
+                  <Link href={`/workspace/library/reading-lists?courseId=${course.id}`}>
+                    {course.code} · {course.name}
+                  </Link>
+                  <span className="field-hint">
+                    {' '}
+                    ·{' '}
+                    {total
+                      ? read === total
+                        ? `Đã đọc hết ${total} tài liệu`
+                        : `Đã đọc ${read}/${total} tài liệu`
+                      : 'Chưa có danh sách đọc đã công bố'}
+                  </span>
+                  {next && (
+                    <p className={dueDay(next.dueOn) < today ? 'home-overdue' : 'field-hint'}>
+                      {dueDay(next.dueOn) < today ? 'Quá hạn' : 'Hạn gần nhất'}{' '}
+                      {formatDue(next.dueOn)}:{' '}
+                      <Link href={`/workspace/library/versions/${next.versionId}`}>
+                        {next.title}
+                      </Link>
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>
+              Bạn chưa theo dõi môn nào. Mở{' '}
+              <Link href="/workspace/library/reading-lists">Danh sách đọc</Link>, chọn môn rồi bật
+              &quot;Hiện hạn đọc của môn này trên Lịch học&quot; để thấy tiến độ ở đây.
+            </p>
+          )
+        }
       </SectionState>
     </section>
   );
@@ -273,6 +336,7 @@ export function RoleHome({ role }: { role: Role }) {
   return (
     <div className="role-home">
       <ContinueReading />
+      <FollowedReadingLists />
       {role === 'ADMIN' ? (
         <>
           <ModerationQueue />
