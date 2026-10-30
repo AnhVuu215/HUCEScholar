@@ -52,3 +52,13 @@ export class ReadingDeadlinesController {
     return this.lists.deadlines(req.user, query);
   }
 }
+
+/** Reading progress of every course the signed-in reader follows, for the home page. */
+@Controller('reading-lists/following')
+@UseGuards(SessionGuard)
+export class FollowedReadingListsController {
+  constructor(private readonly lists: ReadingListsService) {}
+  @Get() following(@Req() req: AuthenticatedRequest) {
+    return this.lists.following(req.user);
+  }
+}
