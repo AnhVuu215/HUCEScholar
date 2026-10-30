@@ -1,6 +1,6 @@
 # SEARCH-03 — Xếp kết quả tìm học liệu theo độ khớp
 
-Ngày 30/10/2026. Nhánh `codex/search-ranking`, xây trên `main` sau PR #58. Roadmap ghi khoảng trống "Chưa xếp hạng kết quả" ở Kho học liệu: [SEARCH-02](2026-10-21-multiword-search.md) lọc đúng nhưng vẫn xếp mới cập nhật trước, nên tài liệu có đúng cụm ở tiêu đề có thể nằm sau tài liệu chỉ khớp tên tác giả.
+Ngày 30/10/2026. Nhánh `codex/search-ranking`, xây trên `main` sau PR #58, đã gộp `main` sau PR #59. Roadmap ghi khoảng trống "Chưa xếp hạng kết quả" ở Kho học liệu: [SEARCH-02](2026-10-21-multiword-search.md) lọc đúng nhưng vẫn xếp mới cập nhật trước, nên tài liệu có đúng cụm ở tiêu đề có thể nằm sau tài liệu chỉ khớp tên tác giả.
 
 Đã chốt theo lựa chọn khuyến nghị (đổi được ở API):
 
