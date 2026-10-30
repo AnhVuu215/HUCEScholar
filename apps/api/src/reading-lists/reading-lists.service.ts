@@ -344,6 +344,7 @@ export class ReadingListsService {
    * The home "Danh sách đọc đang theo dõi": for each active course the reader follows, how many
    * distinct listed versions they have marked read out of those they can open now, and the
    * earliest due date among the unread ones. Hidden versions are left out of both, as in COURSE-02.
+   * Courses come nearest due date first (COURSE-02c).
    */
   async following(actor: Profile) {
     return this.db.$transaction(
@@ -382,28 +383,34 @@ export class ReadingListsService {
             })
           ).map((m) => m.version_id),
         );
-        return {
-          items: followed.map(({ courses: course }) => {
-            const own = rows.filter((r) => r.reading_lists.course_id === course.id);
-            const versions = new Set(own.map((r) => r.version_id));
-            let next: (typeof own)[number] | undefined;
-            for (const r of own)
-              if (r.due_on && !marked.has(r.version_id) && (!next || r.due_on < next.due_on!))
-                next = r;
-            return {
-              course: { id: String(course.id), code: course.code, name: course.name },
-              total: versions.size,
-              read: [...versions].filter((v) => marked.has(v)).length,
-              next: next
-                ? {
-                    dueOn: formatDate(next.due_on!),
-                    versionId: String(next.version_id),
-                    title: next.document_versions.title,
-                  }
-                : null,
-            };
-          }),
-        };
+        const items = followed.map(({ courses: course }) => {
+          const own = rows.filter((r) => r.reading_lists.course_id === course.id);
+          const versions = new Set(own.map((r) => r.version_id));
+          let next: (typeof own)[number] | undefined;
+          for (const r of own)
+            if (r.due_on && !marked.has(r.version_id) && (!next || r.due_on < next.due_on!))
+              next = r;
+          return {
+            course: { id: String(course.id), code: course.code, name: course.name },
+            total: versions.size,
+            read: [...versions].filter((v) => marked.has(v)).length,
+            next: next
+              ? {
+                  dueOn: formatDate(next.due_on!),
+                  versionId: String(next.version_id),
+                  title: next.document_versions.title,
+                }
+              : null,
+          };
+        });
+        // Most urgent first: nearest unread due date (overdue ones lead), then courses with nothing
+        // due. The sort is stable, so ties keep course-code order; YYYY-MM-DD sorts as text.
+        items.sort((a, b) =>
+          a.next && b.next
+            ? a.next.dueOn.localeCompare(b.next.dueOn)
+            : Number(!a.next) - Number(!b.next),
+        );
+        return { items };
       },
       { isolationLevel: 'RepeatableRead' },
     );
