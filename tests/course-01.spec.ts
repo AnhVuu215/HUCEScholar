@@ -333,3 +333,92 @@ test('COURSE-02: a student marks listed materials as read and sees progress only
   await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
   await expect(list.getByText('Đã đọc 0/2 tài liệu')).toBeVisible();
 });
+
+test('home: followed courses show reading progress and the nearest unread due date', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const { code, courseId, titles } = await courseWithMaterials(page, 'course3');
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const key = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const past = new Date();
+  past.setDate(past.getDate() - 2);
+  const soon = new Date();
+  soon.setDate(soon.getDate() + 5);
+  await login(page, 'lecturer', 'course3');
+  const found = (await (await page.request.get(`/api/v1/library?search=${code}`)).json()).items as {
+    versionId: string;
+    title: string;
+  }[];
+  const versionOf = (title: string) => found.find((i) => i.title === title)!.versionId;
+  expect(
+    (
+      await page.request.put(`/api/v1/courses/${courseId}/reading-lists/mine`, {
+        headers: await readerHeaders(page),
+        data: {
+          title: 'Danh sách trang đầu',
+          published: true,
+          revision: 0,
+          items: [
+            { section: '', versionId: versionOf(titles[0]), note: '', dueOn: key(past) },
+            { section: '', versionId: versionOf(titles[1]), note: '', dueOn: key(soon) },
+          ],
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  await readerLogout(page);
+
+  await login(page, 'student', 'course3');
+  // A failed load says so in this section only and retries in place.
+  let fail = true;
+  await page.route('**/api/v1/reading-lists/following', (route) =>
+    fail ? route.abort('failed') : route.continue(),
+  );
+  await page.goto('/workspace/student');
+  const section = page.getByRole('region', { name: 'Danh sách đọc đang theo dõi' });
+  const row = section.getByRole('listitem').filter({ hasText: code });
+  await expect(section.getByRole('alert')).toContainText('Chưa kết nối được máy chủ');
+  fail = false;
+  await section.getByRole('button', { name: 'Tải lại tiến độ đọc', exact: true }).click();
+  await expect(section.getByRole('alert')).toHaveCount(0);
+  await expect(section.getByRole('status')).toHaveCount(0);
+  await expect(row).toHaveCount(0);
+  await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
+  await page.getByLabel('Hiện hạn đọc của môn này trên Lịch học').check();
+  await expect(page.getByText('Hạn đọc của môn này sẽ hiện trên Lịch học.')).toBeVisible();
+
+  await page.goto('/workspace/student');
+  await expect(row).toContainText('Đã đọc 0/2 tài liệu');
+  await expect(row.locator('.home-overdue')).toHaveText(
+    `Quá hạn ${past.toLocaleDateString('vi-VN')}: ${titles[0]}`,
+  );
+  for (const width of [320, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  // Reading the overdue item moves on to the next unread due date.
+  await page.getByRole('link', { name: `${code} · Môn có danh sách đọc`, exact: true }).click();
+  await expect(page).toHaveURL(`/workspace/library/reading-lists?courseId=${courseId}`);
+  const list = page.getByRole('article', { name: 'Danh sách trang đầu' });
+  await list.getByRole('checkbox', { name: `Đã đọc: ${titles[0]}`, exact: true }).check();
+  await expect(list.getByText('Đã đọc 1/2 tài liệu')).toBeVisible();
+  await page.goto('/workspace/student');
+  await expect(row).toContainText('Đã đọc 1/2 tài liệu');
+  await expect(row).toContainText(`Hạn gần nhất ${soon.toLocaleDateString('vi-VN')}: ${titles[1]}`);
+  await expect(row.locator('.home-overdue')).toHaveCount(0);
+  await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
+  await list.getByRole('checkbox', { name: `Đã đọc: ${titles[1]}`, exact: true }).check();
+  await expect(list.getByText('Đã đọc 2/2 tài liệu')).toBeVisible();
+  await page.goto('/workspace/student');
+  await expect(row).toContainText('Đã đọc hết 2 tài liệu');
+  await expect(row.getByRole('paragraph')).toHaveCount(0);
+  await row.getByRole('link').click();
+  await page.getByLabel('Hiện hạn đọc của môn này trên Lịch học').uncheck();
+  await expect(page.getByText('Đã bỏ hạn đọc khỏi Lịch học.')).toBeVisible();
+  await page.goto('/workspace/student');
+  await expect(section.getByRole('heading', { name: 'Danh sách đọc đang theo dõi' })).toBeVisible();
+  await expect(row).toHaveCount(0);
+});

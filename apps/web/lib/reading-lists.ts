@@ -194,6 +194,38 @@ export async function readingDeadlines(from: string, to: string, signal: AbortSi
     return body as { items: ReadingDeadline[]; truncated: boolean };
   throw new Error('Invalid reading deadlines.');
 }
+/** Home: the reader's progress on one followed course. */
+export type FollowedCourse = {
+  course: { id: string; code: string; name: string };
+  /** Distinct listed versions the reader can open now, and how many of those are marked read. */
+  total: number;
+  read: number;
+  /** The earliest due date among unread versions, or null. */
+  next: { dueOn: string; versionId: string; title: string } | null;
+};
+function validFollowed(v: unknown): v is FollowedCourse {
+  return (
+    isRecord(v) &&
+    isRecord(v.course) &&
+    isNumericId(v.course.id) &&
+    typeof v.course.code === 'string' &&
+    typeof v.course.name === 'string' &&
+    Number.isInteger(v.total) &&
+    Number.isInteger(v.read) &&
+    (v.next === null ||
+      (isRecord(v.next) &&
+        day(v.next.dueOn) &&
+        isNumericId(v.next.versionId) &&
+        typeof v.next.title === 'string'))
+  );
+}
+/** Reading progress of every course the signed-in reader follows. */
+export async function followedReadingLists(signal: AbortSignal) {
+  const body: unknown = await (await apiRequest('/reading-lists/following', { signal })).json();
+  if (isRecord(body) && Array.isArray(body.items) && body.items.every(validFollowed))
+    return body.items as FollowedCourse[];
+  throw new Error('Invalid followed reading lists.');
+}
 export function readingListError(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 401) {

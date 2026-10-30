@@ -339,6 +339,13 @@
 .home-group + .home-group {
   margin-top: 16px;
 }
+.home-reading p {
+  margin: 4px 0 0;
+}
+.home-overdue {
+  color: var(--danger);
+  font-weight: 600;
+}
 
 /* REPORT-01: reader report control and report histories. */
 .reader-report {
