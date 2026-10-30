@@ -269,8 +269,8 @@ describe('private material drafts', () => {
       .set('X-CSRF-Token', csrf)
       .send(data);
   }
-  async function create(name = 'lecturer') {
-    const result = await write(name, body());
+  async function create(name = 'lecturer', fields: object = {}) {
+    const result = await write(name, { ...body(), ...fields });
     expect(result.status).toBe(201);
     return result.body.item;
   }
@@ -2048,8 +2048,8 @@ describe('private material drafts', () => {
       .set('X-CSRF-Token', csrf)
       .send(data);
   }
-  async function safeDraft(name = 'student', pageCount = 1) {
-    const item = await create(name);
+  async function safeDraft(name = 'student', pageCount = 1, fields: object = {}) {
+    const item = await create(name, fields);
     const result = await upload(name, item.id, item.revision);
     expect(result.status).toBe(201);
     // Synthetic scanner fixture only; real ClamAV is covered by its opt-in suite.
@@ -2404,8 +2404,8 @@ describe('private material drafts', () => {
       .set('X-CSRF-Token', csrf)
       .send(data);
   }
-  async function submitted(name = 'student', pageCount = 1) {
-    const draft = await safeDraft(name, pageCount);
+  async function submitted(name = 'student', pageCount = 1, fields: object = {}) {
+    const draft = await safeDraft(name, pageCount, fields);
     expect((await publication(name, draft.id, 'submit', { revision: 2 })).status).toBe(201);
     const pending = (
       await db.query(
@@ -2546,12 +2546,53 @@ describe('private material drafts', () => {
     expect(folded.value).toBe(foldVietnamese(sample));
     expect(folded.value).not.toMatch(/[^a-z0-9 _%]/);
   });
+  it('library search ranks title phrase and title words above author-only matches', async () => {
+    const code = randomBytes(4).toString('hex');
+    // Published oldest to newest, so recency alone would give the reverse of the expected order.
+    const phrase = await published({ title: `Kinh tế ${code} vĩ mô`, authors: 'Tác giả A' });
+    const words = await published({ title: `Tế bào kinh điển ${code}`, authors: 'Tác giả B' });
+    const authorPhrase = await published({
+      title: `${code} tổng quan`,
+      authors: `Hội Kinh tế ${code}`,
+    });
+    const authorWords = await published({ title: `Bài tập ${code}`, authors: 'Kinh Tế' });
+    expect(
+      (
+        await db.query('SELECT folded_title FROM hucescholar.version_search WHERE version_id=$1', [
+          phrase.versionId,
+        ])
+      ).rows,
+    ).toEqual([{ folded_title: `kinh te ${code} vi mo` }]);
+    const order = async (search: string, extra = '') =>
+      (
+        await agents.student
+          .get(`/api/v1/library?search=${encodeURIComponent(search)}${extra}`)
+          .expect(200)
+      ).body as { items: { versionId: string }[]; total: number };
+    const all = await order(`KINH TẾ ${code}`, '&limit=100');
+    expect(all.total).toBe(4);
+    expect(all.items.map((item) => item.versionId)).toEqual(
+      [phrase, words, authorPhrase, authorWords].map((item) => item.versionId),
+    );
+    // Pages are cut after ranking; filters still apply and the total counts only filtered rows.
+    const second = await order(`kinh te ${code}`, '&limit=2&page=2');
+    expect(second.total).toBe(4);
+    expect(second.items.map((item) => item.versionId)).toEqual(
+      [authorPhrase, authorWords].map((item) => item.versionId),
+    );
+    expect((await order(`kinh te ${code}`, '&materialType=LECTURE')).total).toBe(0);
+    // Without a search the list stays newest first.
+    const newest = (await agents.student.get(`/api/v1/library?limit=4`).expect(200)).body.items.map(
+      (item: { versionId: string }) => item.versionId,
+    );
+    expect(newest[0]).toBe(authorWords.versionId);
+  });
   async function reportWrite(name: string, path: string, data: object) {
     const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
     return agents[name].post(path).set('Origin', origin).set('X-CSRF-Token', csrf).send(data);
   }
-  async function published() {
-    const item = await submitted();
+  async function published(fields: object = {}) {
+    const item = await submitted('student', 1, fields);
     expect((await review(item.requestId, decision())).status).toBe(201);
     return item;
   }

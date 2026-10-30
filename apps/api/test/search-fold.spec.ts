@@ -1,4 +1,9 @@
-import { foldedTerms, foldVietnamese, MAX_SEARCH_TERMS } from '../src/materials/search-fold';
+import {
+  foldedPhrase,
+  foldedTerms,
+  foldVietnamese,
+  MAX_SEARCH_TERMS,
+} from '../src/materials/search-fold';
 
 describe('Vietnamese search folding', () => {
   it('removes tones, vowel marks, đ and case', () => {
@@ -21,5 +26,9 @@ describe('Vietnamese search folding', () => {
     expect(foldedTerms(words.join(' '))).toEqual(
       words.slice(0, MAX_SEARCH_TERMS).map((w) => `%${w}%`),
     );
+  });
+  it('builds one ordered phrase pattern for ranking', () => {
+    expect(foldedPhrase('  Kinh\tTẾ  vĩ mô ')).toBe('%kinh te vi mo%');
+    expect(foldedPhrase('50% a_b')).toBe('%50\\% a\\_b%');
   });
 });
