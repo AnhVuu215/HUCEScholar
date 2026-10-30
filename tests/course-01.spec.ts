@@ -390,7 +390,7 @@ test('home: followed courses show reading progress and the nearest unread due da
 
   await page.goto('/workspace/student');
   await expect(row).toContainText('Đã đọc 0/2 tài liệu');
-  await expect(row.locator('.home-overdue')).toHaveText(
+  await expect(row.locator('.home-overdue')).toContainText(
     `Quá hạn ${past.toLocaleDateString('vi-VN')}: ${titles[0]}`,
   );
   for (const width of [320, 1440]) {
@@ -399,14 +399,24 @@ test('home: followed courses show reading progress and the nearest unread due da
       true,
     );
   }
-  // Reading the overdue item moves on to the next unread due date.
+  // Marking the overdue item right here moves on to the next unread due date; a failed save
+  // says so and leaves the progress as it was.
+  await page.route('**/reading-lists/read/*', (route) => route.abort('failed'), { times: 1 });
+  const markFirst = row.getByRole('button', { name: `Đánh dấu đã đọc: ${titles[0]}`, exact: true });
+  await markFirst.click();
+  await expect(section.getByRole('alert')).toContainText('Chưa kết nối được máy chủ');
+  await expect(row).toContainText('Đã đọc 0/2 tài liệu');
+  await markFirst.click();
+  await expect(section.getByRole('status')).toHaveText(`Đã đánh dấu đã đọc: ${titles[0]}.`);
+  await expect(section.getByRole('alert')).toHaveCount(0);
+  await expect(row).toContainText('Đã đọc 1/2 tài liệu');
   await page.getByRole('link', { name: `${code} · Môn có danh sách đọc`, exact: true }).click();
   await expect(page).toHaveURL(`/workspace/library/reading-lists?courseId=${courseId}`);
   const list = page.getByRole('article', { name: 'Danh sách trang đầu' });
-  await list.getByRole('checkbox', { name: `Đã đọc: ${titles[0]}`, exact: true }).check();
-  await expect(list.getByText('Đã đọc 1/2 tài liệu')).toBeVisible();
+  await expect(
+    list.getByRole('checkbox', { name: `Đã đọc: ${titles[0]}`, exact: true }),
+  ).toBeChecked();
   await page.goto('/workspace/student');
-  await expect(row).toContainText('Đã đọc 1/2 tài liệu');
   await expect(row).toContainText(`Hạn gần nhất ${soon.toLocaleDateString('vi-VN')}: ${titles[1]}`);
   await expect(row.locator('.home-overdue')).toHaveCount(0);
   await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
