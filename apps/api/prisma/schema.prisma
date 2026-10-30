@@ -515,6 +515,7 @@ model users {
 model version_search {
   version_id        BigInt            @id
   folded            String
+  folded_title      String
   document_versions document_versions @relation(fields: [version_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@schema("hucescholar")
