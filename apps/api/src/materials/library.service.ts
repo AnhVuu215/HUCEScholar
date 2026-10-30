@@ -20,7 +20,7 @@ import {
 import { LibraryListDto } from './library.dto';
 import { DOCX_MIME } from '../files/receive-docx';
 import { MaterialsService } from './materials.service';
-import { foldedTerms } from './search-fold';
+import { foldedPhrase, foldedTerms } from './search-fold';
 
 const selection = {
   id: true,
@@ -154,18 +154,42 @@ export class LibraryService {
   async list(query: LibraryListDto) {
     return this.db.$transaction(
       async (tx) => {
-        const where = await this.listWhere(tx, query);
+        const ranked = await this.searchRanked(tx, query);
+        const where = this.listWhere(query, ranked);
+        const skip = (query.page - 1) * query.limit;
+        if (!ranked) {
+          return {
+            items: (
+              await tx.document_versions.findMany({
+                where,
+                select: selection,
+                orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
+                skip,
+                take: query.limit,
+              })
+            ).map((row) => serialize(row)),
+            total: await tx.document_versions.count({ where }),
+            page: query.page,
+            limit: query.limit,
+          };
+        }
+        // Search results keep the rank order, so the filters run first and the page is cut here.
+        const allowed = new Set(
+          (await tx.document_versions.findMany({ where, select: { id: true } })).map((r) => r.id),
+        );
+        const ids = ranked.filter((id) => allowed.has(id));
+        const pageIds = ids.slice(skip, skip + query.limit);
+        const rows = await tx.document_versions.findMany({
+          where: { id: { in: pageIds } },
+          select: selection,
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
         return {
-          items: (
-            await tx.document_versions.findMany({
-              where,
-              select: selection,
-              orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
-              skip: (query.page - 1) * query.limit,
-              take: query.limit,
-            })
-          ).map((row) => serialize(row)),
-          total: await tx.document_versions.count({ where }),
+          items: pageIds.flatMap((id) => {
+            const row = byId.get(id);
+            return row ? [serialize(row)] : [];
+          }),
+          total: ids.length,
           page: query.page,
           limit: query.limit,
         };
@@ -173,22 +197,32 @@ export class LibraryService {
       { isolationLevel: 'RepeatableRead' },
     );
   }
-  private async listWhere(
-    tx: Prisma.TransactionClient,
-    query: LibraryListDto,
-  ): Promise<Prisma.document_versionsWhereInput> {
-    // Accent-insensitive title/author match ("giao trinh" finds "Giáo trình") against text folded
-    // on write (version_search), limited to current approved versions; every word must appear,
-    // in any order. Then narrows the regular Prisma filter by id.
+  /**
+   * Accent-insensitive title/author match ("giao trinh" finds "Giáo trình") against text folded
+   * on write (version_search), limited to current approved versions; every word must appear, in
+   * any order. Ids come back best match first: the exact phrase in the title, then more words in
+   * the title, then the exact phrase anywhere (title + authors), then newest. Null without search.
+   */
+  private async searchRanked(tx: Prisma.TransactionClient, query: LibraryListDto) {
     const terms = query.search ? foldedTerms(query.search) : [];
-    const matches = terms.length
-      ? await tx.$queryRaw<{ id: bigint }[]>`
-          SELECT v.id FROM hucescholar.document_versions v
-          JOIN hucescholar.documents d ON d.current_version_id = v.id
-          JOIN hucescholar.version_search s ON s.version_id = v.id
-          WHERE v.review_status = 'APPROVED'
-            AND s.folded LIKE ALL (${terms}::text[])`
-      : null;
+    if (!terms.length) return null;
+    const phrase = foldedPhrase(query.search!);
+    const rows = await tx.$queryRaw<{ id: bigint }[]>`
+      SELECT v.id FROM hucescholar.document_versions v
+      JOIN hucescholar.documents d ON d.current_version_id = v.id
+      JOIN hucescholar.version_search s ON s.version_id = v.id
+      WHERE v.review_status = 'APPROVED'
+        AND s.folded LIKE ALL (${terms}::text[])
+      ORDER BY s.folded_title LIKE ${phrase} DESC,
+        (SELECT count(*) FROM unnest(${terms}::text[]) t WHERE s.folded_title LIKE t) DESC,
+        s.folded LIKE ${phrase} DESC,
+        v.updated_at DESC, v.id DESC`;
+    return rows.map((row) => row.id);
+  }
+  private listWhere(
+    query: LibraryListDto,
+    matches: bigint[] | null,
+  ): Prisma.document_versionsWhereInput {
     return {
       AND: [
         available(),
@@ -200,7 +234,7 @@ export class LibraryService {
           ...(query.courseId
             ? { version_courses: { some: { course_id: academicId(query.courseId) } } }
             : {}),
-          ...(matches ? { id: { in: matches.map((row) => row.id) } } : {}),
+          ...(matches ? { id: { in: matches } } : {}),
         },
       ],
     };

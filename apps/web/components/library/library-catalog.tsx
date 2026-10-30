@@ -255,6 +255,7 @@ function CatalogSession({
         <>
           <p role="status">
             {data.total} học liệu · Trang {data.page}
+            {query.search.trim() ? ' · Khớp tiêu đề xếp trước' : ' · Mới cập nhật trước'}
           </p>
           {data.items.length === 0 ? (
             <p>Chưa có học liệu phù hợp. Thử bỏ bớt bộ lọc hoặc tìm theo tiêu đề khác.</p>
