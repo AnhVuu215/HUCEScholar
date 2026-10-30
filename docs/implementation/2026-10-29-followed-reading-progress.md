@@ -21,7 +21,7 @@ Ngày 29/10/2026. Nhánh `codex/home-reading-progress`, xây trên `main` sau PR
 
 ## API
 
-- `GET /api/v1/reading-lists/following` (cần phiên đăng nhập) trả `{ items: [{ course: { id, code, name }, total, read, next: { dueOn, versionId, title } | null }] }`, xếp theo mã môn. Chỉ dùng dấu và lựa chọn theo dõi của chính người xem. Không đổi schema.
+- `GET /api/v1/reading-lists/following` (cần phiên đăng nhập) trả `{ items: [{ course: { id, code, name }, total, read, next: { dueOn, versionId, title } | null }] }`, xếp theo mã môn (từ COURSE-02c xếp theo hạn gần nhất, xem [COURSE-02c](2026-10-30-home-reading-actions.md)). Chỉ dùng dấu và lựa chọn theo dõi của chính người xem. Không đổi schema.
 
 ## Kiểm chứng
 
@@ -34,4 +34,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test`:
 
 ## Chưa làm
 
-- Đánh dấu đã đọc ngay ở trang đầu; sắp các môn theo hạn gần nhất thay vì mã môn.
+- Đánh dấu đã đọc ngay ở trang đầu; sắp các môn theo hạn gần nhất thay vì mã môn. Đã làm ở [COURSE-02c](2026-10-30-home-reading-actions.md).

@@ -38,6 +38,8 @@ CAL-04c local: hạn đọc trên Lịch học của tài liệu đã đánh d�
 
 COURSE-02b local: trang đầu có mục "Danh sách đọc đang theo dõi": mỗi môn đã bật hiện hạn đọc trên Lịch học hiện "Đã đọc X/Y tài liệu" và hạn gần nhất chưa đọc (kể cả quá hạn). Chỉ tính tài liệu còn mở được; không đổi schema. Xem docs/implementation/2026-10-29-followed-reading-progress.md.
 
+COURSE-02c local: ở mục đó, dòng hạn gần nhất có nút "Đánh dấu đã đọc"; các môn xếp theo hạn gần nhất chưa đọc (quá hạn lên đầu), môn không còn hạn xếp sau theo mã môn. Không đổi schema. Xem docs/implementation/2026-10-30-home-reading-actions.md.
+
 READ-01 local: tìm chữ trong PDF theo lô, kết quả trước/tiếp và dấu tạm theo text layer; mục lục chỉ mở đích trang nội bộ qua guard. Đọc tập trung ẩn chrome/panel nhưng giữ bản soạn; mở ghi chú sẽ hiện editor, Escape đóng công cụ trước khi thoát. Chưa OCR/tìm không dấu. Xem docs/implementation/2026-10-18-reader-find-focus.md.
 
 SEARCH-02 local: kho ưu tiên tìm kiếm/môn, thu gọn nguồn/loại inline và có xóa lọc. Bộ lọc công khai và trang ở URL đã kiểm tra giá trị; Back/Forward khôi phục form/kết quả, request cũ bị hủy. Ghi chú riêng không nằm trong URL. Chi tiết và bàn giao palette/zoom cho PREF-01: docs/implementation/2026-10-18-library-catalog.md.
