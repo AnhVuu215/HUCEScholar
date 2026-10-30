@@ -10,6 +10,7 @@ import {
   dueDay,
   followedReadingLists,
   formatDue,
+  markRead,
   readingListError,
   type FollowedCourse,
 } from '../../lib/reading-lists';
@@ -20,7 +21,7 @@ import {
   type AdminReportList,
 } from '../../lib/reports';
 
-type Loaded<T> = { data: T | null; error: string; retry: () => void };
+type Loaded<T> = { data: T | null; error: string; retry: () => void; refresh: () => void };
 
 /** Loads one home section; a failure in one section never blanks the others. */
 function useSection<T>(load: (signal: AbortSignal) => Promise<T>, message: (e: unknown) => string) {
@@ -41,7 +42,9 @@ function useSection<T>(load: (signal: AbortSignal) => Promise<T>, message: (e: u
     setState({ data: null, error: '' });
     setAttempt((n) => n + 1);
   }, []);
-  return { ...state, retry } satisfies Loaded<T>;
+  // Reloads while still showing the current data, for a change the user just made.
+  const refresh = useCallback(() => setAttempt((n) => n + 1), []);
+  return { ...state, retry, refresh } satisfies Loaded<T>;
 }
 
 function SectionState<T>({
@@ -142,8 +145,25 @@ const loadFollowed = (signal: AbortSignal) => followedReadingLists(signal);
 
 function FollowedReadingLists() {
   const followed = useSection<FollowedCourse[]>(loadFollowed, readingListError);
+  const [marking, setMarking] = useState('');
+  const [notice, setNotice] = useState('');
+  const [failure, setFailure] = useState('');
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  async function markNext(courseId: string, next: NonNullable<FollowedCourse['next']>) {
+    setMarking(next.versionId);
+    setNotice('');
+    setFailure('');
+    try {
+      await markRead(courseId, next.versionId, true);
+      setNotice(`Đã đánh dấu đã đọc: ${next.title}.`);
+      followed.refresh();
+    } catch (e) {
+      setFailure(readingListError(e));
+    } finally {
+      setMarking('');
+    }
+  }
   return (
     <section className="content-section home-section" aria-labelledby="home-reading">
       <h2 id="home-reading">Danh sách đọc đang theo dõi</h2>
@@ -154,33 +174,50 @@ function FollowedReadingLists() {
       >
         {(items) =>
           items.length ? (
-            <ul className="home-list home-reading" aria-label="Tiến độ theo môn">
-              {items.map(({ course, total, read, next }) => (
-                <li key={course.id}>
-                  <Link href={`/workspace/library/reading-lists?courseId=${course.id}`}>
-                    {course.code} · {course.name}
-                  </Link>
-                  <span className="field-hint">
-                    {' '}
-                    ·{' '}
-                    {total
-                      ? read === total
-                        ? `Đã đọc hết ${total} tài liệu`
-                        : `Đã đọc ${read}/${total} tài liệu`
-                      : 'Chưa có danh sách đọc đã công bố'}
-                  </span>
-                  {next && (
-                    <p className={dueDay(next.dueOn) < today ? 'home-overdue' : 'field-hint'}>
-                      {dueDay(next.dueOn) < today ? 'Quá hạn' : 'Hạn gần nhất'}{' '}
-                      {formatDue(next.dueOn)}:{' '}
-                      <Link href={`/workspace/library/versions/${next.versionId}`}>
-                        {next.title}
-                      </Link>
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <>
+              {notice && (
+                <p role="status" className="field-hint">
+                  {notice}
+                </p>
+              )}
+              {failure && <p role="alert">{failure}</p>}
+              <ul className="home-list home-reading" aria-label="Tiến độ theo môn">
+                {items.map(({ course, total, read, next }) => (
+                  <li key={course.id}>
+                    <Link href={`/workspace/library/reading-lists?courseId=${course.id}`}>
+                      {course.code} · {course.name}
+                    </Link>
+                    <span className="field-hint">
+                      {' '}
+                      ·{' '}
+                      {total
+                        ? read === total
+                          ? `Đã đọc hết ${total} tài liệu`
+                          : `Đã đọc ${read}/${total} tài liệu`
+                        : 'Chưa có danh sách đọc đã công bố'}
+                    </span>
+                    {next && (
+                      <p className={dueDay(next.dueOn) < today ? 'home-overdue' : 'field-hint'}>
+                        {dueDay(next.dueOn) < today ? 'Quá hạn' : 'Hạn gần nhất'}{' '}
+                        {formatDue(next.dueOn)}:{' '}
+                        <Link href={`/workspace/library/versions/${next.versionId}`}>
+                          {next.title}
+                        </Link>{' '}
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          aria-label={`Đánh dấu đã đọc: ${next.title}`}
+                          disabled={Boolean(marking)}
+                          onClick={() => void markNext(course.id, next)}
+                        >
+                          {marking === next.versionId ? 'Đang lưu…' : 'Đánh dấu đã đọc'}
+                        </button>
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
           ) : (
             <p>
               Bạn chưa theo dõi môn nào. Mở{' '}

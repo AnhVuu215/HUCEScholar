@@ -1118,6 +1118,57 @@ describe('private material drafts', () => {
     await put('student', 'follow', { following: false });
     expect(await progress()).toBeUndefined();
   });
+  it('home: followed courses come nearest unread due date first, then those with nothing due', async () => {
+    const first = await readingFixture();
+    // The second course's material is filed under it while still a draft (courses freeze on
+    // submission), and listed there by a lecturer assigned to it.
+    const second = await safeDraft('student', 3);
+    await db.query('INSERT INTO hucescholar.version_courses(version_id,course_id) VALUES($1,$2)', [
+      second.versionId,
+      courses[1],
+    ]);
+    expect((await publication('student', second.id, 'submit', { revision: 2 })).status).toBe(201);
+    const pending = await db.query(
+      "SELECT id FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+      [second.versionId],
+    );
+    expect((await review(pending.rows[0].id, decision())).status).toBe(201);
+    const write = async (name: string, course: string, item: object) => {
+      const revision =
+        (await agents[name].get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+          ?.revision ?? 0;
+      const items = [{ section: '', note: '', ...item }];
+      const data = { title: 'Danh sách sắp xếp', published: true, revision, items };
+      expect((await listWrite(name, course, data)).status).toBe(200);
+    };
+    await write('lecturer', courses[0], { versionId: first.versionId, dueOn: '2026-11-03' });
+    await write('receiver', courses[1], { versionId: second.versionId, dueOn: '2026-11-01' });
+    const put = async (course: string, path: string, data: object) => {
+      const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+      return agents.student
+        .put(`/api/v1/courses/${course}/reading-lists/${path}`)
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send(data)
+        .expect(200);
+    };
+    const order = async () =>
+      (await agents.student.get('/api/v1/reading-lists/following').expect(200)).body.items
+        .map((i: { course: { id: string } }) => i.course.id)
+        .filter((id: string) => courses.includes(id));
+    for (const course of courses) await put(course, 'follow', { following: true });
+    try {
+      // Course codes sort courses[0] first; the earlier due date puts courses[1] ahead.
+      expect(await order()).toEqual([courses[1], courses[0]]);
+      // Once read, courses[1] has nothing due and drops behind the course that still has.
+      await put(courses[1], `read/${second.versionId}`, { read: true });
+      expect(await order()).toEqual([courses[0], courses[1]]);
+      await put(courses[0], `read/${first.versionId}`, { read: true });
+      expect(await order()).toEqual([courses[0], courses[1]]);
+    } finally {
+      for (const course of courses) await put(course, 'follow', { following: false });
+    }
+  });
   describe('CAL-01 private study calendar', () => {
     const items = '/api/v1/calendar/items';
     const event = (overrides: object = {}) => ({
