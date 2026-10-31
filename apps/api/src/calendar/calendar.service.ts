@@ -40,6 +40,8 @@ import {
   CalendarTasksDto,
   CreateCalendarItemDto,
   UpdateCalendarItemDto,
+  allDayRemindMinutes,
+  remindMinutes,
 } from './calendar.dto';
 
 const DAY = 86_400_000;
@@ -97,8 +99,18 @@ function normalize(body: CalendarFieldsDto) {
     if (problem) throw invalid(problem);
   }
   const remind = body.remindMinutes ?? null;
-  if (remind !== null && (!startsAt || body.allDay))
-    throw invalid('Chỉ nhắc được mục có ngày và giờ, không phải cả ngày.');
+  const more = body.remindMore ?? [];
+  // A timed item reminds minutes before; an all-day one at a time of day (CAL-07).
+  const leads: readonly number[] = body.allDay ? allDayRemindMinutes : remindMinutes;
+  if (remind !== null && !startsAt) throw invalid('Chỉ nhắc được mục có ngày.');
+  if ([remind, ...more].some((m) => m !== null && !leads.includes(m)))
+    throw invalid(
+      body.allDay
+        ? 'Mục cả ngày chỉ nhắc lúc 8:00 hôm đó, 20:00 hoặc 8:00 hôm trước.'
+        : 'Chọn giờ nhắc trong danh sách.',
+    );
+  if (more.length && remind === null) throw invalid('Chọn lời nhắc đầu tiên trước.');
+  if (remind !== null && more.includes(remind)) throw invalid('Mỗi lời nhắc phải khác nhau.');
   if (body.remindEmail && remind === null) throw invalid('Chọn giờ nhắc trước khi bật email.');
   return {
     kind: body.kind,
@@ -117,6 +129,7 @@ function normalize(body: CalendarFieldsDto) {
     repeat_interval: repeat?.interval ?? null,
     repeat_count: repeat?.count ?? null,
     remind_minutes: remind,
+    remind_more: more,
     remind_email: body.remindEmail,
   };
 }
@@ -132,6 +145,7 @@ const sameFields = (row: calendar_items, fields: Fields) =>
   row.version_id === fields.version_id &&
   row.page_number === fields.page_number &&
   row.remind_minutes === fields.remind_minutes &&
+  row.remind_more.join() === fields.remind_more.join() &&
   row.remind_email === fields.remind_email &&
   sameRepeat(row, fields);
 const sameRepeat = (row: calendar_items, fields: Fields) =>
@@ -205,7 +219,9 @@ export class CalendarService {
               }
             : null,
         reminder:
-          r.remind_minutes === null ? null : { minutes: r.remind_minutes, email: r.remind_email },
+          r.remind_minutes === null
+            ? null
+            : { minutes: r.remind_minutes, more: r.remind_more, email: r.remind_email },
         /** Original start of this occurrence of a series; null for a single item. */
         occurrenceStart: null as string | null,
         revision: r.revision,
@@ -334,7 +350,8 @@ export class CalendarService {
               skipped: [...row.calendar_item_skips, ...row.calendar_item_done].map((s) =>
                 s.occurrence_start.getTime(),
               ),
-              remindMinutes: row.remind_minutes,
+              remindLeads:
+                row.remind_minutes === null ? [] : [row.remind_minutes, ...row.remind_more],
               material: material && {
                 title: material.title,
                 pageNumber: material.pageNumber,

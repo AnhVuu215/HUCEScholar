@@ -180,3 +180,62 @@ test('a series every other week ends after a count, splits and truncates from an
     tasks.getByRole('list', { name: 'Việc đã xong' }).getByRole('button', { name: task }),
   ).toHaveCount(1);
 });
+
+test('an all-day item takes reminders at a time of day, up to three, and email can be turned off for the account', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const run = randomUUID().slice(0, 8);
+  const exam = `Thi cuối kỳ ${run}`;
+  await readerLogin(page, 'student', 'cal6');
+  await page.goto('/workspace/calendar');
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const key = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`;
+  await page.getByRole('button', { name: 'Thêm lịch học', exact: true }).click();
+  const editor = page.getByRole('form', { name: 'Thêm lịch học' });
+  await editor.getByLabel('Tiêu đề', { exact: true }).fill(exam);
+  await editor.getByLabel('Ngày bắt đầu', { exact: true }).fill(key);
+  await editor.getByLabel('Cả ngày', { exact: true }).check();
+  await editor.getByLabel('Ngày kết thúc', { exact: true }).fill(key);
+  const first = editor.getByLabel('Nhắc', { exact: true });
+  await expect(first.locator('option')).toHaveText([
+    'Không nhắc',
+    '8:00 sáng hôm đó',
+    '20:00 hôm trước',
+    '8:00 sáng hôm trước',
+  ]);
+  await first.selectOption({ label: '8:00 sáng hôm đó' });
+  await editor.getByRole('button', { name: 'Thêm lời nhắc', exact: true }).click();
+  await editor.getByLabel('Nhắc lần 2', { exact: true }).selectOption({ label: '20:00 hôm trước' });
+  await editor.getByRole('button', { name: 'Thêm lời nhắc', exact: true }).click();
+  await editor
+    .getByLabel('Nhắc lần 3', { exact: true })
+    .selectOption({ label: '8:00 sáng hôm trước' });
+  // Three is the most.
+  await expect(editor.getByRole('button', { name: 'Thêm lời nhắc' })).toHaveCount(0);
+  await editor.getByRole('button', { name: 'Bỏ lời nhắc lần 3', exact: true }).click();
+  await editor.getByRole('button', { name: 'Lưu', exact: true }).click();
+  await page.getByRole('button', { name: 'Lịch biểu', exact: true }).click();
+  const row = page.locator('.calendar-agenda li').filter({ hasText: exam });
+  await expect(row).toContainText('Nhắc: 8:00 sáng hôm đó, 20:00 hôm trước');
+  await row.getByRole('button', { name: exam, exact: true }).click();
+  const edit = page.getByRole('form', { name: 'Sửa lịch học' });
+  await expect(edit.getByLabel('Nhắc', { exact: true })).toHaveValue('-480');
+  await expect(edit.getByLabel('Nhắc lần 2', { exact: true })).toHaveValue('240');
+  await edit.getByRole('button', { name: 'Hủy', exact: true }).click();
+
+  // The account-wide email switch lives in settings and is saved like the reader options.
+  await page.goto('/workspace/settings');
+  const email = page.getByLabel('Cho phép gửi email nhắc lịch (mục nào bật “Gửi cả email”)');
+  await expect(email).toBeChecked();
+  await email.uncheck();
+  await page.getByRole('button', { name: 'Lưu cài đặt đọc', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lưu cài đặt đọc', exact: true })).toBeDisabled();
+  await page.reload();
+  await expect(email).not.toBeChecked();
+  await email.check();
+  await page.getByRole('button', { name: 'Lưu cài đặt đọc', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lưu cài đặt đọc', exact: true })).toBeDisabled();
+});

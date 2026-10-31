@@ -80,7 +80,7 @@ test('sessions and tasks remind before they start, and the notice opens that wee
   await expect(block).toHaveAttribute('title', /Nhắc: trước 15 phút/);
   const saved = (await (await page.request.get(`/api/v1/calendar/items?${span}`)).json()).items;
   const item = saved.find((i: { title: string }) => i.title === session);
-  expect(item.reminder).toEqual({ minutes: 15, email: true });
+  expect(item.reminder).toEqual({ minutes: 15, more: [], email: true });
 
   // The notice reads in local time and opens the week of the session.
   await recordReminder('e2e-cal3-student@example.test', item.id, new Date(item.startsAt), session);
@@ -96,14 +96,15 @@ test('sessions and tasks remind before they start, and the notice opens that wee
   await page.goto('/workspace/notifications');
   await expect(notice).toContainText('Đã đọc');
 
-  // The form shows the saved reminder; an all-day session cannot remind.
+  // The form shows the saved reminder; an all-day session only takes time-of-day reminders
+  // (CAL-07), so a 15-minute one is dropped.
   await page.goto(`/workspace/calendar?at=${encodeURIComponent(item.startsAt)}`);
   await block.click();
   const edit = page.getByRole('form', { name: 'Sửa lịch học' });
   await expect(edit.getByLabel('Nhắc', { exact: true })).toHaveValue('15');
   await expect(edit.getByLabel('Gửi cả email')).toBeChecked();
   await edit.getByLabel('Cả ngày', { exact: true }).check();
-  await expect(edit.getByLabel('Nhắc', { exact: true })).toHaveCount(0);
+  await expect(edit.getByLabel('Nhắc', { exact: true })).toHaveValue('');
   await edit.getByRole('button', { name: 'Lưu', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: `Đã lưu: ${session}` })).toBeVisible();
   const allDay = (await (await page.request.get(`/api/v1/calendar/items?${span}`)).json()).items;

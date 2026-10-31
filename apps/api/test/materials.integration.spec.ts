@@ -2102,7 +2102,7 @@ describe('private material drafts', () => {
     it('validates reminders, notifies each due occurrence once and mails only when asked', async () => {
       const session = await readingWrite('student', items, fields());
       expect(session.status).toBe(201);
-      expect(session.body.item.reminder).toEqual({ minutes: 15, email: true });
+      expect(session.body.item.reminder).toEqual({ minutes: 15, more: [], email: true });
       for (const bad of [
         { remindMinutes: 7 },
         { allDay: true, endsAt: '2027-04-06T00:00:00.000Z', startsAt: '2027-04-05T00:00:00.000Z' },
@@ -2191,6 +2191,96 @@ describe('private material drafts', () => {
       expect((await reminders()).map((n: { calendarItemId: string }) => n.calendarItemId)).toEqual([
         weekly.body.item.id,
       ]);
+    });
+    it('CAL-07: up to three reminders, all-day reminders at a time of day, and an account-wide email switch', async () => {
+      // Monday 6 September 2027 in Hanoi (UTC+7); away from the other calendar dates.
+      const timed = fields({
+        title: 'Ôn Thủy lực',
+        startsAt: '2027-09-06T02:00:00.000Z',
+        endsAt: '2027-09-06T03:00:00.000Z',
+        remindMinutes: 60,
+        remindMore: [15, 1440],
+        remindEmail: false,
+      });
+      const created = await readingWrite('student', items, timed);
+      expect(created.status).toBe(201);
+      expect(created.body.item.reminder).toEqual({ minutes: 60, more: [15, 1440], email: false });
+      for (const body of [
+        fields({ remindMinutes: null, remindMore: [15] }),
+        fields({ remindMinutes: 60, remindMore: [60] }),
+        fields({ remindMinutes: 60, remindMore: [15, 15] }),
+        fields({ remindMinutes: 60, remindMore: [5, 10, 15] }),
+        fields({ remindMinutes: -480 }),
+        fields({
+          allDay: true,
+          startsAt: '2027-09-05T17:00:00.000Z',
+          endsAt: '2027-09-06T17:00:00.000Z',
+          remindMinutes: 60,
+        }),
+      ])
+        expect((await readingWrite('student', items, body)).status).toBe(400);
+      // An all-day exam day: 08:00 that day, and 20:00 the evening before, with email.
+      const allDay = await readingWrite(
+        'student',
+        items,
+        fields({
+          title: 'Thi giữa kỳ',
+          allDay: true,
+          startsAt: '2027-09-07T17:00:00.000Z',
+          endsAt: '2027-09-08T17:00:00.000Z',
+          remindMinutes: -480,
+          remindMore: [240],
+          remindEmail: true,
+        }),
+      );
+      expect(allDay.status).toBe(201);
+
+      const sent: { to: string; subject: string; text: string }[] = [];
+      const service = new CalendarReminders(
+        app.get(DatabaseService),
+        {
+          enabled: true,
+          send: async (mail: (typeof sent)[0]) => void sent.push(mail),
+        } as unknown as Mailer,
+        app.get(AUTH_CONFIG),
+      );
+      // The day before, then an hour before, then 15 minutes before: three notices.
+      expect(await service.dispatch(new Date('2027-09-05T02:01:00.000Z'))).toBe(1);
+      expect(await service.dispatch(new Date('2027-09-06T01:01:00.000Z'))).toBe(1);
+      expect(await service.dispatch(new Date('2027-09-06T01:46:00.000Z'))).toBe(1);
+      expect(await service.dispatch(new Date('2027-09-06T01:48:00.000Z'))).toBe(0);
+      // 20:00 on 7 Sep in Hanoi is 13:00 UTC; 08:00 on 8 Sep is 01:00 UTC, after the start.
+      expect(await service.dispatch(new Date('2027-09-07T13:01:00.000Z'))).toBe(1);
+      expect(sent.map((m) => m.text)).toEqual([
+        expect.stringContaining('“Thi giữa kỳ” bắt đầu ngày mai'),
+      ]);
+      // Turning email off for the account stops the mail; the in-app notice still comes.
+      const prefs = (await agents.student.get('/api/v1/account/preferences').expect(200)).body;
+      expect(prefs.preferences.reminderEmail).toBe(true);
+      const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+      await agents.student
+        .put('/api/v1/account/preferences')
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send({
+          preferences: { ...prefs.preferences, reminderEmail: false },
+          revision: prefs.revision,
+        })
+        .expect(200);
+      expect(await service.dispatch(new Date('2027-09-08T01:01:00.000Z'))).toBe(1);
+      expect(sent).toHaveLength(1);
+      const turnedOff = (await agents.student.get('/api/v1/account/preferences').expect(200)).body;
+      expect(turnedOff.preferences.reminderEmail).toBe(false);
+      // Back on, so other tests see the default.
+      await agents.student
+        .put('/api/v1/account/preferences')
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send({
+          preferences: { ...turnedOff.preferences, reminderEmail: true },
+          revision: turnedOff.revision,
+        })
+        .expect(200);
     });
   });
   describe('CAL-05 iCalendar export', () => {

@@ -93,7 +93,7 @@ const SHORTCUT_HINT =
   'Phím tắt: T hôm nay · W tuần · M tháng · A lịch biểu · ← → chuyển khoảng · N thêm lịch học. Kéo thả bằng chuột: dời lịch học, kéo cạnh dưới để đổi thời lượng, kéo việc lên lịch để đặt hạn hoặc về panel để bỏ ngày.';
 const titleOf = (item: CalendarItem) =>
   `${item.title} · ${whenLabel(item)}${item.repeat ? ` · ${repeatLabel(item.repeat)}` : ''}${
-    item.reminder ? ` · Nhắc: ${remindLabel(item.reminder.minutes).toLowerCase()}` : ''
+    item.reminder ? ` · Nhắc: ${reminderSummary(item)}` : ''
   }`;
 /**
  * What is being dragged. `move`: the whole item, held `grabMinutes` below its start on the hour
@@ -146,6 +146,11 @@ function lanes(items: CalendarItem[], day: Date) {
   return segments;
 }
 
+/** Every reminder of an item, in words. */
+const reminderSummary = (item: CalendarItem) =>
+  [item.reminder!.minutes, ...item.reminder!.more]
+    .map((m) => remindLabel(m, item.allDay).toLowerCase())
+    .join(', ');
 /** CAL-04c: the name says when the reader has already marked the item read. */
 const deadlineLabel = (d: ReadingDeadline) =>
   `Hạn đọc${d.dueTime ? ` ${d.dueTime}` : ''}: ${d.title}${d.read ? ' · Đã đọc' : ''}`;
@@ -862,7 +867,7 @@ export function CalendarBoard() {
                           {i.repeat && <span className="field-hint">{repeatLabel(i.repeat)}</span>}
                           {i.reminder && (
                             <span className="field-hint">
-                              Nhắc: {remindLabel(i.reminder.minutes).toLowerCase()}
+                              Nhắc: {reminderSummary(i)}
                               {i.reminder.email ? ' · có email' : ''}
                             </span>
                           )}
@@ -933,9 +938,7 @@ export function CalendarBoard() {
                       {whenLabel(task)}
                     </span>
                     {task.reminder && (
-                      <span className="field-hint">
-                        Nhắc: {remindLabel(task.reminder.minutes).toLowerCase()}
-                      </span>
+                      <span className="field-hint">Nhắc: {reminderSummary(task)}</span>
                     )}
                     {task.material && (
                       <Link href={readerHref(task.material)}>Trang {task.material.pageNumber}</Link>

@@ -13,6 +13,7 @@ import {
   fromInputs,
   isoWeekday,
   readerHref,
+  allDayRemindOptions,
   remindLabel,
   remindOptions,
   skipOccurrence,
@@ -89,6 +90,7 @@ function initial(item: CalendarItem | null, draft: CalendarDraft, scope: Scope) 
       until:
         item.repeat?.until ?? (first ? dateKey(addDays(first, DEFAULT_REPEAT_WEEKS * 7 - 7)) : ''),
       remind: item.reminder ? String(item.reminder.minutes) : '',
+      remindMore: (item.reminder?.more ?? []).map(String),
       remindEmail: item.reminder?.email ?? false,
     };
   }
@@ -113,6 +115,8 @@ function initial(item: CalendarItem | null, draft: CalendarDraft, scope: Scope) 
     until: '',
     /** Minutes before, as the select's value; empty is no reminder. */
     remind: '',
+    /** Up to two more leads (CAL-07). */
+    remindMore: [] as string[],
     remindEmail: false,
   };
 }
@@ -142,7 +146,9 @@ export function CalendarEditor({
   const repeatable =
     (form.kind === 'EVENT' || form.startDay !== '') && !(occurrence && scope === 'one');
   // Reminders need a time: a timed session, or a task with a due date that is not all-day.
-  const remindable = !form.allDay && (form.kind === 'EVENT' || form.startDay !== '');
+  // Any item with a date reminds; an all-day one at a time of day (CAL-07).
+  const remindable = form.kind === 'EVENT' || form.startDay !== '';
+  const leadOptions: readonly number[] = form.allDay ? allDayRemindOptions : remindOptions;
   const original = item
     ? (item.material ?? (item.materialUnavailable ? 'unavailable' : null))
     : (draft.material ?? null);
@@ -264,6 +270,10 @@ export function CalendarEditor({
       pageNumber: page,
       repeat,
       remindMinutes: remindable && form.remind ? Number(form.remind) : null,
+      remindMore:
+        remindable && form.remind
+          ? [...new Set(form.remindMore.filter((m) => m !== '' && m !== form.remind))].map(Number)
+          : [],
       remindEmail: remindable && form.remind !== '' && form.remindEmail,
     };
   }
@@ -469,7 +479,23 @@ export function CalendarEditor({
           <input
             type="checkbox"
             checked={form.allDay}
-            onChange={(e) => set('allDay', e.target.checked)}
+            onChange={(e) => {
+              const allDay = e.target.checked;
+              // Timed and all-day items take different reminders; drop the ones that no longer fit.
+              const fits: readonly number[] = allDay ? allDayRemindOptions : remindOptions;
+              setForm((v) => {
+                const keep = [v.remind, ...v.remindMore].filter(
+                  (m) => m !== '' && fits.includes(Number(m)),
+                );
+                return {
+                  ...v,
+                  allDay,
+                  remind: keep[0] ?? '',
+                  remindMore: keep.slice(1),
+                  remindEmail: keep.length > 0 && v.remindEmail,
+                };
+              });
+            }}
           />
           Cả ngày
         </label>
@@ -602,17 +628,64 @@ export function CalendarEditor({
             <label htmlFor="calendar-remind">Nhắc</label>
             <select
               id="calendar-remind"
-              value={form.remind}
+              value={leadOptions.includes(Number(form.remind)) ? form.remind : ''}
               onChange={(e) => set('remind', e.target.value)}
             >
               <option value="">Không nhắc</option>
-              {remindOptions.map((minutes) => (
+              {leadOptions.map((minutes) => (
                 <option key={minutes} value={String(minutes)}>
-                  {remindLabel(minutes)}
+                  {remindLabel(minutes, form.allDay)}
                 </option>
               ))}
             </select>
           </div>
+          {form.remind !== '' &&
+            form.remindMore.map((value, index) => (
+              <div className="form-field calendar-remind-more" key={index}>
+                <label htmlFor={`calendar-remind-${index + 2}`}>Nhắc lần {index + 2}</label>
+                <select
+                  id={`calendar-remind-${index + 2}`}
+                  value={leadOptions.includes(Number(value)) ? value : ''}
+                  onChange={(e) =>
+                    set(
+                      'remindMore',
+                      form.remindMore.map((v, i) => (i === index ? e.target.value : v)),
+                    )
+                  }
+                >
+                  <option value="">Chọn giờ nhắc</option>
+                  {leadOptions
+                    .filter((m) => String(m) !== form.remind)
+                    .map((minutes) => (
+                      <option key={minutes} value={String(minutes)}>
+                        {remindLabel(minutes, form.allDay)}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="text-button"
+                  aria-label={`Bỏ lời nhắc lần ${index + 2}`}
+                  onClick={() =>
+                    set(
+                      'remindMore',
+                      form.remindMore.filter((_, i) => i !== index),
+                    )
+                  }
+                >
+                  Bỏ
+                </button>
+              </div>
+            ))}
+          {form.remind !== '' && form.remindMore.length < 2 && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => set('remindMore', [...form.remindMore, ''])}
+            >
+              Thêm lời nhắc
+            </button>
+          )}
           {form.remind !== '' && (
             <label className="calendar-check">
               <input
