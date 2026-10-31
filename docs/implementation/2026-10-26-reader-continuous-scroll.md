@@ -4,7 +4,7 @@ Ngày 26/10/2026. Nhánh `codex/read-05-continuous-scroll`, xây trên `main` sa
 
 Trước lượt này, reader chỉ hiện **một trang mỗi lần** và phải bấm "Trang sau" để xem tiếp. Chủ dự án muốn xem được đủ các trang của tài liệu. Đã chốt theo lựa chọn khuyến nghị (đổi được về sau):
 
-- Thêm chế độ **Cuộn liền các trang**, bật/tắt trên thanh công cụ. Mặc định vẫn là từng trang như cũ. Lựa chọn được nhớ **trong trình duyệt** (`localStorage`), không phải cài đặt tài khoản.
+- Thêm chế độ **Cuộn liền các trang**, bật/tắt trên thanh công cụ. Mặc định vẫn là từng trang như cũ (từ [READ-06](2026-10-31-reader-scroll-default.md), mặc định là cuộn liền). Lựa chọn được nhớ **trong trình duyệt** (`localStorage`), không phải cài đặt tài khoản.
 - **Trang đang đọc** vẫn đủ mọi lớp như chế độ từng trang: lớp chữ để chọn, vùng tô, giấy nhớ (READ-04), tìm chữ. Các trang khác chỉ hiện **ảnh trang**. Cách này giữ nguyên mọi tính năng ghi chú đang có, không phải viết lại chúng cho nhiều trang cùng lúc.
 - Thêm bảng **Các trang**: lưới ảnh thu nhỏ của mọi trang để xem toàn bộ tài liệu và nhảy tới một trang.
 
