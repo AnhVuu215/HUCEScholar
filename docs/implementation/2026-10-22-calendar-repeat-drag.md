@@ -130,4 +130,4 @@ Test e2e dọn lịch của tài khoản `cal2` trước khi chạy, và đặt 
 - Kiểu lặp khác: mỗi N tuần, sau N lần, theo tháng; "buổi này và các buổi sau".
 - Lặp cho việc cần làm.
 - Ở vùng có giờ mùa hè, buổi sau mốc đổi giờ lệch 1 giờ (giới hạn đã ghi trong đặc tả; Việt Nam không bị).
-- Nhắc trước giờ học (CAL-03), hạn danh sách đọc trong lịch (CAL-04), xuất `.ics` (CAL-05).
+- Nhắc trước giờ học (CAL-03), hạn danh sách đọc trong lịch (CAL-04), xuất `.ics` (CAL-05) đã có ở [mốc CAL-05](2026-10-31-calendar-ics-export.md).
