@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { readerPdf } from './helpers/reader-pdf';
+import { configureReaderPanel } from './helpers/reader-session';
 test.use({ actionTimeout: 15000 });
 
 const word = () => readFileSync('apps/api/test/fixtures/docx/vietnamese.docx');
@@ -271,6 +272,8 @@ test('real DOCX conversion supports lecturer publication and student private not
   try {
     const student = await context.newPage();
     await login(student, 'student');
+    // The notes panel is closed by default; this walk-through writes a note, so it opts in.
+    await configureReaderPanel(student);
     await student.goto(`/workspace/library/versions/${item.versionId}`);
     await expect(student.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
     await expect(student.getByRole('link', { name: 'Tải Word gốc', exact: true })).toBeVisible();

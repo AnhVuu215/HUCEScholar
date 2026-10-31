@@ -126,6 +126,7 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` dựng lại từ 
   - `cal-05`, ca mới: nhập file, nhập lại, xuất một ngày.
   - Spec cũ đổi theo hành vi mới: `cal-02` (nhãn "Lặp lại"), `cal-03` (mục cả ngày có ô nhắc).
   - Cả bộ e2e (`pnpm test:e2e`, một worker), chia làm ba lượt theo file vì một lượt chạy liền bị dừng do máy thiếu bộ nhớ: 70 + 74 + 56 = **200 đạt, 8 bỏ qua, 0 hỏng** (208 ca).
+  - 8 ca bỏ qua là ca opt-in, đã chạy riêng và **đều đạt**: `PERF=1` hiệu năng (2/2); `DOCX_REAL=1` chuyển DOCX thật (1/1); `PILOT_REAL=1` pilot với ClamAV, bộ chuyển đổi và file-worker thật dựng từ image mới, nối vào DB `_test` (5/5). Hai ca lâu không chạy cần sửa test, không sửa sản phẩm: ca DOCX thêm bước mở bảng ghi chú (bảng nay mặc định đóng), ca pilot đổi selector vì khung VERSION-01 có cùng cụm "bản công bố trước". Sau đó đã tắt lại các container worker.
 - `pnpm format:check`, `pnpm check` (lint, typecheck, unit, build) đạt.
 - **Chưa thử:** nhập file thật xuất từ Google Calendar hay Outlook, và nhập file `.ics` xuất từ đây vào các ứng dụng đó; chưa thử với trình đọc màn hình.
 
