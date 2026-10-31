@@ -16,6 +16,8 @@ type Row = {
   note: string;
   /** `YYYY-MM-DD` from the date input, or '' for no due date. */
   dueOn: string;
+  /** `HH:MM` (Vietnam time), or '' for the end of the due day. */
+  dueTime: string;
   versionId: string;
   label: string;
 };
@@ -32,6 +34,7 @@ function fromList(list: ReadingList | null): Loaded {
       section: i.section,
       note: i.note,
       dueOn: i.dueOn ?? '',
+      dueTime: i.dueTime ?? '',
       versionId: i.versionId,
       label: i.material
         ? `${i.material.title} · phiên bản ${i.material.versionNo}`
@@ -123,6 +126,8 @@ export function ReadingListEditor() {
           note: r.note,
           versionId: r.versionId,
           dueOn: r.dueOn || null,
+          // A time without a date means nothing; it is dropped rather than refused.
+          dueTime: (r.dueOn && r.dueTime) || null,
         })),
       });
       setForm(fromList(saved));
@@ -253,6 +258,21 @@ export function ReadingListEditor() {
                       }
                     />
                   </div>
+                  <div className="form-field">
+                    <label htmlFor={`due-time-${row.key}`}>Giờ hạn (giờ Việt Nam)</label>
+                    <input
+                      id={`due-time-${row.key}`}
+                      type="time"
+                      disabled={!row.dueOn}
+                      value={row.dueTime}
+                      onChange={(e) =>
+                        update((rows) =>
+                          rows.map((r, i) => (i === index ? { ...r, dueTime: e.target.value } : r)),
+                        )
+                      }
+                    />
+                    <p className="field-hint">Để trống là hết ngày (23:59).</p>
+                  </div>
                   <div className="reading-editor-actions">
                     <button
                       type="button"
@@ -350,6 +370,7 @@ export function ReadingListEditor() {
                           section: rows.at(-1)?.section ?? '',
                           note: '',
                           dueOn: '',
+                          dueTime: '',
                           versionId: item.versionId,
                           label: `${item.title} · phiên bản ${item.versionNo}`,
                         },

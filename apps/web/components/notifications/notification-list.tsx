@@ -153,7 +153,7 @@ export function NotificationList() {
                   >
                     {n.kind === 'CALENDAR_REMINDER'
                       ? 'Mở lịch'
-                      : n.kind.startsWith('REPORT_')
+                      : n.kind.startsWith('REPORT_') || n.kind.startsWith('READING_')
                         ? 'Mở tài liệu'
                         : 'Mở bản nháp'}
                   </Link>

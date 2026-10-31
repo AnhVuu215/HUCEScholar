@@ -788,6 +788,7 @@ describe('private material drafts', () => {
       section: 'Tuần 2',
       note: '',
       dueOn: null,
+      dueTime: null,
       versionId: second.versionId,
       read: false,
       material: null,
@@ -812,6 +813,148 @@ describe('private material drafts', () => {
       );
     }
     expect((await listed()).items.filter(mine)).toHaveLength(1);
+  });
+  it('CAL-07: due times, change notices to followers and reminders before unread due dates', async () => {
+    const first = await readingFixture();
+    const second = await readingFixture();
+    const course = courses[0];
+    const ours = [first.versionId, second.versionId];
+    const follow = async (name: string, body: object) => {
+      const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+      return agents[name]
+        .put(`/api/v1/courses/${course}/reading-lists/follow`)
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send(body);
+    };
+    expect((await follow('student', { following: true, remindMinutes: 1440 })).body).toEqual({
+      following: true,
+      remindMinutes: 1440,
+    });
+    // Absent keeps the choice; other values are refused.
+    expect((await follow('student', { following: true })).body.remindMinutes).toBe(1440);
+    expect((await follow('other', { following: true, remindMinutes: null })).body).toEqual({
+      following: true,
+      remindMinutes: null,
+    });
+    for (const remindMinutes of [7, '60'])
+      expect((await follow('student', { following: true, remindMinutes })).status).toBe(400);
+
+    const revision = async () =>
+      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+        ?.revision ?? 0;
+    const save = async (published: boolean, items: object[]) =>
+      listWrite('lecturer', course, {
+        title: 'Danh sách có giờ',
+        published,
+        revision: await revision(),
+        items,
+      });
+    const item = (versionId: string, dueOn: string | null, dueTime: string | null) => ({
+      section: '',
+      versionId,
+      note: '',
+      dueOn,
+      dueTime,
+    });
+    for (const bad of [
+      [item(first.versionId, null, '08:00')],
+      [item(first.versionId, '2027-08-10', '24:00')],
+      [item(first.versionId, '2027-08-10', '8:00')],
+    ])
+      expect((await save(true, bad)).status).toBe(400);
+    // Built unpublished, then published: neither is a change for followers to hear about.
+    const draft = await save(false, [
+      item(first.versionId, '2027-08-10', '17:00'),
+      item(second.versionId, '2027-08-12', null),
+    ]);
+    expect(draft.status).toBe(200);
+    expect(draft.body.item.items.map((i: { dueTime: string | null }) => i.dueTime)).toEqual([
+      '17:00',
+      null,
+    ]);
+    const changed = async (name: string) =>
+      (
+        (await notices(name, '?limit=50')).items as {
+          kind: string;
+          versionId: string;
+          detail: string | null;
+          eventAt: string | null;
+        }[]
+      )
+        .filter((n) => n.kind === 'READING_DEADLINE_CHANGED' && ours.includes(n.versionId))
+        .map((n) => [n.versionId, n.detail, n.eventAt]);
+    await save(true, [
+      item(first.versionId, '2027-08-10', '17:00'),
+      item(second.versionId, '2027-08-12', null),
+    ]);
+    expect(await changed('student')).toEqual([]);
+    // Moved and removed due dates reach every follower, never the owner.
+    await save(true, [
+      item(first.versionId, '2027-08-10', '09:00'),
+      item(second.versionId, null, null),
+    ]);
+    const expected = [
+      [second.versionId, 'DUE_REMOVED', null],
+      [first.versionId, null, '2027-08-10T02:00:00.000Z'],
+    ];
+    expect((await changed('student')).sort()).toEqual(expected.sort());
+    expect((await changed('other')).sort()).toEqual(expected.sort());
+    expect(await changed('lecturer')).toEqual([]);
+    // Saving the same dates again announces nothing new.
+    await save(true, [
+      item(first.versionId, '2027-08-10', '09:00'),
+      item(second.versionId, null, null),
+    ]);
+    expect(await changed('student')).toHaveLength(2);
+
+    const deadline = (
+      await agents.student
+        .get('/api/v1/calendar/reading-deadlines')
+        .query({ from: '2027-08-01', to: '2027-09-01' })
+        .expect(200)
+    ).body.items.find((d: { versionId: string }) => d.versionId === first.versionId);
+    expect(deadline).toMatchObject({ dueOn: '2027-08-10', dueTime: '09:00' });
+    const followed = (
+      await agents.student.get('/api/v1/reading-lists/following').expect(200)
+    ).body.items.find((c: { course: { id: string } }) => c.course.id === course);
+    expect(followed).toMatchObject({ remindMinutes: 1440 });
+
+    // One day before 09:00 Vietnam time, once, and only for the follower who asked.
+    const reminders = app.get(CalendarReminders);
+    const soon = async (name: string) =>
+      ((await notices(name, '?limit=50')).items as { kind: string; versionId: string }[]).filter(
+        (n) => n.kind === 'READING_DEADLINE_SOON' && ours.includes(n.versionId),
+      );
+    expect(await reminders.dispatch(new Date('2027-08-09T01:58:00.000Z'))).toBe(0);
+    expect(await reminders.dispatch(new Date('2027-08-09T02:01:00.000Z'))).toBe(1);
+    expect(await reminders.dispatch(new Date('2027-08-09T02:03:00.000Z'))).toBe(0);
+    expect(await soon('student')).toMatchObject([
+      { versionId: first.versionId, eventAt: '2027-08-10T02:00:00.000Z' },
+    ]);
+    expect(await soon('other')).toEqual([]);
+    // A version already marked read is not reminded.
+    const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+    await agents.student
+      .put(`/api/v1/courses/${course}/reading-lists/read/${first.versionId}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send({ read: true })
+      .expect(200);
+    await save(true, [
+      item(first.versionId, '2027-08-20', '09:00'),
+      item(second.versionId, null, null),
+    ]);
+    expect(await reminders.dispatch(new Date('2027-08-19T02:01:00.000Z'))).toBe(0);
+    // Leave the course as other tests expect it: nothing followed, nothing read.
+    await agents.student
+      .put(`/api/v1/courses/${course}/reading-lists/read/${first.versionId}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send({ read: false })
+      .expect(200);
+    await follow('student', { following: false });
+    await follow('other', { following: false });
   });
   it('CAL-04b: due dates show on the calendar only for followed courses and readable items', async () => {
     const first = await readingFixture();
@@ -875,7 +1018,7 @@ describe('private material drafts', () => {
       .put(`/api/v1/courses/${course}/reading-lists/follow`)
       .send({ following: true })
       .expect(403);
-    expect((await follow('student', true)).body).toEqual({ following: true });
+    expect((await follow('student', true)).body).toEqual({ following: true, remindMinutes: null });
     expect((await follow('student', true)).status).toBe(200);
     expect(
       (await agents.student.get(`/api/v1/courses/${course}/reading-lists`)).body.following,
@@ -886,6 +1029,7 @@ describe('private material drafts', () => {
     expect(shown).toEqual([
       {
         dueOn: '2026-11-03',
+        dueTime: null,
         listId: saved.body.item.id,
         listTitle: 'Danh sách có hạn',
         course: { id: course, code: expect.any(String), name: expect.any(String) },
@@ -962,7 +1106,10 @@ describe('private material drafts', () => {
       .get(deadlines)
       .query({ from: '2026-11-01', to: '2026-12-01' })
       .expect(401);
-    expect((await follow('student', false)).body).toEqual({ following: false });
+    expect((await follow('student', false)).body).toEqual({
+      following: false,
+      remindMinutes: null,
+    });
     expect(await titles()).toEqual([]);
   });
   it('COURSE-02: readers keep private read marks on listed, readable versions', async () => {
@@ -1089,7 +1236,13 @@ describe('private material drafts', () => {
       course: { id: course, code: expect.any(String), name: expect.any(String) },
       total: 3,
       read: 0,
-      next: { dueOn: '2026-11-03', versionId: second.versionId, title: expect.any(String) },
+      remindMinutes: null,
+      next: {
+        dueOn: '2026-11-03',
+        dueTime: null,
+        versionId: second.versionId,
+        title: expect.any(String),
+      },
     });
     // Reading the earliest item moves "next" to the following unread due date.
     await put('student', `read/${second.versionId}`, { read: true });
@@ -1507,7 +1660,8 @@ describe('private material drafts', () => {
         ).body.items,
       ).toEqual([]);
       for (const body of [
-        series({ kind: 'TASK', endsAt: null }),
+        // A task repeats only once it has a due date (CAL-07).
+        series({ kind: 'TASK', startsAt: null, endsAt: null }),
         series({}, { weekdays: [3] }),
         series({}, { until: '2027-02-28' }),
         series({}, { until: '2028-03-02' }),
@@ -1519,6 +1673,13 @@ describe('private material drafts', () => {
         series({}, { weekdays: [1, 1] }),
         series({}, { utcOffset: 900 }),
         series({}, { every: 2 }),
+        series({}, { freq: 'DAILY' }),
+        series({}, { interval: 13 }),
+        series({}, { interval: 0 }),
+        series({}, { count: 3 }),
+        series({}, { until: undefined, count: 0 }),
+        series({}, { until: undefined, count: 400 }),
+        series({}, { until: undefined }),
       ])
         expect((await readingWrite('student', items, body)).status).toBe(400);
       // Hanoi Monday 06:30 is Sunday 23:30 UTC: the weekday follows the saved offset.
@@ -1554,13 +1715,13 @@ describe('private material drafts', () => {
       ).rejects.toThrow(/ck_calendar_repeat_shape/);
       await expect(
         db.query(
-          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,4,'2027-03-17',420)",
+          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_freq,repeat_interval,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,'WEEKLY',1,4,'2027-03-17',420)",
           [users.student, monday, '2027-03-01T01:00:00.000Z'],
         ),
       ).rejects.toThrow(/ck_calendar_repeat_start/);
       await expect(
         db.query(
-          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,1,'2028-03-02',420)",
+          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_freq,repeat_interval,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,'WEEKLY',1,1,'2028-03-02',420)",
           [users.student, monday, '2027-03-01T01:00:00.000Z'],
         ),
       ).rejects.toThrow(/ck_calendar_repeat_start/);
@@ -1696,6 +1857,225 @@ describe('private material drafts', () => {
       ).toBe(0);
     });
   });
+  describe('CAL-07 repeat rules', () => {
+    const items = '/api/v1/calendar/items';
+    // Saturday 31 July 2027, 07:00–08:00 in Hanoi (UTC+7); away from the other calendar dates.
+    const start = '2027-07-31T00:00:00.000Z';
+    const fields = (overrides: object = {}, repeat: object | null = {}) => ({
+      kind: 'EVENT',
+      title: 'Ôn tập cuối tháng',
+      details: '',
+      startsAt: start,
+      endsAt: '2027-07-31T01:00:00.000Z',
+      allDay: false,
+      color: 'blue',
+      versionId: null,
+      pageNumber: null,
+      repeat:
+        repeat === null
+          ? null
+          : { freq: 'MONTHLY', interval: 1, until: '2027-12-31', utcOffset: 420, ...repeat },
+      requestId: randomUUID(),
+      ...overrides,
+    });
+    const starts = async (id: string, from = start, to = '2028-01-01T00:00:00.000Z') =>
+      (await agents.student.get(items).query({ from, to: to }).expect(200)).body.items
+        .filter((i: { id: string }) => i.id === id)
+        .map((i: { startsAt: string }) => i.startsAt);
+    const between = async (id: string) => [
+      ...(await starts(id, start, '2027-09-30T00:00:00.000Z')),
+      ...(await starts(id, '2027-09-30T00:00:00.000Z', '2027-11-30T00:00:00.000Z')),
+      ...(await starts(id, '2027-11-30T00:00:00.000Z', '2028-01-01T00:00:00.000Z')),
+    ];
+
+    it('repeats monthly on the day of the month, every N weeks and ends after a count', async () => {
+      const monthly = await readingWrite('student', items, fields());
+      expect(monthly.status).toBe(201);
+      expect(monthly.body.item.repeat).toMatchObject({
+        freq: 'MONTHLY',
+        interval: 1,
+        count: null,
+        weekdays: [],
+        until: '2027-12-31',
+      });
+      // No 31st in September or November.
+      expect(await between(monthly.body.item.id)).toEqual([
+        '2027-07-31T00:00:00.000Z',
+        '2027-08-31T00:00:00.000Z',
+        '2027-10-31T00:00:00.000Z',
+        '2027-12-31T00:00:00.000Z',
+      ]);
+      // Every other week on Saturday, three times: the API stores the date of the last one.
+      const fortnight = await readingWrite(
+        'student',
+        items,
+        fields({}, { freq: 'WEEKLY', weekdays: [6], interval: 2, until: undefined, count: 3 }),
+      );
+      expect(fortnight.status).toBe(201);
+      expect(fortnight.body.item.repeat).toMatchObject({ count: 3, until: '2027-08-28' });
+      expect(await between(fortnight.body.item.id)).toEqual([
+        '2027-07-31T00:00:00.000Z',
+        '2027-08-14T00:00:00.000Z',
+        '2027-08-28T00:00:00.000Z',
+      ]);
+      // The database refuses a monthly series with weekdays, whatever the API sends.
+      await expect(
+        db.query('UPDATE hucescholar.calendar_items SET repeat_days = 1 WHERE id = $1', [
+          monthly.body.item.id,
+        ]),
+      ).rejects.toThrow(/ck_calendar_repeat_shape/);
+    });
+
+    it('repeats a dated task, done one occurrence at a time', async () => {
+      const task = await readingWrite(
+        'student',
+        items,
+        fields(
+          { kind: 'TASK', title: 'Nộp nhật ký thí nghiệm', endsAt: null },
+          { freq: 'WEEKLY', weekdays: [6], until: '2027-08-21' },
+        ),
+      );
+      expect(task.status).toBe(201);
+      const id = task.body.item.id;
+      const occurrences = (
+        await agents.student
+          .get(items)
+          .query({ from: start, to: '2027-08-22T00:00:00.000Z' })
+          .expect(200)
+      ).body.items.filter((i: { id: string }) => i.id === id);
+      expect(
+        occurrences.map((i: { startsAt: string; endsAt: null }) => [i.startsAt, i.endsAt]),
+      ).toEqual([
+        ['2027-07-31T00:00:00.000Z', null],
+        ['2027-08-07T00:00:00.000Z', null],
+        ['2027-08-14T00:00:00.000Z', null],
+        ['2027-08-21T00:00:00.000Z', null],
+      ]);
+      const open = async () =>
+        (await agents.student.get('/api/v1/calendar/tasks?limit=100').expect(200)).body.items
+          .filter((i: { id: string }) => i.id === id)
+          .map((i: { startsAt: string }) => i.startsAt);
+      expect(await open()).toEqual(['2027-07-31T00:00:00.000Z']);
+      // A repeating task needs the occurrence; done moves the open one to the next.
+      expect(
+        (await readingWrite('student', `${items}/${id}/done`, { done: true }, 'put')).status,
+      ).toBe(400);
+      const done = await readingWrite(
+        'student',
+        `${items}/${id}/done`,
+        { done: true, occurrenceStart: '2027-07-31T00:00:00.000Z' },
+        'put',
+      );
+      expect(done.body.item).toMatchObject({
+        done: true,
+        occurrenceStart: '2027-07-31T00:00:00.000Z',
+      });
+      expect(await open()).toEqual(['2027-08-07T00:00:00.000Z']);
+      const doneList = (
+        await agents.student.get('/api/v1/calendar/tasks?status=done&limit=100').expect(200)
+      ).body.items.filter((i: { id: string }) => i.id === id);
+      expect(doneList).toMatchObject([{ occurrenceStart: '2027-07-31T00:00:00.000Z', done: true }]);
+      const inRange = (
+        await agents.student
+          .get(items)
+          .query({ from: start, to: '2027-08-08T00:00:00.000Z' })
+          .expect(200)
+      ).body.items.filter((i: { id: string }) => i.id === id);
+      expect(inRange.map((i: { done: boolean }) => i.done)).toEqual([true, false]);
+      expect(
+        (
+          await readingWrite(
+            'student',
+            `${items}/${id}/done`,
+            { done: true, occurrenceStart: '2027-08-01T00:00:00.000Z' },
+            'put',
+          )
+        ).status,
+      ).toBe(400);
+      await readingWrite(
+        'student',
+        `${items}/${id}/done`,
+        { done: false, occurrenceStart: '2027-07-31T00:00:00.000Z' },
+        'put',
+      );
+      expect(await open()).toEqual(['2027-07-31T00:00:00.000Z']);
+    });
+
+    it('edits or deletes "this and following" by ending the series before the occurrence', async () => {
+      const weekly = await readingWrite(
+        'student',
+        items,
+        fields(
+          { title: 'Học nhóm thứ Bảy' },
+          { freq: 'WEEKLY', weekdays: [6], until: '2027-08-28' },
+        ),
+      );
+      const id = weekly.body.item.id;
+      const split = await readingWrite('student', `${items}/${id}/split`, {
+        ...fields(
+          {
+            title: 'Học nhóm (giờ mới)',
+            startsAt: '2027-08-14T02:00:00.000Z',
+            endsAt: '2027-08-14T03:00:00.000Z',
+          },
+          { freq: 'WEEKLY', weekdays: [6], until: '2027-08-28' },
+        ),
+        revision: 1,
+        occurrenceStart: '2027-08-14T00:00:00.000Z',
+      });
+      expect(split.status).toBe(201);
+      expect(await between(id)).toEqual(['2027-07-31T00:00:00.000Z', '2027-08-07T00:00:00.000Z']);
+      expect(await between(split.body.item.id)).toEqual([
+        '2027-08-14T02:00:00.000Z',
+        '2027-08-21T02:00:00.000Z',
+        '2027-08-28T02:00:00.000Z',
+      ]);
+      const series = (
+        await agents.student.get(items).query({ from: start, to: '2027-08-01T00:00:00.000Z' })
+      ).body.items.find((i: { id: string }) => i.id === id);
+      expect(series.repeat.until).toBe('2027-08-13');
+      // From the first occurrence a split is refused (edit the whole series instead).
+      expect(
+        (
+          await readingWrite('student', `${items}/${split.body.item.id}/split`, {
+            ...fields({}, null),
+            revision: 1,
+            occurrenceStart: '2027-08-14T02:00:00.000Z',
+          })
+        ).status,
+      ).toBe(400);
+      // Deleting from the third session keeps the first two; from the first it deletes all.
+      expect(
+        (
+          await readingWrite('student', `${items}/${split.body.item.id}/truncate`, {
+            revision: 1,
+            occurrenceStart: '2027-08-28T02:00:00.000Z',
+          })
+        ).status,
+      ).toBe(204);
+      expect(await between(split.body.item.id)).toEqual([
+        '2027-08-14T02:00:00.000Z',
+        '2027-08-21T02:00:00.000Z',
+      ]);
+      expect(
+        (
+          await readingWrite('student', `${items}/${id}/truncate`, {
+            revision: 2,
+            occurrenceStart: '2027-07-31T00:00:00.000Z',
+          })
+        ).status,
+      ).toBe(204);
+      expect(await between(id)).toEqual([]);
+      expect(
+        (
+          await readingWrite('other', `${items}/${split.body.item.id}/truncate`, {
+            revision: 2,
+            occurrenceStart: '2027-08-21T02:00:00.000Z',
+          })
+        ).status,
+      ).toBe(404);
+    });
+  });
   describe('CAL-03 reminders', () => {
     const items = '/api/v1/calendar/items';
     // Monday 5 April 2027 in Hanoi (UTC+7); away from the CAL-01/02 dates.
@@ -1722,7 +2102,7 @@ describe('private material drafts', () => {
     it('validates reminders, notifies each due occurrence once and mails only when asked', async () => {
       const session = await readingWrite('student', items, fields());
       expect(session.status).toBe(201);
-      expect(session.body.item.reminder).toEqual({ minutes: 15, email: true });
+      expect(session.body.item.reminder).toEqual({ minutes: 15, more: [], email: true });
       for (const bad of [
         { remindMinutes: 7 },
         { allDay: true, endsAt: '2027-04-06T00:00:00.000Z', startsAt: '2027-04-05T00:00:00.000Z' },
@@ -1811,6 +2191,96 @@ describe('private material drafts', () => {
       expect((await reminders()).map((n: { calendarItemId: string }) => n.calendarItemId)).toEqual([
         weekly.body.item.id,
       ]);
+    });
+    it('CAL-07: up to three reminders, all-day reminders at a time of day, and an account-wide email switch', async () => {
+      // Monday 6 September 2027 in Hanoi (UTC+7); away from the other calendar dates.
+      const timed = fields({
+        title: 'Ôn Thủy lực',
+        startsAt: '2027-09-06T02:00:00.000Z',
+        endsAt: '2027-09-06T03:00:00.000Z',
+        remindMinutes: 60,
+        remindMore: [15, 1440],
+        remindEmail: false,
+      });
+      const created = await readingWrite('student', items, timed);
+      expect(created.status).toBe(201);
+      expect(created.body.item.reminder).toEqual({ minutes: 60, more: [15, 1440], email: false });
+      for (const body of [
+        fields({ remindMinutes: null, remindMore: [15] }),
+        fields({ remindMinutes: 60, remindMore: [60] }),
+        fields({ remindMinutes: 60, remindMore: [15, 15] }),
+        fields({ remindMinutes: 60, remindMore: [5, 10, 15] }),
+        fields({ remindMinutes: -480 }),
+        fields({
+          allDay: true,
+          startsAt: '2027-09-05T17:00:00.000Z',
+          endsAt: '2027-09-06T17:00:00.000Z',
+          remindMinutes: 60,
+        }),
+      ])
+        expect((await readingWrite('student', items, body)).status).toBe(400);
+      // An all-day exam day: 08:00 that day, and 20:00 the evening before, with email.
+      const allDay = await readingWrite(
+        'student',
+        items,
+        fields({
+          title: 'Thi giữa kỳ',
+          allDay: true,
+          startsAt: '2027-09-07T17:00:00.000Z',
+          endsAt: '2027-09-08T17:00:00.000Z',
+          remindMinutes: -480,
+          remindMore: [240],
+          remindEmail: true,
+        }),
+      );
+      expect(allDay.status).toBe(201);
+
+      const sent: { to: string; subject: string; text: string }[] = [];
+      const service = new CalendarReminders(
+        app.get(DatabaseService),
+        {
+          enabled: true,
+          send: async (mail: (typeof sent)[0]) => void sent.push(mail),
+        } as unknown as Mailer,
+        app.get(AUTH_CONFIG),
+      );
+      // The day before, then an hour before, then 15 minutes before: three notices.
+      expect(await service.dispatch(new Date('2027-09-05T02:01:00.000Z'))).toBe(1);
+      expect(await service.dispatch(new Date('2027-09-06T01:01:00.000Z'))).toBe(1);
+      expect(await service.dispatch(new Date('2027-09-06T01:46:00.000Z'))).toBe(1);
+      expect(await service.dispatch(new Date('2027-09-06T01:48:00.000Z'))).toBe(0);
+      // 20:00 on 7 Sep in Hanoi is 13:00 UTC; 08:00 on 8 Sep is 01:00 UTC, after the start.
+      expect(await service.dispatch(new Date('2027-09-07T13:01:00.000Z'))).toBe(1);
+      expect(sent.map((m) => m.text)).toEqual([
+        expect.stringContaining('“Thi giữa kỳ” bắt đầu ngày mai'),
+      ]);
+      // Turning email off for the account stops the mail; the in-app notice still comes.
+      const prefs = (await agents.student.get('/api/v1/account/preferences').expect(200)).body;
+      expect(prefs.preferences.reminderEmail).toBe(true);
+      const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+      await agents.student
+        .put('/api/v1/account/preferences')
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send({
+          preferences: { ...prefs.preferences, reminderEmail: false },
+          revision: prefs.revision,
+        })
+        .expect(200);
+      expect(await service.dispatch(new Date('2027-09-08T01:01:00.000Z'))).toBe(1);
+      expect(sent).toHaveLength(1);
+      const turnedOff = (await agents.student.get('/api/v1/account/preferences').expect(200)).body;
+      expect(turnedOff.preferences.reminderEmail).toBe(false);
+      // Back on, so other tests see the default.
+      await agents.student
+        .put('/api/v1/account/preferences')
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send({
+          preferences: { ...turnedOff.preferences, reminderEmail: true },
+          revision: turnedOff.revision,
+        })
+        .expect(200);
     });
   });
   describe('CAL-05 iCalendar export', () => {
@@ -1908,6 +2378,125 @@ describe('private material drafts', () => {
       ])
         expect((await agents.student.get(exported).query(query)).status).toBe(400);
       await request(app.getHttpServer()).get(exported).query({ utcOffset: 420 }).expect(401);
+    });
+    it('CAL-07: imports an .ics file once, and exports a date range with reading-list due dates', async () => {
+      const imported = '/api/v1/calendar/import';
+      const upload = async (body: string, type = 'text/calendar', who = 'student') => {
+        const csrf = (await agents[who].get('/api/v1/auth/csrf')).body.csrfToken;
+        return agents[who]
+          .post(`${imported}?utcOffset=420`)
+          .set('Origin', origin)
+          .set('X-CSRF-Token', csrf)
+          .set('Content-Type', type)
+          .send(body);
+      };
+      const uid = randomUUID();
+      const file = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        `UID:${uid}-weekly`,
+        'DTSTART;TZID=Asia/Ho_Chi_Minh:20271004T070000',
+        'DTEND;TZID=Asia/Ho_Chi_Minh:20271004T083000',
+        'RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=3',
+        'EXDATE;TZID=Asia/Ho_Chi_Minh:20271011T070000',
+        'SUMMARY:Nhập: học nhóm',
+        'END:VEVENT',
+        'BEGIN:VTODO',
+        `UID:${uid}-todo`,
+        'DUE:20271006T100000Z',
+        'SUMMARY:Nhập: nộp bài',
+        'END:VTODO',
+        'BEGIN:VEVENT',
+        `UID:${uid}-moved`,
+        'RECURRENCE-ID:20271011T000000Z',
+        'DTSTART:20271012T000000Z',
+        'SUMMARY:Nhập: buổi dời',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n');
+      const first = await upload(file);
+      expect(first.status).toBe(200);
+      expect(first.body).toMatchObject({
+        created: 2,
+        existing: 0,
+        skippedCount: 1,
+        skipped: [{ title: 'Nhập: buổi dời', reason: expect.any(String) }],
+      });
+      // The same file again adds nothing.
+      expect((await upload(file)).body).toMatchObject({ created: 0, existing: 2 });
+      const october = (
+        await agents.student
+          .get(items)
+          .query({ from: '2027-10-01T00:00:00.000Z', to: '2027-10-31T00:00:00.000Z' })
+          .expect(200)
+      ).body.items.filter((i: { title: string }) => i.title.startsWith('Nhập: '));
+      expect(
+        october.map((i: { title: string; startsAt: string }) => [i.title, i.startsAt]),
+      ).toEqual([
+        ['Nhập: học nhóm', '2027-10-04T00:00:00.000Z'],
+        ['Nhập: nộp bài', '2027-10-06T10:00:00.000Z'],
+        ['Nhập: học nhóm', '2027-10-18T00:00:00.000Z'],
+      ]);
+      expect(october[0]).toMatchObject({ color: 'gray', repeat: { count: 3, weekdays: [1] } });
+      expect((await upload(file, 'text/plain')).status).toBe(415);
+      expect((await upload('x'.repeat(513 * 1024))).status).toBe(413);
+      await agents.student
+        .post(`${imported}?utcOffset=420`)
+        .set('Content-Type', 'text/calendar')
+        .send(file)
+        .expect(403);
+      expect((await upload(file, 'text/calendar', 'other')).body).toMatchObject({ created: 2 });
+
+      // Export: a date range keeps only what falls in it; due dates of followed courses join.
+      const course = courses[0];
+      const reading = await readingFixture();
+      const revision =
+        (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+          ?.revision ?? 0;
+      await listWrite('lecturer', course, {
+        title: 'Danh sách xuất lịch',
+        published: true,
+        revision,
+        items: [
+          {
+            section: '',
+            versionId: reading.versionId,
+            note: '',
+            dueOn: '2027-10-06',
+            dueTime: '17:00',
+          },
+        ],
+      });
+      const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+      const follow = (following: boolean) =>
+        agents.student
+          .put(`/api/v1/courses/${course}/reading-lists/follow`)
+          .set('Origin', origin)
+          .set('X-CSRF-Token', csrf)
+          .send({ following });
+      await follow(true).expect(200);
+      const ranged = await agents.student
+        .get(exported)
+        .query({ utcOffset: 420, from: '2027-10-05', to: '2027-10-07', deadlines: true })
+        .expect(200);
+      expect(ranged.text).toContain('SUMMARY:Việc: Nhập: nộp bài');
+      expect(ranged.text).not.toContain('SUMMARY:Nhập: học nhóm');
+      expect(ranged.text).toContain(`UID:deadline-`);
+      expect(ranged.text).toContain('DTSTART:20271006T100000Z');
+      expect(ranged.text.replace(/\r\n /g, '')).toMatch(/SUMMARY:Hạn đọc: .+ \(/);
+      const without = await agents.student
+        .get(exported)
+        .query({ utcOffset: 420, from: '2027-10-05', to: '2027-10-07' })
+        .expect(200);
+      expect(without.text).not.toContain('UID:deadline-');
+      for (const query of [
+        { utcOffset: 420, from: '2027-10-05' },
+        { utcOffset: 420, from: '2027-10-07', to: '2027-10-05' },
+        { utcOffset: 420, from: '2027-02-30', to: '2027-03-01' },
+      ])
+        expect((await agents.student.get(exported).query(query)).status).toBe(400);
+      await follow(false).expect(200);
     });
   });
   it('STUDY-02: practice and the card list filter by course or document, from readable cards only', async () => {

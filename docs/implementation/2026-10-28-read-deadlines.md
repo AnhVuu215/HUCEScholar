@@ -28,4 +28,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test`:
 
 ## Chưa làm
 
-- Lọc ẩn hạn đã đọc; đánh dấu ngay trên lịch.
+- Lọc ẩn hạn đã đọc và đánh dấu ngay trên lịch đã có ở [CAL-07](2026-10-31-calendar-complete.md).

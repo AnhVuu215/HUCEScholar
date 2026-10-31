@@ -1,5 +1,6 @@
 import {
   isOccurrence,
+  lastOfCount,
   localWeekday,
   maskWeekdays,
   occurrenceStarts,
@@ -75,5 +76,53 @@ describe('CAL-02 weekly repeat', () => {
     expect(seriesProblem(plan({ until: parseDate('2026-11-01')! }))).toMatch(/từ ngày bắt đầu/);
     expect(seriesProblem(plan({ until: parseDate('2027-11-03')! }))).toBeNull();
     expect(seriesProblem(plan({ until: parseDate('2027-11-04')! }))).toMatch(/366/);
+  });
+  describe('CAL-07 rules', () => {
+    it('repeats every other week, counting weeks from the first Monday', () => {
+      const series = plan({
+        days: weekdayMask([1, 3]),
+        interval: 2,
+        until: parseDate('2026-11-30')!,
+      });
+      expect([...occurrenceStarts(series)].map(iso)).toEqual([
+        '2026-11-02T00:00:00.000Z',
+        '2026-11-04T00:00:00.000Z',
+        '2026-11-16T00:00:00.000Z',
+        '2026-11-18T00:00:00.000Z',
+        '2026-11-30T00:00:00.000Z',
+      ]);
+    });
+    it('repeats monthly on the day of the month and skips months without it', () => {
+      // Saturday 31 Oct 2026, 07:00 in Hanoi.
+      const start = new Date('2026-10-31T00:00:00.000Z');
+      const series = plan({
+        start,
+        end: new Date('2026-10-31T01:00:00.000Z'),
+        freq: 'MONTHLY',
+        days: 0,
+        until: parseDate('2027-03-31')!,
+      });
+      expect([...occurrenceStarts(series)].map(iso)).toEqual([
+        '2026-10-31T00:00:00.000Z',
+        '2026-12-31T00:00:00.000Z',
+        '2027-01-31T00:00:00.000Z',
+        '2027-03-31T00:00:00.000Z',
+      ]);
+      expect(seriesProblem(series)).toBeNull();
+      expect([...occurrenceStarts({ ...series, interval: 2 })].map(iso)).toEqual([
+        '2026-10-31T00:00:00.000Z',
+        '2026-12-31T00:00:00.000Z',
+      ]);
+    });
+    it('stops after a count and finds the date of the last time', () => {
+      const series = plan({ count: 3, until: parseDate('2026-12-31')! });
+      expect([...occurrenceStarts(series)]).toHaveLength(3);
+      expect(lastOfCount(plan(), 3)?.toISOString()).toBe('2026-11-09T00:00:00.000Z');
+      // 200 sessions on two weekdays do not fit in 366 days.
+      expect(lastOfCount(plan(), 200)).toBeNull();
+    });
+    it('refuses an interval outside 1-12', () => {
+      expect(seriesProblem(plan({ interval: 13 }))).toBe('Khoảng lặp từ 1 tới 12.');
+    });
   });
 });

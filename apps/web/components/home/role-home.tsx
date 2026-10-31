@@ -199,7 +199,7 @@ function FollowedReadingLists() {
                     {next && (
                       <p className={dueDay(next.dueOn) < today ? 'home-overdue' : 'field-hint'}>
                         {dueDay(next.dueOn) < today ? 'Quá hạn' : 'Hạn gần nhất'}{' '}
-                        {formatDue(next.dueOn)}:{' '}
+                        {formatDue(next.dueOn, next.dueTime)}:{' '}
                         <Link href={`/workspace/library/versions/${next.versionId}`}>
                           {next.title}
                         </Link>{' '}

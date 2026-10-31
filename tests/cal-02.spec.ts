@@ -56,7 +56,7 @@ test('weekly sessions repeat, one session changes alone, and drag and drop moves
   await editor.getByLabel('Giờ bắt đầu', { exact: true }).fill('08:00');
   await editor.getByLabel('Ngày kết thúc', { exact: true }).fill(key(monday));
   await editor.getByLabel('Giờ kết thúc', { exact: true }).fill('09:00');
-  await editor.getByLabel('Lặp lại hằng tuần', { exact: true }).check();
+  await editor.getByLabel('Lặp lại', { exact: true }).check();
   const weekdays = editor.getByRole('group', { name: 'Lặp vào' });
   // The start day's weekday is always part of the series.
   await expect(weekdays.getByRole('checkbox', { name: 'Th 2' })).toBeChecked();
@@ -80,7 +80,7 @@ test('weekly sessions repeat, one session changes alone, and drag and drop moves
   await block(wednesday).click();
   const edit = page.getByRole('form', { name: 'Sửa lịch học' });
   await expect(edit.getByRole('radio', { name: 'Chỉ buổi này' })).toBeChecked();
-  await expect(edit.getByLabel('Lặp lại hằng tuần', { exact: true })).toHaveCount(0);
+  await expect(edit.getByLabel('Lặp lại', { exact: true })).toHaveCount(0);
   await edit.getByLabel('Tiêu đề', { exact: true }).fill(`${session} (bù)`);
   await edit.getByRole('button', { name: 'Lưu', exact: true }).click();
   await expect(block(wednesday, `${session} (bù)`)).toHaveCount(1);
@@ -150,7 +150,7 @@ test('weekly sessions repeat, one session changes alone, and drag and drop moves
   const whole = page.getByRole('form', { name: 'Sửa lịch học' });
   await whole.getByRole('radio', { name: 'Cả chuỗi' }).check();
   await expect(whole.getByLabel('Ngày bắt đầu', { exact: true })).toHaveValue(key(monday));
-  await expect(whole.getByLabel('Lặp lại hằng tuần', { exact: true })).toBeChecked();
+  await expect(whole.getByLabel('Lặp lại', { exact: true })).toBeChecked();
   await whole.getByRole('button', { name: 'Xóa cả chuỗi', exact: true }).click();
   await page.getByRole('button', { name: 'Xác nhận xóa', exact: true }).click();
   await expect(block(following)).toHaveCount(0);

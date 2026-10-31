@@ -4,6 +4,7 @@ import {
   IsDefined,
   IsIn,
   IsInt,
+  IsOptional,
   IsString,
   Max,
   MaxLength,
@@ -24,6 +25,8 @@ export class ReaderPreferencesDto {
   highlightColor!: string;
   @IsIn(['fit-width', '100', '125', '150']) defaultZoom!: string;
   @IsBoolean() annotationPanelOpen!: boolean;
+  /** CAL-07: account-wide switch for reminder emails; absent keeps the stored choice. */
+  @IsOptional() @IsBoolean() reminderEmail?: boolean;
 }
 export class PreferencesUpdateDto {
   @IsDefined()

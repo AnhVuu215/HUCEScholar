@@ -651,7 +651,7 @@
   font-weight: 600;
 }
 .is-done > button,
-.calendar-deadline.is-done > a:first-child {
+.calendar-deadline.is-done > a:first-of-type {
   text-decoration: line-through;
   opacity: 0.75;
 }
@@ -1107,4 +1107,48 @@
 }
 .calendar-review > .secondary-button {
   margin-bottom: 12px;
+}
+/* Finished tasks, shown on request under the open ones. */
+.calendar-done {
+  margin-top: 12px;
+}
+.calendar-done .calendar-task-list {
+  margin-top: 8px;
+}
+.calendar-task-list li.is-done .text-button {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+/* Picking a document for a calendar item. */
+.calendar-picker {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.calendar-picker .form-field {
+  width: 100%;
+}
+.calendar-picker-results {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.calendar-picker-results li {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* CAL-07: kind and interval of a repeat side by side. */
+.calendar-repeat-rule {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 8px;
+}
+/* CAL-07: what an .ics import added and left out. */
+.calendar-import-result ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
 }

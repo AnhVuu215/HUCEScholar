@@ -526,6 +526,7 @@ model user_preferences {
   highlight_color String @default("#FFF59D") @db.VarChar(7)
   default_zoom String @default("fit-width") @db.VarChar(16)
   annotation_panel_open Boolean @default(false)
+  reminder_email Boolean @default(true)
   revision Int @default(1)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -555,6 +556,7 @@ model reading_list_items {
   version_id BigInt
   note String @default("") @db.VarChar(500)
   due_on DateTime? @db.Date
+  due_time DateTime? @db.Time(0)
   reading_lists reading_lists @relation(fields: [list_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document_versions document_versions @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   @@id([list_id, position])
@@ -566,6 +568,7 @@ model reading_list_follows {
   user_id BigInt
   course_id BigInt
   created_at DateTime @default(now()) @db.Timestamptz(6)
+  remind_minutes Int? @db.SmallInt
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   courses courses @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   @@id([user_id, course_id])
@@ -693,17 +696,32 @@ model calendar_items {
   repeat_utc_offset Int? @db.SmallInt
   remind_minutes Int? @db.SmallInt
   remind_email Boolean @default(false)
+  repeat_freq String? @db.VarChar(8)
+  repeat_interval Int? @db.SmallInt
+  repeat_count Int? @db.SmallInt
+  remind_more Int[] @default([]) @db.SmallInt
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document_versions document_versions? @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   calendar_item_skips calendar_item_skips[]
+  calendar_item_done calendar_item_done[]
   notifications notifications[]
   @@unique([user_id, request_id], map: "ux_calendar_request")
   @@index([user_id, starts_at, id], map: "ix_calendar_owner_time")
   @@index([user_id, starts_at, id], map: "ix_calendar_open_tasks", where: raw("(((kind)::text = 'TASK'::text) AND (done_at IS NULL))"))
   @@index([version_id], map: "ix_calendar_version")
-  @@index([user_id, repeat_until], map: "ix_calendar_series", where: raw("(repeat_days IS NOT NULL)"))
-  @@index([starts_at], map: "ix_calendar_remind_single", where: raw("((remind_minutes IS NOT NULL) AND (repeat_days IS NULL) AND (done_at IS NULL))"))
-  @@index([repeat_until], map: "ix_calendar_remind_series", where: raw("((remind_minutes IS NOT NULL) AND (repeat_days IS NOT NULL))"))
+  @@index([user_id, repeat_until], map: "ix_calendar_series", where: raw("(repeat_freq IS NOT NULL)"))
+  @@index([starts_at], map: "ix_calendar_remind_single", where: raw("((remind_minutes IS NOT NULL) AND (repeat_freq IS NULL) AND (done_at IS NULL))"))
+  @@index([repeat_until], map: "ix_calendar_remind_series", where: raw("((remind_minutes IS NOT NULL) AND (repeat_freq IS NOT NULL))"))
+  @@schema("hucescholar")
+}
+
+/// CAL-07. Occurrences of a repeating task the owner has done.
+model calendar_item_done {
+  item_id BigInt
+  occurrence_start DateTime @db.Timestamptz(6)
+  done_at DateTime @default(now()) @db.Timestamptz(6)
+  calendar_items calendar_items @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  @@id([item_id, occurrence_start])
   @@schema("hucescholar")
 }
 
