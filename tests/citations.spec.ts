@@ -182,7 +182,8 @@ test.describe('reader citations', () => {
     await expect(page.getByRole('status').filter({ hasText: 'Chưa sao chép được.' })).toBeVisible();
     await page.getByRole('button', { name: 'Đóng trích dẫn', exact: true }).click();
     await expect(
-      page.getByLabel('Trang tài liệu; cuộn ngang khi phóng lớn', { exact: true }),
+      // The stage takes focus back in either layout (its label names the layout).
+      page.locator('.reader-stage'),
     ).toBeFocused();
   });
 

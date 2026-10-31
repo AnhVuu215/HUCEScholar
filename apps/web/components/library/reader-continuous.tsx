@@ -1,5 +1,12 @@
 'use client';
-import { useEffect, useEffectEvent, useRef, useState, type RefObject } from 'react';
+import {
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import type { PageViewport } from 'pdfjs-dist';
 import { paintPage, readerViewport } from '../../lib/pdf-viewport';
@@ -93,11 +100,50 @@ export function ContinuousPages({
     for (const slot of slotsRef.current.values()) observer.observe(slot);
     return () => observer.disconnect();
   }, [stageRef, slotsRef, count]);
+  /**
+   * A zoom, rotation or width change resizes every page and the browser moves the scroll
+   * position with it. Those scrolls are not the reader's, so they must not change the page;
+   * once the new sizes are in, the page being read goes back to the top of the stage.
+   */
+  const settling = useRef(false);
+  const anchor = useEffectEvent(() => {
+    const root = stageRef.current,
+      slot = slotsRef.current.get(page);
+    if (root && slot)
+      root.scrollTop += slot.getBoundingClientRect().top - root.getBoundingClientRect().top - 16;
+    // The scroll this causes is handled a frame later; it is ours too.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        settling.current = false;
+      }),
+    );
+  });
+  useLayoutEffect(() => {
+    settling.current = true;
+    // Two frames: the new slot sizes are laid out before the column is moved.
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => anchor());
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [view, estimate]);
   const follow = useEffectEvent(() => {
     const root = stageRef.current;
-    if (!root) return;
+    if (!root || settling.current) return;
     const top = root.getBoundingClientRect().top,
       line = top + root.clientHeight * READING_LINE;
+    // At the end of the column the last page is being read, even when it is too short to
+    // reach the reading line (a short document on a narrow screen).
+    if (root.scrollTop > 0 && root.scrollTop + root.clientHeight >= root.scrollHeight - 2) {
+      if (count !== page) {
+        scrolledTo.current = count;
+        onScrollPage(count);
+      }
+      return;
+    }
     for (let n = 1; n <= count; n++) {
       const slot = slotsRef.current.get(n);
       if (!slot) continue;

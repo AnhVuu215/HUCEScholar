@@ -44,13 +44,16 @@ export function LibraryReader({ id, initialPage }: { id: string; initialPage?: n
   );
 }
 type Layout = 'single' | 'scroll';
-/** Per-browser convenience: the last layout chosen, not an account preference. */
+/**
+ * Per-browser convenience: the last layout chosen, not an account preference. Continuous scroll
+ * is the default; a reader who chose page by page keeps it.
+ */
 const LAYOUT_KEY = 'hucescholar:reader-layout';
 function storedLayout(): Layout {
   try {
-    return localStorage.getItem(LAYOUT_KEY) === 'scroll' ? 'scroll' : 'single';
+    return localStorage.getItem(LAYOUT_KEY) === 'single' ? 'single' : 'scroll';
   } catch {
-    return 'single';
+    return 'scroll';
   }
 }
 function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: number | null }) {
