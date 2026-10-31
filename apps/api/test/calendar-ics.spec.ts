@@ -160,4 +160,34 @@ describe('CAL-05 iCalendar export', () => {
     expect(text).toContain('RRULE:FREQ=WEEKLY;WKST=MO;BYDAY=MO;UNTIL=20261123');
     expect(text).toContain('EXDATE;VALUE=DATE:20261109');
   });
+  it('lists every-other-week and monthly series date by date', () => {
+    const series = {
+      start: new Date('2026-10-31T00:00:00.000Z'),
+      end: new Date('2026-10-31T01:00:00.000Z'),
+      days: 0,
+      until: parseDate('2027-01-31')!,
+      offset: VN,
+      freq: 'MONTHLY' as const,
+    };
+    const text = lines(
+      file([
+        item({
+          series,
+          start: series.start,
+          end: series.end,
+          skipped: [Date.parse('2026-12-31T00:00:00.000Z')],
+        }),
+      ]),
+    );
+    expect(text.some((l) => l.startsWith('RRULE'))).toBe(false);
+    expect(text).toContain('RDATE:20270131T000000Z');
+    // A removed first occurrence is excluded from DTSTART.
+    const skipFirst = lines(
+      file([
+        item({ series, start: series.start, end: series.end, skipped: [series.start.getTime()] }),
+      ]),
+    );
+    expect(skipFirst).toContain('EXDATE:20261031T000000Z');
+    expect(skipFirst).toContain('RDATE:20261231T000000Z,20270131T000000Z');
+  });
 });

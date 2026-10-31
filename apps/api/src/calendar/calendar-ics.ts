@@ -1,4 +1,11 @@
-import { DAY, localDate, localWeekday, maskWeekdays, type Series } from './calendar-repeat';
+import {
+  DAY,
+  localDate,
+  localWeekday,
+  maskWeekdays,
+  occurrenceStarts,
+  type Series,
+} from './calendar-repeat';
 
 /**
  * CAL-05. One iCalendar (RFC 5545) file of the owner's calendar, for importing into another
@@ -109,14 +116,23 @@ function eventLines(item: IcsItem, options: IcsOptions, origin: string) {
     lines.push(`DTSTART:${icsTime(item.start)}`);
     if (item.end) lines.push(`DTEND:${icsTime(item.end)}`);
   }
+  const at = (start: number) =>
+    item.allDay ? icsDate(localDate(new Date(start), offset)) : icsTime(new Date(start));
+  const dateParam = item.allDay ? ';VALUE=DATE' : '';
   if (item.series) {
-    lines.push(rrule(item.series, item.allDay));
-    for (const start of [...item.skipped].sort((a, b) => a - b))
-      lines.push(
-        item.allDay
-          ? `EXDATE;VALUE=DATE:${icsDate(localDate(new Date(start), offset))}`
-          : `EXDATE:${icsTime(new Date(start))}`,
-      );
+    const skipped = [...item.skipped].sort((a, b) => a - b);
+    if ((item.series.freq ?? 'WEEKLY') === 'WEEKLY' && (item.series.interval ?? 1) === 1) {
+      lines.push(rrule(item.series, item.allDay));
+      for (const start of skipped) lines.push(`EXDATE${dateParam}:${at(start)}`);
+    } else {
+      // Every N weeks and monthly series are listed date by date: a rule in UTC would put a
+      // session that starts before 07:00 in Vietnam into the wrong week or month day.
+      const gone = new Set(skipped);
+      const [first, ...rest] = [...occurrenceStarts(item.series)];
+      const dates = rest.filter((start) => !gone.has(start)).map(at);
+      if (dates.length) lines.push(`RDATE${dateParam}:${dates.join(',')}`);
+      if (gone.has(first)) lines.push(`EXDATE${dateParam}:${at(first)}`);
+    }
   }
   lines.push(`SUMMARY:${icsText(item.kind === 'TASK' ? `Việc: ${item.title}` : item.title)}`);
   if (options.details) {

@@ -1660,7 +1660,8 @@ describe('private material drafts', () => {
         ).body.items,
       ).toEqual([]);
       for (const body of [
-        series({ kind: 'TASK', endsAt: null }),
+        // A task repeats only once it has a due date (CAL-07).
+        series({ kind: 'TASK', startsAt: null, endsAt: null }),
         series({}, { weekdays: [3] }),
         series({}, { until: '2027-02-28' }),
         series({}, { until: '2028-03-02' }),
@@ -1672,6 +1673,13 @@ describe('private material drafts', () => {
         series({}, { weekdays: [1, 1] }),
         series({}, { utcOffset: 900 }),
         series({}, { every: 2 }),
+        series({}, { freq: 'DAILY' }),
+        series({}, { interval: 13 }),
+        series({}, { interval: 0 }),
+        series({}, { count: 3 }),
+        series({}, { until: undefined, count: 0 }),
+        series({}, { until: undefined, count: 400 }),
+        series({}, { until: undefined }),
       ])
         expect((await readingWrite('student', items, body)).status).toBe(400);
       // Hanoi Monday 06:30 is Sunday 23:30 UTC: the weekday follows the saved offset.
@@ -1707,13 +1715,13 @@ describe('private material drafts', () => {
       ).rejects.toThrow(/ck_calendar_repeat_shape/);
       await expect(
         db.query(
-          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,4,'2027-03-17',420)",
+          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_freq,repeat_interval,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,'WEEKLY',1,4,'2027-03-17',420)",
           [users.student, monday, '2027-03-01T01:00:00.000Z'],
         ),
       ).rejects.toThrow(/ck_calendar_repeat_start/);
       await expect(
         db.query(
-          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,1,'2028-03-02',420)",
+          "INSERT INTO hucescholar.calendar_items(request_id,user_id,kind,title,starts_at,ends_at,repeat_freq,repeat_interval,repeat_days,repeat_until,repeat_utc_offset) VALUES(gen_random_uuid(),$1,'EVENT','x',$2,$3,'WEEKLY',1,1,'2028-03-02',420)",
           [users.student, monday, '2027-03-01T01:00:00.000Z'],
         ),
       ).rejects.toThrow(/ck_calendar_repeat_start/);
@@ -1847,6 +1855,225 @@ describe('private material drafts', () => {
           )
         ).rows[0].n,
       ).toBe(0);
+    });
+  });
+  describe('CAL-07 repeat rules', () => {
+    const items = '/api/v1/calendar/items';
+    // Saturday 31 July 2027, 07:00–08:00 in Hanoi (UTC+7); away from the other calendar dates.
+    const start = '2027-07-31T00:00:00.000Z';
+    const fields = (overrides: object = {}, repeat: object | null = {}) => ({
+      kind: 'EVENT',
+      title: 'Ôn tập cuối tháng',
+      details: '',
+      startsAt: start,
+      endsAt: '2027-07-31T01:00:00.000Z',
+      allDay: false,
+      color: 'blue',
+      versionId: null,
+      pageNumber: null,
+      repeat:
+        repeat === null
+          ? null
+          : { freq: 'MONTHLY', interval: 1, until: '2027-12-31', utcOffset: 420, ...repeat },
+      requestId: randomUUID(),
+      ...overrides,
+    });
+    const starts = async (id: string, from = start, to = '2028-01-01T00:00:00.000Z') =>
+      (await agents.student.get(items).query({ from, to: to }).expect(200)).body.items
+        .filter((i: { id: string }) => i.id === id)
+        .map((i: { startsAt: string }) => i.startsAt);
+    const between = async (id: string) => [
+      ...(await starts(id, start, '2027-09-30T00:00:00.000Z')),
+      ...(await starts(id, '2027-09-30T00:00:00.000Z', '2027-11-30T00:00:00.000Z')),
+      ...(await starts(id, '2027-11-30T00:00:00.000Z', '2028-01-01T00:00:00.000Z')),
+    ];
+
+    it('repeats monthly on the day of the month, every N weeks and ends after a count', async () => {
+      const monthly = await readingWrite('student', items, fields());
+      expect(monthly.status).toBe(201);
+      expect(monthly.body.item.repeat).toMatchObject({
+        freq: 'MONTHLY',
+        interval: 1,
+        count: null,
+        weekdays: [],
+        until: '2027-12-31',
+      });
+      // No 31st in September or November.
+      expect(await between(monthly.body.item.id)).toEqual([
+        '2027-07-31T00:00:00.000Z',
+        '2027-08-31T00:00:00.000Z',
+        '2027-10-31T00:00:00.000Z',
+        '2027-12-31T00:00:00.000Z',
+      ]);
+      // Every other week on Saturday, three times: the API stores the date of the last one.
+      const fortnight = await readingWrite(
+        'student',
+        items,
+        fields({}, { freq: 'WEEKLY', weekdays: [6], interval: 2, until: undefined, count: 3 }),
+      );
+      expect(fortnight.status).toBe(201);
+      expect(fortnight.body.item.repeat).toMatchObject({ count: 3, until: '2027-08-28' });
+      expect(await between(fortnight.body.item.id)).toEqual([
+        '2027-07-31T00:00:00.000Z',
+        '2027-08-14T00:00:00.000Z',
+        '2027-08-28T00:00:00.000Z',
+      ]);
+      // The database refuses a monthly series with weekdays, whatever the API sends.
+      await expect(
+        db.query('UPDATE hucescholar.calendar_items SET repeat_days = 1 WHERE id = $1', [
+          monthly.body.item.id,
+        ]),
+      ).rejects.toThrow(/ck_calendar_repeat_shape/);
+    });
+
+    it('repeats a dated task, done one occurrence at a time', async () => {
+      const task = await readingWrite(
+        'student',
+        items,
+        fields(
+          { kind: 'TASK', title: 'Nộp nhật ký thí nghiệm', endsAt: null },
+          { freq: 'WEEKLY', weekdays: [6], until: '2027-08-21' },
+        ),
+      );
+      expect(task.status).toBe(201);
+      const id = task.body.item.id;
+      const occurrences = (
+        await agents.student
+          .get(items)
+          .query({ from: start, to: '2027-08-22T00:00:00.000Z' })
+          .expect(200)
+      ).body.items.filter((i: { id: string }) => i.id === id);
+      expect(
+        occurrences.map((i: { startsAt: string; endsAt: null }) => [i.startsAt, i.endsAt]),
+      ).toEqual([
+        ['2027-07-31T00:00:00.000Z', null],
+        ['2027-08-07T00:00:00.000Z', null],
+        ['2027-08-14T00:00:00.000Z', null],
+        ['2027-08-21T00:00:00.000Z', null],
+      ]);
+      const open = async () =>
+        (await agents.student.get('/api/v1/calendar/tasks?limit=100').expect(200)).body.items
+          .filter((i: { id: string }) => i.id === id)
+          .map((i: { startsAt: string }) => i.startsAt);
+      expect(await open()).toEqual(['2027-07-31T00:00:00.000Z']);
+      // A repeating task needs the occurrence; done moves the open one to the next.
+      expect(
+        (await readingWrite('student', `${items}/${id}/done`, { done: true }, 'put')).status,
+      ).toBe(400);
+      const done = await readingWrite(
+        'student',
+        `${items}/${id}/done`,
+        { done: true, occurrenceStart: '2027-07-31T00:00:00.000Z' },
+        'put',
+      );
+      expect(done.body.item).toMatchObject({
+        done: true,
+        occurrenceStart: '2027-07-31T00:00:00.000Z',
+      });
+      expect(await open()).toEqual(['2027-08-07T00:00:00.000Z']);
+      const doneList = (
+        await agents.student.get('/api/v1/calendar/tasks?status=done&limit=100').expect(200)
+      ).body.items.filter((i: { id: string }) => i.id === id);
+      expect(doneList).toMatchObject([{ occurrenceStart: '2027-07-31T00:00:00.000Z', done: true }]);
+      const inRange = (
+        await agents.student
+          .get(items)
+          .query({ from: start, to: '2027-08-08T00:00:00.000Z' })
+          .expect(200)
+      ).body.items.filter((i: { id: string }) => i.id === id);
+      expect(inRange.map((i: { done: boolean }) => i.done)).toEqual([true, false]);
+      expect(
+        (
+          await readingWrite(
+            'student',
+            `${items}/${id}/done`,
+            { done: true, occurrenceStart: '2027-08-01T00:00:00.000Z' },
+            'put',
+          )
+        ).status,
+      ).toBe(400);
+      await readingWrite(
+        'student',
+        `${items}/${id}/done`,
+        { done: false, occurrenceStart: '2027-07-31T00:00:00.000Z' },
+        'put',
+      );
+      expect(await open()).toEqual(['2027-07-31T00:00:00.000Z']);
+    });
+
+    it('edits or deletes "this and following" by ending the series before the occurrence', async () => {
+      const weekly = await readingWrite(
+        'student',
+        items,
+        fields(
+          { title: 'Học nhóm thứ Bảy' },
+          { freq: 'WEEKLY', weekdays: [6], until: '2027-08-28' },
+        ),
+      );
+      const id = weekly.body.item.id;
+      const split = await readingWrite('student', `${items}/${id}/split`, {
+        ...fields(
+          {
+            title: 'Học nhóm (giờ mới)',
+            startsAt: '2027-08-14T02:00:00.000Z',
+            endsAt: '2027-08-14T03:00:00.000Z',
+          },
+          { freq: 'WEEKLY', weekdays: [6], until: '2027-08-28' },
+        ),
+        revision: 1,
+        occurrenceStart: '2027-08-14T00:00:00.000Z',
+      });
+      expect(split.status).toBe(201);
+      expect(await between(id)).toEqual(['2027-07-31T00:00:00.000Z', '2027-08-07T00:00:00.000Z']);
+      expect(await between(split.body.item.id)).toEqual([
+        '2027-08-14T02:00:00.000Z',
+        '2027-08-21T02:00:00.000Z',
+        '2027-08-28T02:00:00.000Z',
+      ]);
+      const series = (
+        await agents.student.get(items).query({ from: start, to: '2027-08-01T00:00:00.000Z' })
+      ).body.items.find((i: { id: string }) => i.id === id);
+      expect(series.repeat.until).toBe('2027-08-13');
+      // From the first occurrence a split is refused (edit the whole series instead).
+      expect(
+        (
+          await readingWrite('student', `${items}/${split.body.item.id}/split`, {
+            ...fields({}, null),
+            revision: 1,
+            occurrenceStart: '2027-08-14T02:00:00.000Z',
+          })
+        ).status,
+      ).toBe(400);
+      // Deleting from the third session keeps the first two; from the first it deletes all.
+      expect(
+        (
+          await readingWrite('student', `${items}/${split.body.item.id}/truncate`, {
+            revision: 1,
+            occurrenceStart: '2027-08-28T02:00:00.000Z',
+          })
+        ).status,
+      ).toBe(204);
+      expect(await between(split.body.item.id)).toEqual([
+        '2027-08-14T02:00:00.000Z',
+        '2027-08-21T02:00:00.000Z',
+      ]);
+      expect(
+        (
+          await readingWrite('student', `${items}/${id}/truncate`, {
+            revision: 2,
+            occurrenceStart: '2027-07-31T00:00:00.000Z',
+          })
+        ).status,
+      ).toBe(204);
+      expect(await between(id)).toEqual([]);
+      expect(
+        (
+          await readingWrite('other', `${items}/${split.body.item.id}/truncate`, {
+            revision: 2,
+            occurrenceStart: '2027-08-21T02:00:00.000Z',
+          })
+        ).status,
+      ).toBe(404);
     });
   });
   describe('CAL-03 reminders', () => {

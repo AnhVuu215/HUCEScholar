@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, Module } from '@nestjs/common';
 import { AUTH_CONFIG, AuthConfiguration } from '../auth/auth.config';
 import { Mailer } from '../auth/mailer';
 import { DatabaseService } from '../database/database.module';
-import { DAY, occurrenceStarts, type Series } from './calendar-repeat';
+import { DAY, occurrenceStarts, rowSeries, type Series } from './calendar-repeat';
 import { available } from '../materials/library.service';
 import { notify } from '../notifications/notify';
 import { dueInstant, shown } from '../reading-lists/reading-lists.service';
@@ -54,11 +54,12 @@ export class CalendarReminders {
     const include = {
       users: { select: { email: true, display_name: true, status: true } },
       calendar_item_skips: { select: { occurrence_start: true } },
+      calendar_item_done: { select: { occurrence_start: true } },
     } as const;
     const single = await this.db.calendar_items.findMany({
       where: {
         remind_minutes: { not: null },
-        repeat_days: null,
+        repeat_freq: null,
         done_at: null,
         starts_at: { gt: new Date(from), lte: new Date(to + MAX_LEAD_MS) },
       },
@@ -70,7 +71,7 @@ export class CalendarReminders {
     const repeating = await this.db.calendar_items.findMany({
       where: {
         remind_minutes: { not: null },
-        repeat_days: { not: null },
+        repeat_freq: { not: null },
         starts_at: { lte: new Date(to + MAX_LEAD_MS) },
         repeat_until: { gte: new Date(from - 2 * DAY) },
       },
@@ -80,17 +81,13 @@ export class CalendarReminders {
     });
     let created = 0;
     for (const row of [...single, ...repeating]) {
-      const plan: Series | null =
-        row.repeat_days !== null && row.repeat_until && row.ends_at
-          ? {
-              start: row.starts_at!,
-              end: row.ends_at,
-              days: row.repeat_days,
-              until: row.repeat_until,
-              offset: row.repeat_utc_offset ?? 0,
-            }
-          : null;
-      const skipped = new Set(row.calendar_item_skips.map((s) => s.occurrence_start.getTime()));
+      const plan = rowSeries(row);
+      // Removed occurrences, and those of a repeating task already done, are not reminded.
+      const skipped = new Set(
+        [...row.calendar_item_skips, ...row.calendar_item_done].map((s) =>
+          s.occurrence_start.getTime(),
+        ),
+      );
       const starts = dueStarts(
         { start: row.starts_at!, minutes: row.remind_minutes!, series: plan, skipped },
         from,
