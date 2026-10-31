@@ -342,3 +342,32 @@
     grid-column: 1 / -1;
   }
 }
+/* LEARN-04: a review session walks the filtered entries one at a time. */
+.notebook-review {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.notebook-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.notebook-review-head h3 {
+  margin: 0 auto 0 0;
+}
+.notebook-review-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.notebook-review-card h4 {
+  margin: 0;
+  font-size: 1.125rem;
+}
