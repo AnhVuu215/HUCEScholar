@@ -15,6 +15,7 @@ import {
 import { personalError } from '../../lib/reading';
 import { SelectField } from '../ui/select-field';
 import { NotebookEntryEdit } from './notebook-entry-edit';
+import { NotebookReview } from './notebook-review';
 import {
   AnnotationFilterFields,
   AnnotationSummary,
@@ -40,6 +41,7 @@ export function LibraryNotebook() {
     filters: {},
     iteration: 0,
   });
+  const [reviewing, setReviewing] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     // Without the list the filter only offers "Mọi môn"; searching still works.
@@ -93,8 +95,26 @@ export function LibraryNotebook() {
         download={(format) => exportNotebook(search.filters, format)}
         tooLarge="Sổ tay có quá nhiều mục để xuất một lần. Thu hẹp bộ lọc rồi thử lại."
       />
-      {/* A new result session per search, so an old cursor or late response cannot mix in. */}
-      <NotebookResults key={search.iteration} filters={search.filters} />
+      {/* Like the export, a session covers what the last search filtered. */}
+      {reviewing ? (
+        <NotebookReview
+          filters={search.filters}
+          close={() => {
+            setReviewing(false);
+            setSearch((v) => ({ ...v, iteration: v.iteration + 1 }));
+          }}
+        />
+      ) : (
+        <>
+          <div className="note-actions">
+            <button className="secondary-button" onClick={() => setReviewing(true)}>
+              Ôn lần lượt theo bộ lọc đang xem
+            </button>
+          </div>
+          {/* A new result session per search, so an old cursor or late response cannot mix in. */}
+          <NotebookResults key={search.iteration} filters={search.filters} />
+        </>
+      )}
     </section>
   );
 }
