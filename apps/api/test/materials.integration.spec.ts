@@ -1910,6 +1910,101 @@ describe('private material drafts', () => {
       await request(app.getHttpServer()).get(exported).query({ utcOffset: 420 }).expect(401);
     });
   });
+  it('STUDY-02: practice and the card list filter by course or document, from readable cards only', async () => {
+    const first = await readingFixture();
+    const draft = await safeDraft('student', 3);
+    await db.query('INSERT INTO hucescholar.version_courses(version_id,course_id) VALUES($1,$2)', [
+      draft.versionId,
+      courses[1],
+    ]);
+    expect((await publication('student', draft.id, 'submit', { revision: 2 })).status).toBe(201);
+    const pending = await db.query(
+      "SELECT id FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+      [draft.versionId],
+    );
+    expect((await review(pending.rows[0].id, decision())).status).toBe(201);
+    const card = async (versionId: string, question: string) => {
+      const path = `/api/v1/library/versions/${versionId}`;
+      const highlight = (
+        await readingWrite('student', `${path}/highlights`, {
+          pageNumber: 1,
+          content: '',
+          color: '#FFF59D',
+          requestId: randomUUID(),
+          anchor: highlightAnchor(),
+        })
+      ).body.item;
+      const created = await readingWrite('student', `${path}/study-cards`, {
+        annotationId: highlight.id,
+        question,
+        answer: 'Đáp án',
+        requestId: randomUUID(),
+      });
+      expect(created.status).toBe(201);
+      return created.body.item.id as string;
+    };
+    const one = await card(first.versionId, 'Thẻ môn đầu');
+    const two = await card(draft.versionId, 'Thẻ môn sau');
+    const practice = (query: string, who = 'student') =>
+      agents[who].get(`/api/v1/study-cards/practice${query}`);
+    const ids = (res: { body: { items: { id: string }[] } }) => res.body.items.map((c) => c.id);
+
+    const all = await practice('');
+    expect(all.status).toBe(200);
+    expect(ids(all)).toEqual(expect.arrayContaining([one, two]));
+    expect(all.body.total).toBe(all.body.items.length);
+    // Newest first, with the source title for the practice screen.
+    expect(ids(all).indexOf(two)).toBeLessThan(ids(all).indexOf(one));
+    expect(all.body.items.find((c: { id: string }) => c.id === two)).toMatchObject({
+      question: 'Thẻ môn sau',
+      title: expect.any(String),
+    });
+    const byCourse = await practice(`?courseId=${courses[1]}`);
+    expect(ids(byCourse)).toContain(two);
+    expect(ids(byCourse)).not.toContain(one);
+    expect(ids(await practice(`?versionId=${first.versionId}`))).toEqual([one]);
+    expect(ids(await practice(`?versionId=${first.versionId}&courseId=${courses[1]}`))).toEqual([]);
+    expect(ids(await practice('?courseId=999999999'))).toEqual([]);
+    // The paged list takes the same course filter.
+    const listed = await agents.student
+      .get(`/api/v1/study-cards?courseId=${courses[1]}&limit=50`)
+      .expect(200);
+    expect(ids(listed)).toContain(two);
+    expect(ids(listed)).not.toContain(one);
+
+    const filters = await agents.student.get('/api/v1/study-cards/filters').expect(200);
+    expect(filters.body.documents).toEqual(
+      expect.arrayContaining([
+        { versionId: first.versionId, title: expect.any(String), cards: 1 },
+        { versionId: draft.versionId, title: expect.any(String), cards: 1 },
+      ]),
+    );
+    expect(filters.body.courses.map((c: { id: string }) => c.id)).toEqual(
+      expect.arrayContaining([String(courses[0]), String(courses[1])]),
+    );
+    // Someone else sees none of it.
+    expect(ids(await practice('', 'other'))).not.toContain(one);
+    expect(
+      (await agents.other.get('/api/v1/study-cards/filters')).body.documents.map(
+        (d: { versionId: string }) => d.versionId,
+      ),
+    ).not.toContain(first.versionId);
+    // A hidden document drops its cards from practice and the filter menus.
+    await db.query(
+      "UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=(SELECT document_id FROM hucescholar.document_versions WHERE id=$1)",
+      [first.versionId],
+    );
+    expect(ids(await practice(''))).not.toContain(one);
+    expect(
+      (await agents.student.get('/api/v1/study-cards/filters')).body.documents.map(
+        (d: { versionId: string }) => d.versionId,
+      ),
+    ).not.toContain(first.versionId);
+    for (const query of ['?courseId=x', '?versionId=0', '?courseId=1.5'])
+      expect((await practice(query)).status).toBe(400);
+    await request(app.getHttpServer()).get('/api/v1/study-cards/practice').expect(401);
+    await request(app.getHttpServer()).get('/api/v1/study-cards/filters').expect(401);
+  });
   it('study cards are private, keep their source after the highlight is deleted, and follow read access', async () => {
     const { path, id, versionId } = await readingFixture();
     const highlight = (
