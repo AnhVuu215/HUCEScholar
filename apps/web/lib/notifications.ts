@@ -14,6 +14,8 @@ export const notificationKinds = [
   'REPORT_RESOLVED',
   'REPORT_DISMISSED',
   'CALENDAR_REMINDER',
+  'READING_DEADLINE_SOON',
+  'READING_DEADLINE_CHANGED',
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 export type AppNotification = {
@@ -121,6 +123,14 @@ export function notificationMessage(n: AppNotification) {
       return `Báo cáo của bạn về ${title} đã được xử lý.`;
     case 'REPORT_DISMISSED':
       return `Báo cáo của bạn về ${title} đã đóng, tài liệu không cần thay đổi.`;
+    case 'READING_DEADLINE_SOON':
+      return `Sắp đến hạn đọc ${title}: ${deadlineWhen(n.eventAt!)}.`;
+    case 'READING_DEADLINE_CHANGED':
+      return n.detail === 'DUE_REMOVED'
+        ? `Giảng viên đã bỏ hạn đọc của ${title}.`
+        : n.detail === 'DUE_ADDED'
+          ? `Giảng viên đặt hạn đọc cho ${title}: ${deadlineWhen(n.eventAt!)}.`
+          : `Hạn đọc của ${title} đổi sang ${deadlineWhen(n.eventAt!)}.`;
     case 'CALENDAR_REMINDER': {
       const at = new Date(n.eventAt!);
       const when = `${formatTime(at)} ${formatLongDay(at)}`;
@@ -130,11 +140,22 @@ export function notificationMessage(n: AppNotification) {
     }
   }
 }
+/** A course due time, in Vietnam time like the lecturer set it. */
+function deadlineWhen(eventAt: string) {
+  const at = new Date(eventAt);
+  const time = at.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  });
+  const day = at.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+  return `${time} ${day}`;
+}
 /** Where the notice leads; the target page re-checks access, so a link never grants any. */
 export function notificationHref(n: AppNotification, role: Role) {
   if (n.kind === 'CALENDAR_REMINDER')
     return `/workspace/calendar?at=${encodeURIComponent(n.eventAt!)}`;
-  if (n.kind.startsWith('REPORT_') || role === 'ADMIN')
+  if (n.kind.startsWith('REPORT_') || n.kind.startsWith('READING_') || role === 'ADMIN')
     return `/workspace/library/versions/${n.versionId}`;
   return `/workspace/${role.toLowerCase()}/materials?draft=${n.documentId}`;
 }

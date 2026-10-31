@@ -62,3 +62,67 @@ test('the calendar downloads as an .ics file, with notes only when ticked', asyn
     true,
   );
 });
+
+test('an .ics file from another calendar is imported once, and the export takes a date range', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const run = randomUUID().slice(0, 8);
+  await readerLogin(page, 'student', 'cal5');
+  await page.goto('/workspace/calendar');
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const ics = (d: Date) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+  const key = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const file = {
+    name: 'lich-khac.ics',
+    mimeType: 'text/calendar',
+    buffer: Buffer.from(
+      [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        `UID:${run}@other`,
+        `DTSTART;TZID=Asia/Ho_Chi_Minh:${ics(tomorrow)}T070000`,
+        `DTEND;TZID=Asia/Ho_Chi_Minh:${ics(tomorrow)}T080000`,
+        `SUMMARY:Từ lịch khác ${run}`,
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        `UID:${run}-yearly@other`,
+        `DTSTART:${ics(tomorrow)}T020000Z`,
+        'RRULE:FREQ=YEARLY',
+        `SUMMARY:Hằng năm ${run}`,
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n'),
+    ),
+  };
+  const panel = page.getByRole('complementary', { name: 'Nhập từ lịch khác' });
+  await panel.getByLabel('File lịch (.ics)').setInputFiles(file);
+  await expect(panel.getByRole('status')).toContainText('Đã thêm 2 mục.');
+  await expect(panel.getByRole('status')).toContainText(`Hằng năm ${run}: Kiểu lặp này chưa có`);
+  await page.getByRole('button', { name: 'Lịch biểu', exact: true }).click();
+  await expect(
+    page.locator('.calendar-agenda li').filter({ hasText: `Từ lịch khác ${run}` }),
+  ).toHaveCount(1);
+  // The same file again adds nothing.
+  await panel.getByLabel('File lịch (.ics)').setInputFiles(file);
+  await expect(panel.getByRole('status')).toContainText(
+    'Đã thêm 0 mục, 2 mục đã có từ lần nhập trước.',
+  );
+
+  // Export only tomorrow: the imported session is in, today's items are not.
+  const exporter = page.getByRole('complementary', { name: 'Xuất sang lịch khác' });
+  await exporter.getByLabel('Chỉ xuất một khoảng ngày').check();
+  await exporter.getByLabel('Từ ngày', { exact: true }).fill(key(tomorrow));
+  await exporter.getByLabel('Đến ngày', { exact: true }).fill(key(tomorrow));
+  await exporter.getByLabel('Kèm hạn danh sách đọc của các môn đang theo dõi').check();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    exporter.getByRole('button', { name: 'Tải file .ics', exact: true }).click(),
+  ]);
+  const text = (await readFile((await download.path())!, 'utf8')).replace(/\r\n /g, '');
+  expect(text).toContain(`SUMMARY:Từ lịch khác ${run}`);
+  expect(text).not.toContain('SUMMARY:Học nhóm');
+});

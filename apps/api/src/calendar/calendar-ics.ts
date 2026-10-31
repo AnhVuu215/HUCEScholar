@@ -1,4 +1,11 @@
-import { DAY, localDate, localWeekday, maskWeekdays, type Series } from './calendar-repeat';
+import {
+  DAY,
+  localDate,
+  localWeekday,
+  maskWeekdays,
+  occurrenceStarts,
+  type Series,
+} from './calendar-repeat';
 
 /**
  * CAL-05. One iCalendar (RFC 5545) file of the owner's calendar, for importing into another
@@ -16,9 +23,24 @@ export type IcsItem = {
   series: Series | null;
   /** Original starts (ms) removed from a series, including detached ones. */
   skipped: number[];
-  remindMinutes: number | null;
+  /** Minutes before the start; an all-day item's may be negative (08:00 that day is -480). */
+  remindLeads: number[];
   /** Readable linked page, or null when there is none or it is withheld. */
   material: { title: string; pageNumber: number; href: string } | null;
+};
+/** CAL-07: a followed course's reading-list due date; `due` is its end instant. */
+export type IcsDeadline = {
+  listId: string;
+  versionId: string;
+  title: string;
+  course: string;
+  courseId: string;
+  listTitle: string;
+  dueOn: string;
+  due: Date;
+  /** False: a whole day (the lecturer set no time). */
+  timed: boolean;
+  read: boolean;
 };
 export type IcsOptions = {
   /** Minutes east of UTC, for all-day items outside a series. */
@@ -109,14 +131,23 @@ function eventLines(item: IcsItem, options: IcsOptions, origin: string) {
     lines.push(`DTSTART:${icsTime(item.start)}`);
     if (item.end) lines.push(`DTEND:${icsTime(item.end)}`);
   }
+  const at = (start: number) =>
+    item.allDay ? icsDate(localDate(new Date(start), offset)) : icsTime(new Date(start));
+  const dateParam = item.allDay ? ';VALUE=DATE' : '';
   if (item.series) {
-    lines.push(rrule(item.series, item.allDay));
-    for (const start of [...item.skipped].sort((a, b) => a - b))
-      lines.push(
-        item.allDay
-          ? `EXDATE;VALUE=DATE:${icsDate(localDate(new Date(start), offset))}`
-          : `EXDATE:${icsTime(new Date(start))}`,
-      );
+    const skipped = [...item.skipped].sort((a, b) => a - b);
+    if ((item.series.freq ?? 'WEEKLY') === 'WEEKLY' && (item.series.interval ?? 1) === 1) {
+      lines.push(rrule(item.series, item.allDay));
+      for (const start of skipped) lines.push(`EXDATE${dateParam}:${at(start)}`);
+    } else {
+      // Every N weeks and monthly series are listed date by date: a rule in UTC would put a
+      // session that starts before 07:00 in Vietnam into the wrong week or month day.
+      const gone = new Set(skipped);
+      const [first, ...rest] = [...occurrenceStarts(item.series)];
+      const dates = rest.filter((start) => !gone.has(start)).map(at);
+      if (dates.length) lines.push(`RDATE${dateParam}:${dates.join(',')}`);
+      if (gone.has(first)) lines.push(`EXDATE${dateParam}:${at(first)}`);
+    }
   }
   lines.push(`SUMMARY:${icsText(item.kind === 'TASK' ? `Việc: ${item.title}` : item.title)}`);
   if (options.details) {
@@ -131,20 +162,47 @@ function eventLines(item: IcsItem, options: IcsOptions, origin: string) {
     if (description) lines.push(`DESCRIPTION:${icsText(description)}`);
   }
   lines.push(`TRANSP:${item.kind === 'TASK' ? 'TRANSPARENT' : 'OPAQUE'}`);
-  if (item.remindMinutes !== null && !item.allDay)
+  for (const lead of item.remindLeads)
     lines.push(
       'BEGIN:VALARM',
       'ACTION:DISPLAY',
       `DESCRIPTION:${icsText(item.title)}`,
-      `TRIGGER:-PT${item.remindMinutes}M`,
+      `TRIGGER:${lead > 0 ? '-' : ''}PT${Math.abs(lead)}M`,
       'END:VALARM',
     );
   lines.push('END:VEVENT');
   return lines;
 }
 
+function deadlineLines(d: IcsDeadline, options: IcsOptions, origin: string) {
+  const lines = [
+    'BEGIN:VEVENT',
+    `UID:deadline-${d.listId}-${d.versionId}@hucescholar`,
+    `DTSTAMP:${icsTime(options.now)}`,
+  ];
+  if (d.timed) lines.push(`DTSTART:${icsTime(d.due)}`);
+  else {
+    const day = d.dueOn.replace(/-/g, '');
+    const next = new Date(Date.parse(`${d.dueOn}T00:00:00Z`) + DAY).toISOString().slice(0, 10);
+    lines.push(`DTSTART;VALUE=DATE:${day}`, `DTEND;VALUE=DATE:${next.replace(/-/g, '')}`);
+  }
+  lines.push(`SUMMARY:${icsText(`Hạn đọc: ${d.title} (${d.course})${d.read ? ' · đã đọc' : ''}`)}`);
+  if (options.details)
+    lines.push(
+      `DESCRIPTION:${icsText(
+        `${d.listTitle}\n${origin}/workspace/library/reading-lists?courseId=${d.courseId}`,
+      )}`,
+    );
+  lines.push('TRANSP:TRANSPARENT', 'END:VEVENT');
+  return lines;
+}
 /** The whole file, CRLF line endings, lines folded. */
-export function calendarIcs(items: IcsItem[], options: IcsOptions, origin: string) {
+export function calendarIcs(
+  items: IcsItem[],
+  options: IcsOptions,
+  origin: string,
+  deadlines: IcsDeadline[] = [],
+) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -153,6 +211,7 @@ export function calendarIcs(items: IcsItem[], options: IcsOptions, origin: strin
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${icsText('HUCEScholar — Lịch học')}`,
     ...items.flatMap((item) => eventLines(item, options, origin)),
+    ...deadlines.flatMap((d) => deadlineLines(d, options, origin)),
     'END:VCALENDAR',
   ];
   return lines.map(foldLine).join('\r\n') + '\r\n';

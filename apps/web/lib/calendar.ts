@@ -12,18 +12,36 @@ export const colorLabels: Record<CalendarColor, string> = {
   gray: 'Xám',
 };
 export type CalendarKind = 'EVENT' | 'TASK';
-/** CAL-02 weekly repeat as the API returns it; times are those of the first session. */
+export type RepeatFreq = 'WEEKLY' | 'MONTHLY';
+/**
+ * CAL-02/CAL-07 repeat as the API returns it; times are those of the first occurrence (a task
+ * has no end). `until` is the last date, also when the series ends after `count` times.
+ */
 export type CalendarRepeat = {
+  freq: RepeatFreq;
+  interval: number;
+  count: number | null;
+  /** Weekly only; empty for a monthly series. */
   weekdays: number[];
   until: string;
   startsAt: string;
-  endsAt: string;
+  endsAt: string | null;
 };
-/** What the form sends: ISO weekdays (1 = Monday), last local date, the device's UTC offset. */
-export type CalendarRepeatInput = { weekdays: number[]; until: string; utcOffset: number };
+/** What the form sends: one of `until` or `count`, local to the device's UTC offset. */
+export type CalendarRepeatInput = {
+  freq: RepeatFreq;
+  interval: number;
+  weekdays: number[];
+  until?: string;
+  count?: number;
+  utcOffset: number;
+};
 /** CAL-03 lead times in minutes; 0 reminds at the start or due time. */
 export const remindOptions = [0, 5, 10, 15, 30, 60, 120, 1440] as const;
-export type CalendarReminder = { minutes: number; email: boolean };
+/** CAL-07: an all-day item starts at local midnight; -480 is 08:00 that day. */
+export const allDayRemindOptions = [-480, 240, 960] as const;
+/** Up to three reminders: `minutes` first, then `more`. */
+export type CalendarReminder = { minutes: number; more: number[]; email: boolean };
 export type CalendarItem = {
   id: string;
   kind: CalendarKind;
@@ -58,6 +76,7 @@ export type CalendarFields = {
   pageNumber: number | null;
   repeat?: CalendarRepeatInput | null;
   remindMinutes?: number | null;
+  remindMore?: number[];
   remindEmail?: boolean;
 };
 export type CalendarRange = { items: CalendarItem[]; truncated: boolean };
@@ -69,11 +88,13 @@ const repeat = (v: unknown) =>
   (isRecord(v) &&
     Array.isArray(v.weekdays) &&
     v.weekdays.every((d) => Number.isInteger(d) && d >= 1 && d <= 7) &&
+    (v.freq === 'WEEKLY' || v.freq === 'MONTHLY') &&
+    Number.isInteger(v.interval) &&
+    (v.count === null || Number.isInteger(v.count)) &&
     typeof v.until === 'string' &&
     /^\d{4}-\d{2}-\d{2}$/.test(v.until) &&
     typeof v.startsAt === 'string' &&
     time(v.startsAt) &&
-    typeof v.endsAt === 'string' &&
     time(v.endsAt));
 function valid(v: unknown): v is CalendarItem {
   return (
@@ -96,18 +117,29 @@ function valid(v: unknown): v is CalendarItem {
     repeat(v.repeat) &&
     (v.reminder === null ||
       (isRecord(v.reminder) &&
-        (remindOptions as readonly unknown[]).includes(v.reminder.minutes) &&
+        ([...remindOptions, ...allDayRemindOptions] as readonly unknown[]).includes(
+          v.reminder.minutes,
+        ) &&
+        Array.isArray(v.reminder.more) &&
+        v.reminder.more.every((m) => Number.isInteger(m)) &&
         typeof v.reminder.email === 'boolean')) &&
     time(v.occurrenceStart) &&
     Number.isInteger(v.revision) &&
     typeof v.updatedAt === 'string'
   );
 }
-/** Only an item with a date and time reminds; a move to all-day or no date drops the reminder. */
+/**
+ * Only an item with a date reminds, with leads that fit it: a move between timed and all-day,
+ * or to no date, drops the reminders that no longer fit.
+ */
 function fit(fields: CalendarFields): CalendarFields {
-  return fields.startsAt && !fields.allDay
-    ? fields
-    : { ...fields, remindMinutes: null, remindEmail: false };
+  const allowed: readonly number[] = fields.allDay ? allDayRemindOptions : remindOptions;
+  const leads = [fields.remindMinutes, ...(fields.remindMore ?? [])].filter(
+    (m): m is number => m !== null && m !== undefined && allowed.includes(m),
+  );
+  if (!fields.startsAt || !leads.length)
+    return { ...fields, remindMinutes: null, remindMore: [], remindEmail: false };
+  return { ...fields, remindMinutes: leads[0], remindMore: leads.slice(1) };
 }
 async function send(path: string, method: string, body: object) {
   const token = await csrfToken();
@@ -135,7 +167,14 @@ export async function calendarRange(from: Date, to: Date, signal?: AbortSignal) 
   throw new Error('Invalid calendar range.');
 }
 export async function openTasks(signal?: AbortSignal) {
-  const body: unknown = await (await apiRequest('/calendar/tasks?limit=100', { signal })).json();
+  return taskList('/calendar/tasks?limit=100', signal);
+}
+/** Done tasks, most recently finished first, one page at a time. */
+export async function doneTasks(page: number, signal?: AbortSignal) {
+  return taskList(`/calendar/tasks?status=done&limit=20&page=${page}`, signal);
+}
+async function taskList(path: string, signal?: AbortSignal) {
+  const body: unknown = await (await apiRequest(path, { signal })).json();
   if (
     isRecord(body) &&
     Array.isArray(body.items) &&
@@ -193,12 +232,43 @@ export async function detachOccurrence(
     ).json(),
   );
 }
+/** A repeating task is done one occurrence at a time. */
 export async function setCalendarDone(current: CalendarItem, done: boolean) {
+  const occurrence = current.repeat && current.occurrenceStart;
   return item(
     await (
-      await send(`/calendar/items/${encodeURIComponent(current.id)}/done`, 'PUT', { done })
+      await send(`/calendar/items/${encodeURIComponent(current.id)}/done`, 'PUT', {
+        done,
+        ...(occurrence ? { occurrenceStart: occurrence } : {}),
+      })
     ).json(),
   );
+}
+/** "Buổi này và các buổi sau": the series ends before it; a new item with these fields starts. */
+export async function splitOccurrence(
+  current: CalendarItem,
+  fields: CalendarFields,
+  requestId: string,
+  keepSource = false,
+) {
+  return item(
+    await (
+      await send(`/calendar/items/${encodeURIComponent(current.id)}/split`, 'POST', {
+        ...fit(fields),
+        ...(keepSource ? { versionId: null, pageNumber: null, keepSource } : {}),
+        requestId,
+        revision: current.revision,
+        occurrenceStart: current.occurrenceStart,
+      })
+    ).json(),
+  );
+}
+/** "Xóa buổi này và các buổi sau"; from the first occurrence it deletes the series. */
+export async function truncateOccurrence(current: CalendarItem) {
+  await send(`/calendar/items/${encodeURIComponent(current.id)}/truncate`, 'POST', {
+    revision: current.revision,
+    occurrenceStart: current.occurrenceStart,
+  });
 }
 export async function deleteCalendarItem(current: CalendarItem) {
   await send(`/calendar/items/${encodeURIComponent(current.id)}`, 'DELETE', {
@@ -318,15 +388,28 @@ export function isoWeekday(date: Date) {
 export function utcOffset(date: Date) {
   return -date.getTimezoneOffset();
 }
-export function remindLabel(minutes: number) {
+export function remindLabel(minutes: number, allDay = false) {
+  if (allDay)
+    return minutes === -480
+      ? '8:00 sáng hôm đó'
+      : minutes === 240
+        ? '20:00 hôm trước'
+        : '8:00 sáng hôm trước';
   if (minutes === 0) return 'Lúc bắt đầu';
   if (minutes === 1440) return 'Trước 1 ngày';
   return minutes >= 60 ? `Trước ${minutes / 60} giờ` : `Trước ${minutes} phút`;
 }
 export function repeatLabel(repeat: CalendarRepeat) {
   const [y, m, d] = repeat.until.split('-').map(Number);
-  const days = repeat.weekdays.map((w) => weekdayLabels[w - 1]).join(', ');
-  return `Lặp hằng tuần: ${days} · đến ${d}/${m}/${y}`;
+  const every =
+    repeat.freq === 'MONTHLY'
+      ? repeat.interval === 1
+        ? 'Lặp hằng tháng'
+        : `Lặp mỗi ${repeat.interval} tháng`
+      : `${repeat.interval === 1 ? 'Lặp hằng tuần' : `Lặp mỗi ${repeat.interval} tuần`}: ${repeat.weekdays
+          .map((w) => weekdayLabels[w - 1])
+          .join(', ')}`;
+  return `${every} · ${repeat.count ? `${repeat.count} lần, ` : ''}đến ${d}/${m}/${y}`;
 }
 /**
  * An item's own fields, for a move that changes only its time. A withheld link has no ids in the
@@ -346,6 +429,7 @@ export function itemFields(item: CalendarItem): { fields: CalendarFields; keepSo
       pageNumber: item.material?.pageNumber ?? null,
       repeat: null,
       remindMinutes: item.reminder?.minutes ?? null,
+      remindMore: item.reminder?.more ?? [],
       remindEmail: item.reminder?.email ?? false,
     },
     keepSource: item.materialUnavailable,
@@ -440,12 +524,55 @@ export function resizedTimes(
  * CAL-05: the whole calendar as one `.ics` file. The browser's offset dates all-day items;
  * notes and linked pages are included only when asked.
  */
-export async function exportCalendar(details: boolean) {
+export async function exportCalendar(
+  details: boolean,
+  options: { deadlines?: boolean; from?: string; to?: string } = {},
+) {
   const params = new URLSearchParams({
     utcOffset: String(utcOffset(new Date())),
     details: String(details),
+    deadlines: String(!!options.deadlines),
+    ...(options.from && options.to ? { from: options.from, to: options.to } : {}),
   });
   const response = await apiRequest(`/calendar/export?${params}`, {}, 20_000);
   const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1];
   return { blob: await response.blob(), name: name ?? 'hucescholar-lich-hoc.ics' };
+}
+
+/** CAL-07: what an import added, found already there, and left out with the reason. */
+export type CalendarImportResult = {
+  created: number;
+  existing: number;
+  skippedCount: number;
+  skipped: { title: string; reason: string }[];
+  notes: { title: string; reason: string }[];
+};
+/** Sends an .ics file as is; the API reads what fits and reports the rest. */
+export async function importCalendar(file: File) {
+  const token = await csrfToken();
+  const params = new URLSearchParams({ utcOffset: String(utcOffset(new Date())) });
+  const body: unknown = await (
+    await apiRequest(
+      `/calendar/import?${params}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/calendar', 'X-CSRF-Token': token },
+        body: await file.text(),
+      },
+      30_000,
+    )
+  ).json();
+  const list = (v: unknown) =>
+    Array.isArray(v) &&
+    v.every((e) => isRecord(e) && typeof e.title === 'string' && typeof e.reason === 'string');
+  if (
+    isRecord(body) &&
+    Number.isInteger(body.created) &&
+    Number.isInteger(body.existing) &&
+    Number.isInteger(body.skippedCount) &&
+    list(body.skipped) &&
+    list(body.notes)
+  )
+    return body as unknown as CalendarImportResult;
+  throw new Error('Invalid import result.');
 }

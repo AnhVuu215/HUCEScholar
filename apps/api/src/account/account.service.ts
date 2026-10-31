@@ -46,6 +46,9 @@ export class AccountService {
             highlight_color: update.preferences.highlightColor,
             default_zoom: update.preferences.defaultZoom,
             annotation_panel_open: update.preferences.annotationPanelOpen,
+            ...(update.preferences.reminderEmail === undefined
+              ? {}
+              : { reminder_email: update.preferences.reminderEmail }),
             updated_at: new Date(),
           };
           row = row
@@ -70,8 +73,14 @@ export class AccountService {
                 highlightColor: row.highlight_color,
                 defaultZoom: row.default_zoom,
                 annotationPanelOpen: row.annotation_panel_open,
+                reminderEmail: row.reminder_email,
               }
-            : { highlightColor: '#FFF59D', defaultZoom: 'fit-width', annotationPanelOpen: false },
+            : {
+                highlightColor: '#FFF59D',
+                defaultZoom: 'fit-width',
+                annotationPanelOpen: false,
+                reminderEmail: true,
+              },
           revision: row?.revision ?? 0,
         };
       });

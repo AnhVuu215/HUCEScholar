@@ -493,6 +493,7 @@ describe('self-service account with real sessions and PostgreSQL', () => {
     highlightColor: '#FFF59D',
     defaultZoom: 'fit-width',
     annotationPanelOpen: false,
+    reminderEmail: true,
   };
   it('preferences GET returns account-bound defaults without writing a row', async () => {
     const agent = await login();

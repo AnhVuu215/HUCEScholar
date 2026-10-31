@@ -74,7 +74,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 
 ## Chưa làm
 
-- Hạn có giờ, nhắc trước hạn. Đánh dấu đã đọc từng mục đã có ở [COURSE-02](2026-10-28-reading-marks.md).
-- Thông báo cho người theo dõi khi giảng viên đổi hạn (NOTIFY-01 chưa có loại này).
-- Danh sách các môn đang theo dõi ở một chỗ; hiện chỉ bật/tắt từng môn trên trang Danh sách đọc.
-- Xuất `.ics` đã có ở [CAL-05](2026-10-31-calendar-ics-export.md), nhưng chưa gồm hạn danh sách đọc.
+- Hạn có giờ, nhắc trước hạn, thông báo khi giảng viên đổi hạn, danh sách môn đang theo dõi ở một chỗ và xuất hạn ra `.ics` đã có ở [CAL-07](2026-10-31-calendar-complete.md).

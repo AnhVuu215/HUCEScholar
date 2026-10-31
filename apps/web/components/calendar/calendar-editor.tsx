@@ -13,10 +13,13 @@ import {
   fromInputs,
   isoWeekday,
   readerHref,
+  allDayRemindOptions,
   remindLabel,
   remindOptions,
   skipOccurrence,
+  splitOccurrence,
   timeKey,
+  truncateOccurrence,
   updateCalendarItem,
   utcOffset,
   weekdayLabels,
@@ -26,8 +29,10 @@ import {
   type CalendarItem,
   type CalendarKind,
   type CalendarRepeatInput,
+  type RepeatFreq,
 } from '../../lib/calendar';
 import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
+import { MaterialPicker } from './material-picker';
 
 /** Asked before leaving the page, or before another item replaces an edited form. */
 export const CALENDAR_DRAFT_PROMPT = 'Bạn có mục lịch chưa lưu. Rời trang và bỏ thay đổi?';
@@ -44,8 +49,12 @@ export type CalendarDraft = {
 const MAX_EVENT_MS = 14 * 86_400_000;
 /** A new series runs for 15 weeks by default, about one HUCE semester. */
 const DEFAULT_REPEAT_WEEKS = 15;
-/** "one": this occurrence only (detach or skip). "all": the whole series. */
-type Scope = 'one' | 'all';
+/**
+ * "one": this occurrence only (detach or skip). "following": this occurrence and the later ones
+ * (split or truncate). "all": the whole series.
+ */
+type Scope = 'one' | 'following' | 'all';
+const DEFAULT_REPEAT_COUNT = 10;
 
 /** Date and time inputs for an item; a series edited as a whole shows its first session. */
 function times(item: CalendarItem, scope: Scope) {
@@ -73,10 +82,15 @@ function initial(item: CalendarItem | null, draft: CalendarDraft, scope: Scope) 
       color: item.color,
       ...times(item, scope),
       repeat: item.repeat !== null,
+      freq: (item.repeat?.freq ?? 'WEEKLY') as RepeatFreq,
+      interval: String(item.repeat?.interval ?? 1),
       weekdays: item.repeat?.weekdays ?? [],
+      endBy: (item.repeat?.count ? 'count' : 'until') as 'count' | 'until',
+      count: String(item.repeat?.count ?? DEFAULT_REPEAT_COUNT),
       until:
         item.repeat?.until ?? (first ? dateKey(addDays(first, DEFAULT_REPEAT_WEEKS * 7 - 7)) : ''),
       remind: item.reminder ? String(item.reminder.minutes) : '',
+      remindMore: (item.reminder?.more ?? []).map(String),
       remindEmail: item.reminder?.email ?? false,
     };
   }
@@ -93,10 +107,16 @@ function initial(item: CalendarItem | null, draft: CalendarDraft, scope: Scope) 
     endDay: end ? dateKey(draft.allDay ? start! : end) : '',
     endTime: end && !draft.allDay ? timeKey(end) : '',
     repeat: false,
+    freq: 'WEEKLY' as RepeatFreq,
+    interval: '1',
     weekdays: [] as number[],
+    endBy: 'until' as 'count' | 'until',
+    count: String(DEFAULT_REPEAT_COUNT),
     until: '',
     /** Minutes before, as the select's value; empty is no reminder. */
     remind: '',
+    /** Up to two more leads (CAL-07). */
+    remindMore: [] as string[],
     remindEmail: false,
   };
 }
@@ -122,16 +142,24 @@ export function CalendarEditor({
   const [baseline] = useState(() => initial(item, draft, 'one'));
   const [form, setForm] = useState(baseline);
   // Repeat is set on a whole series or a single item, never on one occurrence.
-  const repeatable = form.kind === 'EVENT' && !(occurrence && scope === 'one');
+  // A session or a dated task repeats; one occurrence on its own does not.
+  const repeatable =
+    (form.kind === 'EVENT' || form.startDay !== '') && !(occurrence && scope === 'one');
   // Reminders need a time: a timed session, or a task with a due date that is not all-day.
-  const remindable = !form.allDay && (form.kind === 'EVENT' || form.startDay !== '');
-  const link = item
+  // Any item with a date reminds; an all-day one at a time of day (CAL-07).
+  const remindable = form.kind === 'EVENT' || form.startDay !== '';
+  const leadOptions: readonly number[] = form.allDay ? allDayRemindOptions : remindOptions;
+  const original = item
     ? (item.material ?? (item.materialUnavailable ? 'unavailable' : null))
     : (draft.material ?? null);
+  /** A document picked in this form; it replaces the stored link. */
+  const [chosen, setChosen] = useState<CalendarDraft['material'] | null>(null);
+  const [picking, setPicking] = useState(false);
+  const link = chosen ?? original;
   // A withheld link keeps its ids server-side; the form can only keep it or drop it.
-  const [keepLink, setKeepLink] = useState(link !== null);
+  const [keepLink, setKeepLink] = useState(original !== null);
   const [pageNumber, setPageNumber] = useState(
-    link && link !== 'unavailable' ? String(link.pageNumber) : '',
+    original && original !== 'unavailable' ? String(original.pageNumber) : '',
   );
   const [requestId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
@@ -141,8 +169,9 @@ export function CalendarEditor({
   const unchanged = occurrence ? { ...baseline, ...times(occurrence, scope) } : baseline;
   const dirty =
     JSON.stringify(form) !== JSON.stringify(unchanged) ||
-    keepLink !== (link !== null) ||
-    pageNumber !== (link && link !== 'unavailable' ? String(link.pageNumber) : '');
+    chosen !== null ||
+    keepLink !== (original !== null) ||
+    pageNumber !== (original && original !== 'unavailable' ? String(original.pageNumber) : '');
   useNotesLeaveGuard(dirty, busy, CALENDAR_DRAFT_PROMPT);
   const reportDirty = useEffectEvent((value: boolean) => dirtyChanged?.(value));
   useEffect(() => reportDirty(dirty), [dirty]);
@@ -185,17 +214,30 @@ export function CalendarEditor({
         return 'Một lịch học kéo dài tối đa 14 ngày.';
       startsAt = start.toISOString();
       endsAt = end.toISOString();
-      if (repeatable && form.repeat) {
-        if (!fromInputs(form.until)) return 'Chọn ngày kết thúc lặp.';
-        if (form.until < form.startDay) return 'Ngày kết thúc lặp phải từ ngày bắt đầu trở đi.';
-        // The first session always repeats, so its weekday is part of the series.
-        const weekdays = [...new Set([...form.weekdays, isoWeekday(start)])].sort();
-        repeat = { weekdays, until: form.until, utcOffset: utcOffset(start) };
-      }
     } else if (form.startDay) {
       const due = fromInputs(form.startDay, form.allDay ? '00:00' : form.startTime || '23:59');
       if (!due) return 'Ngày hạn chưa hợp lệ.';
       startsAt = due.toISOString();
+    }
+    if (repeatable && form.repeat && startsAt) {
+      const start = new Date(startsAt);
+      const interval = Number(form.interval);
+      if (!Number.isInteger(interval) || interval < 1 || interval > 12)
+        return 'Lặp mỗi 1 tới 12 tuần hoặc tháng.';
+      let end: { until: string } | { count: number };
+      if (form.endBy === 'count') {
+        const count = Number(form.count);
+        if (!Number.isInteger(count) || count < 1 || count > 400) return 'Số lần lặp từ 1 tới 400.';
+        end = { count };
+      } else {
+        if (!fromInputs(form.until)) return 'Chọn ngày kết thúc lặp.';
+        if (form.until < form.startDay) return 'Ngày kết thúc lặp phải từ ngày bắt đầu trở đi.';
+        end = { until: form.until };
+      }
+      // The first occurrence always repeats, so its weekday is part of a weekly series.
+      const weekdays =
+        form.freq === 'WEEKLY' ? [...new Set([...form.weekdays, isoWeekday(start)])].sort() : [];
+      repeat = { freq: form.freq, interval, weekdays, ...end, utcOffset: utcOffset(start) };
     }
     let versionId: string | null = null,
       page: number | null = null;
@@ -228,6 +270,10 @@ export function CalendarEditor({
       pageNumber: page,
       repeat,
       remindMinutes: remindable && form.remind ? Number(form.remind) : null,
+      remindMore:
+        remindable && form.remind
+          ? [...new Set(form.remindMore.filter((m) => m !== '' && m !== form.remind))].map(Number)
+          : [],
       remindEmail: remindable && form.remind !== '' && form.remindEmail,
     };
   }
@@ -245,9 +291,11 @@ export function CalendarEditor({
       saved(
         occurrence && scope === 'one'
           ? await detachOccurrence(occurrence, built, requestId, keepSource)
-          : item
-            ? await updateCalendarItem(item, built, keepSource)
-            : await createCalendarItem(built, requestId),
+          : occurrence && scope === 'following'
+            ? await splitOccurrence(occurrence, built, requestId, keepSource)
+            : item
+              ? await updateCalendarItem(item, built, keepSource)
+              : await createCalendarItem(built, requestId),
       );
     } catch (failure) {
       setError(calendarError(failure));
@@ -260,6 +308,7 @@ export function CalendarEditor({
     setError('');
     try {
       if (occurrence && scope === 'one') await skipOccurrence(occurrence);
+      else if (occurrence && scope === 'following') await truncateOccurrence(occurrence);
       else await deleteCalendarItem(item);
       deleted();
     } catch (failure) {
@@ -290,25 +339,37 @@ export function CalendarEditor({
           {(
             [
               ['one', 'Chỉ buổi này'],
+              ['following', 'Buổi này và các buổi sau'],
               ['all', 'Cả chuỗi'],
             ] as const
-          ).map(([value, label]) => (
-            <label key={value}>
-              <input
-                type="radio"
-                name="calendar-scope"
-                value={value}
-                checked={scope === value}
-                disabled={busy}
-                onChange={() => {
-                  setScope(value);
-                  setDeleting(false);
-                  setForm((v) => ({ ...v, ...times(occurrence, value) }));
-                }}
-              />
-              {label}
-            </label>
-          ))}
+          )
+            // From the first occurrence, "and the following" is the whole series.
+            .filter(
+              ([value]) =>
+                value !== 'following' || occurrence.occurrenceStart !== occurrence.repeat?.startsAt,
+            )
+            .map(([value, label]) => (
+              <label key={value}>
+                <input
+                  type="radio"
+                  name="calendar-scope"
+                  value={value}
+                  checked={scope === value}
+                  disabled={busy}
+                  onChange={() => {
+                    setScope(value);
+                    setDeleting(false);
+                    // A new tail series ends where the old one did, by date.
+                    setForm((v) => ({
+                      ...v,
+                      ...times(occurrence, value),
+                      ...(value === 'following' ? { endBy: 'until' as const } : {}),
+                    }));
+                  }}
+                />
+                {label}
+              </label>
+            ))}
         </fieldset>
       )}
       <fieldset className="calendar-kind">
@@ -418,7 +479,23 @@ export function CalendarEditor({
           <input
             type="checkbox"
             checked={form.allDay}
-            onChange={(e) => set('allDay', e.target.checked)}
+            onChange={(e) => {
+              const allDay = e.target.checked;
+              // Timed and all-day items take different reminders; drop the ones that no longer fit.
+              const fits: readonly number[] = allDay ? allDayRemindOptions : remindOptions;
+              setForm((v) => {
+                const keep = [v.remind, ...v.remindMore].filter(
+                  (m) => m !== '' && fits.includes(Number(m)),
+                );
+                return {
+                  ...v,
+                  allDay,
+                  remind: keep[0] ?? '',
+                  remindMore: keep.slice(1),
+                  remindEmail: keep.length > 0 && v.remindEmail,
+                };
+              });
+            }}
           />
           Cả ngày
         </label>
@@ -430,48 +507,116 @@ export function CalendarEditor({
             checked={form.repeat}
             onChange={(e) => toggleRepeat(e.target.checked)}
           />
-          Lặp lại hằng tuần
+          Lặp lại
         </label>
       )}
       {repeatable && form.repeat && (
         <div className="calendar-repeat">
-          <fieldset className="calendar-weekdays">
-            <legend>Lặp vào</legend>
-            {weekdayLabels.map((label, index) => {
-              const day = index + 1;
-              return (
-                <label key={label}>
-                  <input
-                    type="checkbox"
-                    checked={day === startWeekday || form.weekdays.includes(day)}
-                    // The start date's weekday cannot be dropped; move the start instead.
-                    disabled={day === startWeekday}
-                    onChange={(e) =>
-                      set(
-                        'weekdays',
-                        e.target.checked
-                          ? [...form.weekdays, day]
-                          : form.weekdays.filter((d) => d !== day),
-                      )
-                    }
-                  />
-                  {label}
-                </label>
-              );
-            })}
-          </fieldset>
-          <div className="form-field">
-            <label htmlFor="calendar-until">Lặp đến ngày</label>
-            <input
-              id="calendar-until"
-              type="date"
-              required
-              min={form.startDay || undefined}
-              value={form.until}
-              onChange={(e) => set('until', e.target.value)}
-            />
+          <div className="calendar-repeat-rule">
+            <div className="form-field">
+              <label htmlFor="calendar-freq">Kiểu lặp</label>
+              <select
+                id="calendar-freq"
+                value={form.freq}
+                onChange={(e) => set('freq', e.target.value as RepeatFreq)}
+              >
+                <option value="WEEKLY">Hằng tuần</option>
+                <option value="MONTHLY">Hằng tháng (cùng ngày)</option>
+              </select>
+            </div>
+            <div className="form-field">
+              <label htmlFor="calendar-interval">
+                Mỗi bao nhiêu {form.freq === 'MONTHLY' ? 'tháng' : 'tuần'}
+              </label>
+              <input
+                id="calendar-interval"
+                type="number"
+                min={1}
+                max={12}
+                required
+                value={form.interval}
+                onChange={(e) => set('interval', e.target.value)}
+              />
+            </div>
           </div>
-          <p className="field-hint">Tối đa 366 ngày. Ngày bắt đầu luôn là buổi đầu của chuỗi.</p>
+          {form.freq === 'WEEKLY' && (
+            <fieldset className="calendar-weekdays">
+              <legend>Lặp vào</legend>
+              {weekdayLabels.map((label, index) => {
+                const day = index + 1;
+                return (
+                  <label key={label}>
+                    <input
+                      type="checkbox"
+                      checked={day === startWeekday || form.weekdays.includes(day)}
+                      // The start date's weekday cannot be dropped; move the start instead.
+                      disabled={day === startWeekday}
+                      onChange={(e) =>
+                        set(
+                          'weekdays',
+                          e.target.checked
+                            ? [...form.weekdays, day]
+                            : form.weekdays.filter((d) => d !== day),
+                        )
+                      }
+                    />
+                    {label}
+                  </label>
+                );
+              })}
+            </fieldset>
+          )}
+          <fieldset className="calendar-kind">
+            <legend>Kết thúc</legend>
+            <label>
+              <input
+                type="radio"
+                name="calendar-end-by"
+                checked={form.endBy === 'until'}
+                onChange={() => set('endBy', 'until')}
+              />
+              Vào ngày
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="calendar-end-by"
+                checked={form.endBy === 'count'}
+                onChange={() => set('endBy', 'count')}
+              />
+              Sau số lần
+            </label>
+          </fieldset>
+          {form.endBy === 'until' ? (
+            <div className="form-field">
+              <label htmlFor="calendar-until">Lặp đến ngày</label>
+              <input
+                id="calendar-until"
+                type="date"
+                required
+                min={form.startDay || undefined}
+                value={form.until}
+                onChange={(e) => set('until', e.target.value)}
+              />
+            </div>
+          ) : (
+            <div className="form-field">
+              <label htmlFor="calendar-count">Số lần</label>
+              <input
+                id="calendar-count"
+                type="number"
+                min={1}
+                max={400}
+                required
+                value={form.count}
+                onChange={(e) => set('count', e.target.value)}
+              />
+            </div>
+          )}
+          <p className="field-hint">
+            Tối đa 366 ngày. Ngày bắt đầu luôn là lần đầu của chuỗi
+            {form.freq === 'MONTHLY' ? '; tháng không có ngày đó thì bỏ qua' : ''}.
+          </p>
         </div>
       )}
       {form.kind === 'TASK' && !form.startDay && (
@@ -483,17 +628,64 @@ export function CalendarEditor({
             <label htmlFor="calendar-remind">Nhắc</label>
             <select
               id="calendar-remind"
-              value={form.remind}
+              value={leadOptions.includes(Number(form.remind)) ? form.remind : ''}
               onChange={(e) => set('remind', e.target.value)}
             >
               <option value="">Không nhắc</option>
-              {remindOptions.map((minutes) => (
+              {leadOptions.map((minutes) => (
                 <option key={minutes} value={String(minutes)}>
-                  {remindLabel(minutes)}
+                  {remindLabel(minutes, form.allDay)}
                 </option>
               ))}
             </select>
           </div>
+          {form.remind !== '' &&
+            form.remindMore.map((value, index) => (
+              <div className="form-field calendar-remind-more" key={index}>
+                <label htmlFor={`calendar-remind-${index + 2}`}>Nhắc lần {index + 2}</label>
+                <select
+                  id={`calendar-remind-${index + 2}`}
+                  value={leadOptions.includes(Number(value)) ? value : ''}
+                  onChange={(e) =>
+                    set(
+                      'remindMore',
+                      form.remindMore.map((v, i) => (i === index ? e.target.value : v)),
+                    )
+                  }
+                >
+                  <option value="">Chọn giờ nhắc</option>
+                  {leadOptions
+                    .filter((m) => String(m) !== form.remind)
+                    .map((minutes) => (
+                      <option key={minutes} value={String(minutes)}>
+                        {remindLabel(minutes, form.allDay)}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="text-button"
+                  aria-label={`Bỏ lời nhắc lần ${index + 2}`}
+                  onClick={() =>
+                    set(
+                      'remindMore',
+                      form.remindMore.filter((_, i) => i !== index),
+                    )
+                  }
+                >
+                  Bỏ
+                </button>
+              </div>
+            ))}
+          {form.remind !== '' && form.remindMore.length < 2 && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => set('remindMore', [...form.remindMore, ''])}
+            >
+              Thêm lời nhắc
+            </button>
+          )}
           {form.remind !== '' && (
             <label className="calendar-check">
               <input
@@ -559,11 +751,34 @@ export function CalendarEditor({
               </div>
             </>
           )}
-          <button type="button" className="text-button" onClick={() => setKeepLink(false)}>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              setKeepLink(false);
+              setChosen(null);
+            }}
+          >
             Bỏ liên kết tài liệu
           </button>
         </div>
       )}
+      {!(link && keepLink) &&
+        (picking ? (
+          <MaterialPicker
+            cancel={() => setPicking(false)}
+            pick={(found) => {
+              setChosen({ versionId: found.versionId, pageNumber: 1, title: found.title });
+              setKeepLink(true);
+              setPageNumber('1');
+              setPicking(false);
+            }}
+          />
+        ) : (
+          <button type="button" className="text-button" onClick={() => setPicking(true)}>
+            Gắn tài liệu
+          </button>
+        ))}
       {error && (
         <p role="alert" className="form-error">
           {error}
@@ -583,7 +798,13 @@ export function CalendarEditor({
             disabled={busy}
             onClick={() => setDeleting(true)}
           >
-            {occurrence ? (scope === 'one' ? 'Xóa buổi này' : 'Xóa cả chuỗi') : 'Xóa'}
+            {occurrence
+              ? scope === 'one'
+                ? 'Xóa buổi này'
+                : scope === 'following'
+                  ? 'Xóa buổi này và các buổi sau'
+                  : 'Xóa cả chuỗi'
+              : 'Xóa'}
           </button>
         )}
       </div>
@@ -592,9 +813,11 @@ export function CalendarEditor({
           <p>
             {occurrence && scope === 'one'
               ? `Xóa buổi ${whenLabel(occurrence)} khỏi chuỗi “${occurrence.title}”?`
-              : occurrence
-                ? `Xóa cả chuỗi “${occurrence.title}” cùng mọi buổi?`
-                : `Xóa “${item?.title}”?`}{' '}
+              : occurrence && scope === 'following'
+                ? `Xóa buổi ${whenLabel(occurrence)} và mọi buổi sau đó của “${occurrence.title}”?`
+                : occurrence
+                  ? `Xóa cả chuỗi “${occurrence.title}” cùng mọi buổi?`
+                  : `Xóa “${item?.title}”?`}{' '}
             Thao tác không thể hoàn tác.
           </p>
           <div className="note-actions">

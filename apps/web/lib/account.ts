@@ -34,6 +34,8 @@ export interface ReaderPreferences {
   highlightColor: HighlightColor;
   defaultZoom: keyof typeof readerZooms;
   annotationPanelOpen: boolean;
+  /** CAL-07: whether calendar reminders may be emailed at all. */
+  reminderEmail: boolean;
 }
 export interface PreferencesSnapshot {
   userId: string;
@@ -44,6 +46,7 @@ export const defaultReaderPreferences: ReaderPreferences = {
   highlightColor: '#FFF59D',
   defaultZoom: 'fit-width',
   annotationPanelOpen: false,
+  reminderEmail: true,
 };
 export function isReaderPreferences(value: unknown): value is ReaderPreferences {
   if (!value || typeof value !== 'object') return false;
@@ -52,7 +55,8 @@ export function isReaderPreferences(value: unknown): value is ReaderPreferences 
     isHighlightColor(item.highlightColor) &&
     typeof item.defaultZoom === 'string' &&
     Object.hasOwn(readerZooms, item.defaultZoom) &&
-    typeof item.annotationPanelOpen === 'boolean'
+    typeof item.annotationPanelOpen === 'boolean' &&
+    typeof item.reminderEmail === 'boolean'
   );
 }
 async function preferencesResponse(
