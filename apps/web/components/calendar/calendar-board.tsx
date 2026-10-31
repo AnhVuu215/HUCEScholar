@@ -39,6 +39,7 @@ import {
 import { readingDeadlines, type ReadingDeadline } from '../../lib/reading-lists';
 import { CALENDAR_DRAFT_PROMPT, CalendarEditor, type CalendarDraft } from './calendar-editor';
 import { CalendarExport } from './calendar-export';
+import { DoneTasks } from './done-tasks';
 import { ReviewLaterPanel } from './review-later-panel';
 
 type View = 'week' | 'month' | 'agenda';
@@ -876,6 +877,7 @@ export function CalendarBoard() {
           {tasks && tasks.total > tasks.items.length && (
             <p className="field-hint">Còn {tasks.total - tasks.items.length} việc chưa hiện.</p>
           )}
+          <DoneTasks attempt={attempt} busy={busy} toggle={toggle} open={open} />
         </aside>
         <ReviewLaterPanel onScheduled={reload} />
         <CalendarExport />

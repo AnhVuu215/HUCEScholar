@@ -28,6 +28,7 @@ import {
   type CalendarRepeatInput,
 } from '../../lib/calendar';
 import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
+import { MaterialPicker } from './material-picker';
 
 /** Asked before leaving the page, or before another item replaces an edited form. */
 export const CALENDAR_DRAFT_PROMPT = 'Bạn có mục lịch chưa lưu. Rời trang và bỏ thay đổi?';
@@ -125,13 +126,17 @@ export function CalendarEditor({
   const repeatable = form.kind === 'EVENT' && !(occurrence && scope === 'one');
   // Reminders need a time: a timed session, or a task with a due date that is not all-day.
   const remindable = !form.allDay && (form.kind === 'EVENT' || form.startDay !== '');
-  const link = item
+  const original = item
     ? (item.material ?? (item.materialUnavailable ? 'unavailable' : null))
     : (draft.material ?? null);
+  /** A document picked in this form; it replaces the stored link. */
+  const [chosen, setChosen] = useState<CalendarDraft['material'] | null>(null);
+  const [picking, setPicking] = useState(false);
+  const link = chosen ?? original;
   // A withheld link keeps its ids server-side; the form can only keep it or drop it.
-  const [keepLink, setKeepLink] = useState(link !== null);
+  const [keepLink, setKeepLink] = useState(original !== null);
   const [pageNumber, setPageNumber] = useState(
-    link && link !== 'unavailable' ? String(link.pageNumber) : '',
+    original && original !== 'unavailable' ? String(original.pageNumber) : '',
   );
   const [requestId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
@@ -141,8 +146,9 @@ export function CalendarEditor({
   const unchanged = occurrence ? { ...baseline, ...times(occurrence, scope) } : baseline;
   const dirty =
     JSON.stringify(form) !== JSON.stringify(unchanged) ||
-    keepLink !== (link !== null) ||
-    pageNumber !== (link && link !== 'unavailable' ? String(link.pageNumber) : '');
+    chosen !== null ||
+    keepLink !== (original !== null) ||
+    pageNumber !== (original && original !== 'unavailable' ? String(original.pageNumber) : '');
   useNotesLeaveGuard(dirty, busy, CALENDAR_DRAFT_PROMPT);
   const reportDirty = useEffectEvent((value: boolean) => dirtyChanged?.(value));
   useEffect(() => reportDirty(dirty), [dirty]);
@@ -559,11 +565,34 @@ export function CalendarEditor({
               </div>
             </>
           )}
-          <button type="button" className="text-button" onClick={() => setKeepLink(false)}>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              setKeepLink(false);
+              setChosen(null);
+            }}
+          >
             Bỏ liên kết tài liệu
           </button>
         </div>
       )}
+      {!(link && keepLink) &&
+        (picking ? (
+          <MaterialPicker
+            cancel={() => setPicking(false)}
+            pick={(found) => {
+              setChosen({ versionId: found.versionId, pageNumber: 1, title: found.title });
+              setKeepLink(true);
+              setPageNumber('1');
+              setPicking(false);
+            }}
+          />
+        ) : (
+          <button type="button" className="text-button" onClick={() => setPicking(true)}>
+            Gắn tài liệu
+          </button>
+        ))}
       {error && (
         <p role="alert" className="form-error">
           {error}
