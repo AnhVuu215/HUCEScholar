@@ -1099,3 +1099,12 @@
 .study-practice .study-card h3 {
   font-size: 1.25rem;
 }
+/* LEARN-02: filters on the calendar's "Cần xem lại" panel. */
+.calendar-review-filters {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.calendar-review > .secondary-button {
+  margin-bottom: 12px;
+}

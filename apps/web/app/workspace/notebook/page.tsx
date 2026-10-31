@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { LibraryWorkspace } from '../../../components/library/library-workspace';
 import { LibraryNotebook } from '../../../components/library/library-notebook';
 export const metadata: Metadata = { title: 'Sổ tay — HUCEScholar' };
+export const dynamic = 'force-dynamic';
 export default function NotebookPage() {
   return (
     <LibraryWorkspace

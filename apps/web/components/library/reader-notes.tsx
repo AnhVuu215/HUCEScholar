@@ -15,6 +15,7 @@ import {
 import { pagePointToPosition, pinBox, type HighlightSurface } from '../../lib/highlight-geometry';
 import { useNotesLeaveGuard } from './use-notes-leave-guard';
 import { useAnnotationEditor, useAnnotationPanel } from './reader-annotation-panel';
+import { ReviewMarkButton, useReviewMark } from './notebook-parts';
 const samePosition = (a: NotePosition | null, b: NotePosition | null) =>
   a === b || (!!a && !!b && a.x === b.x && a.y === b.y);
 /** Pointer travel (CSS px) before a press on a sticky note counts as dragging, not a click. */
@@ -319,6 +320,8 @@ export function ReaderNotes({
     if (!moved) edit(note);
   }
   const pageItems = loadedPage === page ? items : [];
+  // LEARN-02: the private mark, also from this list; it does not change the note's revision.
+  const review = useReviewMark(setItems);
   const draftOnPage =
     !!surface && !!position && surface.page === effectiveDraftPage && surface.page === page;
   const pinStyle = (at: NotePosition) => pinBox(at, surface!.viewport);
@@ -489,6 +492,11 @@ export function ReaderNotes({
       </form>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
+      {review.message && (
+        <p role="status" className="field-hint">
+          {review.message}
+        </p>
+      )}
       {listError && loadedPage === page && <p role="alert">{listError}</p>}
       {fetching && <p role="status">Đang tải ghi chú…</p>}
       {!fetching && !listError && items.length === 0 && (
@@ -506,6 +514,7 @@ export function ReaderNotes({
               Trang {note.pageNumber}
               {note.position ? ' · Ghim trên trang' : ''} · Sửa lúc{' '}
               {new Date(note.updatedAt).toLocaleString('vi-VN')}
+              {note.reviewLater && <strong className="review-later-tag"> · Cần xem lại</strong>}
             </p>
             <div className="note-actions">
               <button
@@ -525,6 +534,11 @@ export function ReaderNotes({
               >
                 Xóa
               </button>
+              <ReviewMarkButton
+                item={note}
+                busy={review.marking === note.id}
+                onClick={() => void review.mark(note)}
+              />
             </div>
             {deleting?.id === note.id && (
               <div className="note-delete">

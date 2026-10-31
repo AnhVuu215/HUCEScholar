@@ -1,5 +1,12 @@
 'use client';
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type SetStateAction,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { ApiError } from '../../lib/auth';
 import { personalError } from '../../lib/reading';
@@ -23,6 +30,7 @@ import { formatCitation } from '../../lib/citations';
 import { useReturnFocus } from '../../lib/use-return-focus';
 import { ReaderCitation, type CitationStatus } from './reader-citation';
 import { StudyCardMaker } from '../study/study-card-maker';
+import { ReviewMarkButton, useReviewMark } from './notebook-parts';
 
 type Draft = {
   page: number;
@@ -62,6 +70,14 @@ export function ReaderHighlights({
   const [citationStatus, setCitationStatus] = useState<CitationStatus>('copying');
   const copyRequest = useRef(0);
   const [overlaps, setOverlaps] = useState<TextHighlight[]>([]);
+  // LEARN-02: the private mark, also from this list; it does not change the highlight's revision.
+  const review = useReviewMark<TextHighlight>(
+    useCallback((next: SetStateAction<TextHighlight[]>) => {
+      setData(
+        (old) => old && { ...old, items: typeof next === 'function' ? next(old.items) : next },
+      );
+    }, []),
+  );
   const [draft, setDraft] = useState<Draft | null>(null),
     [content, setContent] = useState('');
   const [color, setColor] = useState('#FFF59D');
@@ -494,6 +510,11 @@ export function ReaderHighlights({
         )}
         {error && <p role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
+        {review.message && (
+          <p role="status" className="field-hint">
+            {review.message}
+          </p>
+        )}
         {listError && <p role="alert">{listError}</p>}
         {fetching && <p role="status">Đang tải vùng tô…</p>}
         {!fetching && !listError && !items.length && (
@@ -508,6 +529,7 @@ export function ReaderHighlights({
               <p className="note-content">{item.content || 'Chưa thêm ghi chú.'}</p>
               <p className="field-hint">
                 {highlightColorLabel(item.color)} · Trang {item.pageNumber}
+                {item.reviewLater && <strong className="review-later-tag"> · Cần xem lại</strong>}
               </p>
               <div className="note-actions">
                 <button className="secondary-button" disabled={locked} onClick={() => open(item)}>
@@ -523,6 +545,11 @@ export function ReaderHighlights({
                 >
                   Xóa vùng tô
                 </button>
+                <ReviewMarkButton
+                  item={item}
+                  busy={review.marking === item.id}
+                  onClick={() => void review.mark(item)}
+                />
               </div>
               <StudyCardMaker versionId={versionId} highlightId={item.id} disabled={locked} />
               {deleting?.id === item.id && (

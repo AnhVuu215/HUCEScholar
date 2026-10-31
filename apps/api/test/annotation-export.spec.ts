@@ -71,6 +71,28 @@ describe('annotation export', () => {
       'Chưa có ghi chú hoặc đoạn tô nào.',
     );
   });
+  it('labels entries marked "cần xem lại" in both formats', () => {
+    const marked = [
+      { ...rows[0], review_later: true },
+      { ...rows[1], review_later: true },
+      { ...rows[2], review_later: false },
+    ];
+    const markdown = exportAnnotations(source, marked, 'markdown');
+    expect(markdown).toContain('**Ghi chú trang** · Cần xem lại');
+    expect(markdown).toContain('**Đoạn tô xanh dương** · Cần xem lại');
+    expect(markdown).toContain('**Đoạn tô vàng**\n');
+    const text = exportAnnotations(source, marked, 'text');
+    expect(text).toContain('- Ghi chú trang [Cần xem lại]: Ôn lại');
+    expect(text).toContain('- Đoạn tô (xanh dương) [Cần xem lại]: “Lực bằng');
+    expect(text).toContain('- Đoạn tô (vàng): “<script>');
+    expect(
+      exportNotebook(
+        [{ ...source, rows: marked }],
+        { filters: 'cần xem lại', exportedAt: source.exportedAt },
+        'markdown',
+      ),
+    ).toContain('**Ghi chú trang** · Cần xem lại');
+  });
   it('EXPORT-02: writes one section per document in the given order with the filters', () => {
     const documents = [
       { ...source, rows },

@@ -713,6 +713,7 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
             notebook={
               <ReaderNotebook
                 versionId={id}
+                title={item.title}
                 active={panel.open && panel.scope === 'all'}
                 available={!error && !invalidLink && !!pdf}
                 onSelect={(annotation) => {

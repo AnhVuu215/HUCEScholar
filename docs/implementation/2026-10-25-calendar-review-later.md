@@ -66,5 +66,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 ## Chưa làm
 
 - **CAL-04b:** hạn cho từng mục danh sách đọc và hiện hạn đó trong lịch. Cần chốt trước: ai thấy hạn của môn nào, khi sản phẩm chưa có danh sách lớp hay đăng ký môn.
-- Lên lịch ôn ngay trong sổ ghi chú của reader; hiện tại chỉ từ trang lịch.
-- Lọc khung "Cần xem lại" theo môn hoặc tài liệu.
+- Lên lịch ôn trong sổ ghi chú của reader và lọc khung theo môn/tài liệu: đã có ở [hoàn thiện "Cần xem lại"](2026-10-31-review-later-complete.md).
