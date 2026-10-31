@@ -78,9 +78,22 @@ export type ReviewLaterList = {
   page: number;
   limit: number;
 };
-export async function reviewLaterList(page: number, signal: AbortSignal): Promise<ReviewLaterList> {
+/** Narrows the "cần xem lại" list to one course and/or one document; empty means all. */
+export type ReviewLaterScope = { courseId: string; versionId: string };
+export type ReviewLaterFilters = {
+  documents: { versionId: string; title: string; marks: number }[];
+  courses: { id: string; code: string; name: string }[];
+};
+export async function reviewLaterList(
+  page: number,
+  signal: AbortSignal,
+  scope: ReviewLaterScope = { courseId: '', versionId: '' },
+): Promise<ReviewLaterList> {
+  const params = new URLSearchParams({ page: String(page), limit: '12' });
+  if (scope.courseId) params.set('courseId', scope.courseId);
+  if (scope.versionId) params.set('versionId', scope.versionId);
   const body: unknown = await (
-    await apiRequest(`/personal-library/review-later?page=${page}&limit=12`, { signal })
+    await apiRequest(`/personal-library/review-later?${params}`, { signal })
   ).json();
   if (
     !isRecord(body) ||
@@ -103,4 +116,31 @@ export async function reviewLaterList(page: number, signal: AbortSignal): Promis
   )
     throw new Error('Invalid review list.');
   return body as ReviewLaterList;
+}
+/** Documents and courses that have readable marks, for the calendar panel's filters. */
+export async function reviewLaterFilters(signal: AbortSignal): Promise<ReviewLaterFilters> {
+  const body: unknown = await (
+    await apiRequest('/personal-library/review-later/filters', { signal })
+  ).json();
+  if (
+    isRecord(body) &&
+    Array.isArray(body.documents) &&
+    body.documents.every(
+      (d) =>
+        isRecord(d) &&
+        isNumericId(d.versionId) &&
+        typeof d.title === 'string' &&
+        Number.isSafeInteger(d.marks),
+    ) &&
+    Array.isArray(body.courses) &&
+    body.courses.every(
+      (c) =>
+        isRecord(c) &&
+        isNumericId(c.id) &&
+        typeof c.code === 'string' &&
+        typeof c.name === 'string',
+    )
+  )
+    return body as unknown as ReviewLaterFilters;
+  throw new Error('Invalid review filters.');
 }

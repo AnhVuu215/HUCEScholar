@@ -38,4 +38,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` sau `pnpm test:set
 
 ## Chưa làm
 
-- Lượt này chỉ chặn việc rời hẳn trang, cộng với việc thay form trên trang Lịch học. Chưa rà các thao tác trong cùng trang có thể gỡ form đang sửa, ví dụ chuyển trang danh sách ở trang Thẻ ôn tập hay đổi mục trong khung "Cần xem lại".
+- Lượt này chỉ chặn việc rời hẳn trang, cộng với việc thay form trên trang Lịch học. Chưa rà các thao tác trong cùng trang có thể gỡ form đang sửa, ví dụ chuyển trang danh sách ở trang Thẻ ôn tập. Đổi bộ lọc của khung "Cần xem lại" nay giữ form đang mở ([hoàn thiện "Cần xem lại"](2026-10-31-review-later-complete.md)).

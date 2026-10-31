@@ -4226,6 +4226,119 @@ describe('private material drafts', () => {
       (await readingWrite('student', endpoint, { reviewLater: true })).body.items,
     ).toHaveLength(1);
   });
+  it('LEARN-02: "cần xem lại" filters by course or document, opens a session for one document and is labelled in exports', async () => {
+    const first = await readingFixture();
+    const draft = await safeDraft('student', 3);
+    await db.query('INSERT INTO hucescholar.version_courses(version_id,course_id) VALUES($1,$2)', [
+      draft.versionId,
+      courses[1],
+    ]);
+    expect((await publication('student', draft.id, 'submit', { revision: 2 })).status).toBe(201);
+    const pending = await db.query(
+      "SELECT id FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+      [draft.versionId],
+    );
+    expect((await review(pending.rows[0].id, decision())).status).toBe(201);
+    const second = { ...draft, path: `/api/v1/library/versions/${draft.versionId}` };
+    const token = randomUUID().slice(0, 8);
+    const note = async (path: string, pageNumber: number, content: string, marked: boolean) => {
+      const created = (
+        await readingWrite('student', `${path}/notes`, {
+          pageNumber,
+          content,
+          requestId: randomUUID(),
+        })
+      ).body.item;
+      if (marked)
+        expect(
+          (
+            await readingWrite(
+              'student',
+              `${path}/annotations/${created.id}/review-later`,
+              { reviewLater: true },
+              'put',
+            )
+          ).status,
+        ).toBe(200);
+      return created.id as string;
+    };
+    const one = await note(first.path, 1, `${token} môn đầu`, true);
+    const two = await note(second.path, 2, `${token} môn sau`, true);
+    const plain = await note(second.path, 1, `${token} chưa đánh dấu`, false);
+    const listed = async (query: string) => {
+      const response = await agents.student.get(`/api/v1/personal-library/review-later${query}`);
+      expect(response.status).toBe(200);
+      return response.body.items.map((i: { id: string }) => i.id) as string[];
+    };
+    const byCourse = await listed(`?courseId=${courses[1]}&limit=100`);
+    expect(byCourse).toContain(two);
+    expect(byCourse).not.toContain(one);
+    expect(await listed(`?versionId=${first.versionId}`)).toEqual([one]);
+    expect(await listed(`?versionId=${first.versionId}&courseId=${courses[1]}`)).toEqual([]);
+    for (const query of ['?courseId=x', '?versionId=0'])
+      expect(
+        (await agents.student.get(`/api/v1/personal-library/review-later${query}`)).status,
+      ).toBe(400);
+
+    const filters = await agents.student
+      .get('/api/v1/personal-library/review-later/filters')
+      .expect(200);
+    expect(filters.body.documents).toEqual(
+      expect.arrayContaining([
+        { versionId: first.versionId, title: expect.any(String), marks: 1 },
+        { versionId: second.versionId, title: expect.any(String), marks: 1 },
+      ]),
+    );
+    expect(filters.body.courses.map((c: { id: string }) => c.id)).toEqual(
+      expect.arrayContaining([String(courses[0]), String(courses[1])]),
+    );
+    expect(
+      (await agents.other.get('/api/v1/personal-library/review-later/filters')).body.documents.map(
+        (d: { versionId: string }) => d.versionId,
+      ),
+    ).not.toContain(first.versionId);
+    await request(app.getHttpServer())
+      .get('/api/v1/personal-library/review-later/filters')
+      .expect(401);
+
+    // The notebook search narrows to one document, so a session can start from the calendar.
+    const session = await readingWrite('student', '/api/v1/personal-library/notebook/search', {
+      query: token,
+      reviewLater: true,
+      versionId: second.versionId,
+    });
+    expect(session.status).toBe(201);
+    expect(session.body.items.map((i: { id: string }) => i.id)).toEqual([two]);
+    const everything = await readingWrite('student', '/api/v1/personal-library/notebook/search', {
+      query: token,
+      versionId: second.versionId,
+    });
+    expect(everything.body.items.map((i: { id: string }) => i.id)).toEqual([plain, two]);
+    expect(
+      (
+        await readingWrite('student', '/api/v1/personal-library/notebook/search', {
+          versionId: 'x',
+        })
+      ).status,
+    ).toBe(400);
+
+    // Both exports label the mark.
+    const md = await agents.student.get(`${second.path}/annotations/export`).expect(200);
+    expect(md.text).toContain('**Ghi chú trang** · Cần xem lại');
+    const text = await agents.student
+      .get(`${second.path}/annotations/export?format=text`)
+      .expect(200);
+    expect(text.text).toContain(`- Ghi chú trang [Cần xem lại]: ${token} môn sau`);
+    expect(text.text).toContain(`- Ghi chú trang: ${token} chưa đánh dấu`);
+    const notebookFile = await readingWrite('student', '/api/v1/personal-library/notebook/export', {
+      versionId: second.versionId,
+      reviewLater: true,
+      format: 'text',
+    });
+    expect(notebookFile.text).toContain('Bộ lọc: một tài liệu · cần xem lại');
+    expect(notebookFile.text).toContain(`[Cần xem lại]: ${token} môn sau`);
+    expect(notebookFile.text).not.toContain(`${token} môn đầu`);
+  });
   it('lists the owner\'s "cần xem lại" marks across readable documents for the calendar (CAL-04)', async () => {
     const first = await readingFixture();
     const second = await readingFixture();
@@ -4454,7 +4567,8 @@ describe('private material drafts', () => {
     });
     expect(text.headers['content-type']).toBe('text/plain; charset=utf-8');
     expect(text.text).toMatch(/Bộ lọc: môn .+ · chỉ ghi chú trang · cần xem lại · có chữ/);
-    expect(text.text).toContain(`- Ghi chú trang: ${token} đầu`);
+    // Filtered by the mark, so every entry carries its label (LEARN-02).
+    expect(text.text).toContain(`- Ghi chú trang [Cần xem lại]: ${token} đầu`);
     expect(text.text).not.toContain(`${token} cuối`);
     expect((await exportNotes({ query: token, format: 'markdown' }, 'other')).text).toContain(
       'Chưa có ghi chú hoặc đoạn tô nào.',
