@@ -126,8 +126,5 @@ Test e2e dọn lịch của tài khoản `cal2` trước khi chạy, và đặt 
 
 ## Chưa làm
 
-- Kéo thả trên màn hình cảm ứng: ngoài phạm vi, vì chủ dự án chốt làm xong bản web trước. Bằng bàn phím thì dùng form sửa.
-- Kiểu lặp khác: mỗi N tuần, sau N lần, theo tháng; "buổi này và các buổi sau".
-- Lặp cho việc cần làm.
-- Ở vùng có giờ mùa hè, buổi sau mốc đổi giờ lệch 1 giờ (giới hạn đã ghi trong đặc tả; Việt Nam không bị).
-- Nhắc trước giờ học (CAL-03), hạn danh sách đọc trong lịch (CAL-04), xuất `.ics` (CAL-05) đã có ở [mốc CAL-05](2026-10-31-calendar-ics-export.md).
+- Kiểu lặp mỗi N tuần, sau N lần, theo tháng, "buổi này và các buổi sau" và lặp cho việc cần làm đã có ở [CAL-07](2026-10-31-calendar-complete.md).
+- Kéo thả trên màn hình cảm ứng: ngoài phạm vi (bản web cho chuột). Lệch 1 giờ quanh giờ mùa hè: giới hạn đã ghi, Việt Nam không bị.
