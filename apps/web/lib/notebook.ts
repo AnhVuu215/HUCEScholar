@@ -12,7 +12,8 @@ import { isNote } from './reading';
 
 /** LEARN-03: one of the signed-in user's notes or highlights, with the document it sits in. */
 export type NotebookEntry = AnnotationItem & { material: LibraryItem | null };
-export type NotebookFilters = AnnotationFilters & { courseId?: string };
+/** `versionId` narrows to one document; set only by a session opened from the calendar. */
+export type NotebookFilters = AnnotationFilters & { courseId?: string; versionId?: string };
 export type NotebookCourse = { id: string; code: string; name: string };
 
 /** Searches every readable document; the text goes in a POST body, never the URL. */

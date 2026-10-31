@@ -45,4 +45,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` sau `pnpm test:set
 
 - Lưu tiến độ buổi ôn hay đặt lịch ôn lại; gắn buổi ôn vào Lịch học.
 - Sửa nội dung ghi chú ngay trong buổi ôn (hiện sửa ở danh sách Sổ tay hoặc trong reader).
-- Bắt đầu buổi ôn từ khung "Cần xem lại" của Lịch học.
+- Bắt đầu buổi ôn từ khung "Cần xem lại" của Lịch học: đã có ở [hoàn thiện "Cần xem lại"](2026-10-31-review-later-complete.md).

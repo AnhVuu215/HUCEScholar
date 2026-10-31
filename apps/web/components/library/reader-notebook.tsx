@@ -20,14 +20,17 @@ import {
   useReviewMark,
   type FilterState,
 } from './notebook-parts';
+import { ScheduleReading } from '../calendar/schedule-reading';
 
 type NotebookProps = {
   versionId: string;
+  /** Document title, for the "Ôn: …" session a marked entry can book. */
+  title: string;
   active: boolean;
   available: boolean;
   onSelect: (item: AnnotationItem) => void;
 };
-export function ReaderNotebook({ versionId, active, available, onSelect }: NotebookProps) {
+export function ReaderNotebook({ versionId, title, active, available, onSelect }: NotebookProps) {
   const [fields, setFields] = useState<FilterState>(emptyFilterState);
   const [search, setSearch] = useState<{ filters: AnnotationFilters; iteration: number }>({
     filters: {},
@@ -60,6 +63,7 @@ export function ReaderNotebook({ versionId, active, available, onSelect }: Noteb
         <NotebookResults
           key={versionId + ':' + search.iteration}
           versionId={versionId}
+          title={title}
           filters={search.filters}
           available={available}
           onSelect={onSelect}
@@ -80,6 +84,7 @@ function failure(cause: unknown) {
 }
 function NotebookResults({
   versionId,
+  title,
   filters,
   available,
   onSelect,
@@ -135,6 +140,16 @@ function NotebookResults({
               busy={review.marking === item.id}
               onClick={() => void review.mark(item)}
             />
+            {/* CAL-04: a marked entry books its review session here, as on the calendar. */}
+            {item.reviewLater && (
+              <ScheduleReading
+                purpose="review"
+                versionId={versionId}
+                pageNumber={item.pageNumber}
+                title={title}
+                disabled={!available}
+              />
+            )}
           </article>
         ))}
       </div>
