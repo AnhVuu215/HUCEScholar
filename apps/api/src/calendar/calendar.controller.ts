@@ -18,11 +18,12 @@ import { AuthenticatedRequest } from '../auth/auth.types';
 import { SessionGuard } from '../auth/session.guard';
 import {
   CalendarDetachDto,
-  CalendarDoneDto,
+  CalendarOccurrenceDoneDto,
   CalendarExportDto,
   CalendarOccurrenceDto,
   CalendarRangeDto,
   CalendarRevisionDto,
+  CalendarSplitDto,
   CalendarTasksDto,
   CreateCalendarItemDto,
   UpdateCalendarItemDto,
@@ -64,7 +65,7 @@ export class CalendarController {
   @Put('items/:itemId/done') setDone(
     @Req() req: AuthenticatedRequest,
     @Param('itemId') itemId: string,
-    @Body() body: CalendarDoneDto,
+    @Body() body: CalendarOccurrenceDoneDto,
   ) {
     return this.calendar.setDone(req.user, itemId, body);
   }
@@ -81,6 +82,20 @@ export class CalendarController {
     @Body() body: CalendarDetachDto,
   ) {
     return this.calendar.detach(req.user, itemId, body);
+  }
+  @Post('items/:itemId/split') split(
+    @Req() req: AuthenticatedRequest,
+    @Param('itemId') itemId: string,
+    @Body() body: CalendarSplitDto,
+  ) {
+    return this.calendar.split(req.user, itemId, body);
+  }
+  @Post('items/:itemId/truncate') @HttpCode(204) truncate(
+    @Req() req: AuthenticatedRequest,
+    @Param('itemId') itemId: string,
+    @Body() body: CalendarOccurrenceDto,
+  ) {
+    return this.calendar.truncate(req.user, itemId, body);
   }
   @Delete('items/:itemId') @HttpCode(204) remove(
     @Req() req: AuthenticatedRequest,

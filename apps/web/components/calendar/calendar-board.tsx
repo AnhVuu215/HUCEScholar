@@ -378,16 +378,18 @@ export function CalendarBoard() {
     setEditor((v) => ({ item: null, draft, seq: (v?.seq ?? 0) + 1 }));
   }
   /** Ticks show at once; a failed request reloads to put the box back as the server has it. */
-  function mark(id: string, done: boolean) {
+  /** One occurrence of a repeating task, or the whole single task. */
+  function mark(target: CalendarItem, done: boolean) {
+    const key = itemKey(target);
     const apply = <T extends { items: CalendarItem[] }>(v: T | null) =>
-      v && { ...v, items: v.items.map((i) => (i.id === id ? { ...i, done } : i)) };
+      v && { ...v, items: v.items.map((i) => (itemKey(i) === key ? { ...i, done } : i)) };
     setRange(apply);
     setTasks(apply);
   }
   async function toggle(item: CalendarItem, done: boolean) {
     setBusy(true);
     setError('');
-    mark(item.id, done);
+    mark(item, done);
     try {
       await setCalendarDone(item, done);
       setNotice(done ? `Đã xong: ${item.title}` : `Mở lại: ${item.title}`);

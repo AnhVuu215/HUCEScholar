@@ -24,8 +24,15 @@ import {
 export const calendarColors = ['blue', 'green', 'orange', 'purple', 'red', 'gray'] as const;
 /** CAL-03 lead times in minutes; 0 reminds at the start (or due time). */
 export const remindMinutes = [0, 5, 10, 15, 30, 60, 120, 1440] as const;
-/** CAL-02 weekly repeat. Weekdays and `until` are local to `utcOffset` (minutes east of UTC). */
+/**
+ * CAL-02/CAL-07 repeat. Weekly on `weekdays`, or monthly on the first date's day of the month,
+ * every `interval` weeks or months; it ends on `until` or after `count` times (exactly one).
+ * Weekdays and dates are local to `utcOffset` (minutes east of UTC).
+ */
 export class CalendarRepeatDto {
+  @IsOptional() @IsIn(['WEEKLY', 'MONTHLY']) freq: 'WEEKLY' | 'MONTHLY' = 'WEEKLY';
+  @IsOptional() @IsInt() @Min(1) @Max(12) interval = 1;
+  @ValidateIf((o: CalendarRepeatDto) => o.freq !== 'MONTHLY')
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(7)
@@ -33,8 +40,9 @@ export class CalendarRepeatDto {
   @IsInt({ each: true })
   @Min(1, { each: true })
   @Max(7, { each: true })
-  weekdays!: number[];
-  @Matches(/^\d{4}-\d{2}-\d{2}$/) until!: string;
+  weekdays: number[] = [];
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) until?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(400) count?: number;
   @IsInt() @Min(-840) @Max(840) utcOffset!: number;
 }
 /** Full replacement of an item's fields; done state has its own endpoint. */
@@ -109,9 +117,23 @@ export class CalendarTasksDto {
   @Transform(integer) @IsInt() @Min(1) @Max(100) limit = 50;
   @IsOptional() @IsIn(['open', 'done']) status: 'open' | 'done' = 'open';
 }
+/** CAL-07: a repeating task is done one occurrence at a time. */
+export class CalendarOccurrenceDoneDto {
+  @IsBoolean() done!: boolean;
+  @IsOptional() @IsISO8601({ strict: true }) occurrenceStart?: string;
+}
 /** One occurrence of a series, named by its original start. */
 export class CalendarOccurrenceDto extends CalendarRevisionDto {
   @IsISO8601({ strict: true }) occurrenceStart!: string;
+}
+/**
+ * CAL-07 "Buổi này và các buổi sau": the series ends before the occurrence, and a new item with
+ * these fields (repeating or not) starts at it.
+ */
+export class CalendarSplitDto extends CreateCalendarItemDto {
+  @IsInt() @Min(1) @Max(2147483646) revision!: number;
+  @IsISO8601({ strict: true }) occurrenceStart!: string;
+  @IsOptional() @IsBoolean() keepSource = false;
 }
 /** "Chỉ buổi này": the occurrence leaves the series and becomes its own item with these fields. */
 export class CalendarDetachDto extends CreateCalendarItemDto {

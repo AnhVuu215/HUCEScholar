@@ -12,15 +12,30 @@ export const colorLabels: Record<CalendarColor, string> = {
   gray: 'Xám',
 };
 export type CalendarKind = 'EVENT' | 'TASK';
-/** CAL-02 weekly repeat as the API returns it; times are those of the first session. */
+export type RepeatFreq = 'WEEKLY' | 'MONTHLY';
+/**
+ * CAL-02/CAL-07 repeat as the API returns it; times are those of the first occurrence (a task
+ * has no end). `until` is the last date, also when the series ends after `count` times.
+ */
 export type CalendarRepeat = {
+  freq: RepeatFreq;
+  interval: number;
+  count: number | null;
+  /** Weekly only; empty for a monthly series. */
   weekdays: number[];
   until: string;
   startsAt: string;
-  endsAt: string;
+  endsAt: string | null;
 };
-/** What the form sends: ISO weekdays (1 = Monday), last local date, the device's UTC offset. */
-export type CalendarRepeatInput = { weekdays: number[]; until: string; utcOffset: number };
+/** What the form sends: one of `until` or `count`, local to the device's UTC offset. */
+export type CalendarRepeatInput = {
+  freq: RepeatFreq;
+  interval: number;
+  weekdays: number[];
+  until?: string;
+  count?: number;
+  utcOffset: number;
+};
 /** CAL-03 lead times in minutes; 0 reminds at the start or due time. */
 export const remindOptions = [0, 5, 10, 15, 30, 60, 120, 1440] as const;
 export type CalendarReminder = { minutes: number; email: boolean };
@@ -69,11 +84,13 @@ const repeat = (v: unknown) =>
   (isRecord(v) &&
     Array.isArray(v.weekdays) &&
     v.weekdays.every((d) => Number.isInteger(d) && d >= 1 && d <= 7) &&
+    (v.freq === 'WEEKLY' || v.freq === 'MONTHLY') &&
+    Number.isInteger(v.interval) &&
+    (v.count === null || Number.isInteger(v.count)) &&
     typeof v.until === 'string' &&
     /^\d{4}-\d{2}-\d{2}$/.test(v.until) &&
     typeof v.startsAt === 'string' &&
     time(v.startsAt) &&
-    typeof v.endsAt === 'string' &&
     time(v.endsAt));
 function valid(v: unknown): v is CalendarItem {
   return (
@@ -200,12 +217,43 @@ export async function detachOccurrence(
     ).json(),
   );
 }
+/** A repeating task is done one occurrence at a time. */
 export async function setCalendarDone(current: CalendarItem, done: boolean) {
+  const occurrence = current.repeat && current.occurrenceStart;
   return item(
     await (
-      await send(`/calendar/items/${encodeURIComponent(current.id)}/done`, 'PUT', { done })
+      await send(`/calendar/items/${encodeURIComponent(current.id)}/done`, 'PUT', {
+        done,
+        ...(occurrence ? { occurrenceStart: occurrence } : {}),
+      })
     ).json(),
   );
+}
+/** "Buổi này và các buổi sau": the series ends before it; a new item with these fields starts. */
+export async function splitOccurrence(
+  current: CalendarItem,
+  fields: CalendarFields,
+  requestId: string,
+  keepSource = false,
+) {
+  return item(
+    await (
+      await send(`/calendar/items/${encodeURIComponent(current.id)}/split`, 'POST', {
+        ...fit(fields),
+        ...(keepSource ? { versionId: null, pageNumber: null, keepSource } : {}),
+        requestId,
+        revision: current.revision,
+        occurrenceStart: current.occurrenceStart,
+      })
+    ).json(),
+  );
+}
+/** "Xóa buổi này và các buổi sau"; from the first occurrence it deletes the series. */
+export async function truncateOccurrence(current: CalendarItem) {
+  await send(`/calendar/items/${encodeURIComponent(current.id)}/truncate`, 'POST', {
+    revision: current.revision,
+    occurrenceStart: current.occurrenceStart,
+  });
 }
 export async function deleteCalendarItem(current: CalendarItem) {
   await send(`/calendar/items/${encodeURIComponent(current.id)}`, 'DELETE', {
@@ -332,8 +380,15 @@ export function remindLabel(minutes: number) {
 }
 export function repeatLabel(repeat: CalendarRepeat) {
   const [y, m, d] = repeat.until.split('-').map(Number);
-  const days = repeat.weekdays.map((w) => weekdayLabels[w - 1]).join(', ');
-  return `Lặp hằng tuần: ${days} · đến ${d}/${m}/${y}`;
+  const every =
+    repeat.freq === 'MONTHLY'
+      ? repeat.interval === 1
+        ? 'Lặp hằng tháng'
+        : `Lặp mỗi ${repeat.interval} tháng`
+      : `${repeat.interval === 1 ? 'Lặp hằng tuần' : `Lặp mỗi ${repeat.interval} tuần`}: ${repeat.weekdays
+          .map((w) => weekdayLabels[w - 1])
+          .join(', ')}`;
+  return `${every} · ${repeat.count ? `${repeat.count} lần, ` : ''}đến ${d}/${m}/${y}`;
 }
 /**
  * An item's own fields, for a move that changes only its time. A withheld link has no ids in the

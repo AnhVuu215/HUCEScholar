@@ -1140,3 +1140,9 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+/* CAL-07: kind and interval of a repeat side by side. */
+.calendar-repeat-rule {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 8px;
+}
