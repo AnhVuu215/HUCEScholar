@@ -9,6 +9,9 @@ export default defineConfig({
   testDir: './tests',
   globalSetup: './scripts/browser-setup.mjs',
   fullyParallel: false,
+  // Several local workers each drive a Chromium against one dev API and Next server; on the
+  // project's low-memory Windows machine that slows logins past the 5 s expect timeout.
+  workers: process.env.CI ? undefined : 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',

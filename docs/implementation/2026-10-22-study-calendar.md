@@ -57,5 +57,5 @@ Cần chạy `pnpm test:setup`, `pnpm test:integration` và `pnpm test:e2e` trê
 
 - CAL-03…05 theo đặc tả: nhắc giờ học, hạn danh sách đọc và mục "Cần xem lại" trong lịch, xuất `.ics`. Lặp lại, kéo thả và phím tắt đã làm ở [CAL-02](2026-10-22-calendar-repeat-drag.md).
 - Ô chọn tài liệu trong form lịch; danh sách việc đã xong trên giao diện (API có `status=done`).
-- Form tạo/sửa chưa hỏi trước khi rời trang như ghi chú.
+- Hỏi trước khi rời trang hoặc mở mục khác khi form còn thay đổi chưa lưu: đã có ở [UX-02](2026-10-31-form-leave-guards.md).
 - Sự kiện cả ngày lệch ngày nếu đổi múi giờ máy (giới hạn đã ghi trong đặc tả).
