@@ -58,4 +58,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 
 - Mở một mục từ sổ tay chỉ tới đúng trang, chưa tự mở editor của ghi chú đó như sổ ghi chú trong reader.
 - Sửa/xóa ngay trên sổ tay đã có ở [LEARN-03b](2026-10-28-notebook-edit.md). Xuất cả sổ tay đã có ở [EXPORT-02](2026-10-28-notebook-export.md).
-- Tìm không dấu đã có ở [LEARN-03c](2026-10-28-notebook-unaccent-search.md). Chưa nhóm tùy ý, chưa "buổi ôn tập" duyệt lần lượt.
+- Tìm không dấu đã có ở [LEARN-03c](2026-10-28-notebook-unaccent-search.md). Chưa nhóm tùy ý. "Buổi ôn tập" duyệt lần lượt đã có ở [LEARN-04](2026-10-31-notebook-review-session.md).
