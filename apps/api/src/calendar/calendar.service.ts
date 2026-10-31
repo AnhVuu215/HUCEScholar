@@ -1,14 +1,17 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { AUTH_CONFIG, AuthConfiguration } from '../auth/auth.config';
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type calendar_items } from '../generated/prisma/client';
 import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { available } from '../materials/library.service';
+import { calendarIcs } from './calendar-ics';
 import {
   formatDate,
   isOccurrence,
@@ -22,6 +25,7 @@ import {
 import {
   CalendarDetachDto,
   CalendarDoneDto,
+  CalendarExportDto,
   CalendarFieldsDto,
   CalendarOccurrenceDto,
   CalendarRangeDto,
@@ -129,7 +133,10 @@ function series(row: calendar_items): Series | null {
  */
 @Injectable()
 export class CalendarService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    @Inject(AUTH_CONFIG) private readonly config: AuthConfiguration,
+  ) {}
 
   private async sources(tx: Prisma.TransactionClient, ids: bigint[]) {
     const rows = ids.length
@@ -250,6 +257,52 @@ export class CalendarService {
           items: items.slice(0, MAX_RANGE_ITEMS),
           truncated: items.length > MAX_RANGE_ITEMS,
         };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  /**
+   * CAL-05. Every session (series as one weekly rule) and every open task with a due date, as an
+   * iCalendar file. Undated and done tasks are left out; notes and linked pages only on request.
+   */
+  async exportIcs(actor: Profile, query: CalendarExportDto) {
+    const user_id = academicId(actor.id);
+    return this.db.$transaction(
+      async (tx) => {
+        const rows = await tx.calendar_items.findMany({
+          where: {
+            user_id,
+            starts_at: { not: null },
+            OR: [{ kind: 'EVENT' }, { kind: 'TASK', done_at: null }],
+          },
+          include: { calendar_item_skips: { select: { occurrence_start: true } } },
+          orderBy: [{ starts_at: 'asc' }, { id: 'asc' }],
+        });
+        const items = await this.serialize(tx, rows);
+        return calendarIcs(
+          rows.map((row, index) => {
+            const { material } = items[index];
+            return {
+              id: String(row.id),
+              kind: row.kind as 'EVENT' | 'TASK',
+              title: row.title,
+              details: row.details,
+              start: row.starts_at!,
+              end: row.ends_at,
+              allDay: row.all_day,
+              series: series(row),
+              skipped: row.calendar_item_skips.map((s) => s.occurrence_start.getTime()),
+              remindMinutes: row.remind_minutes,
+              material: material && {
+                title: material.title,
+                pageNumber: material.pageNumber,
+                href: `/workspace/library/versions/${material.versionId}?page=${material.pageNumber}`,
+              },
+            };
+          }),
+          { offset: query.utcOffset, details: query.details, now: new Date() },
+          this.config.origin,
+        );
       },
       { isolationLevel: 'RepeatableRead' },
     );

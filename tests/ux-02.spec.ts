@@ -22,6 +22,8 @@ function workspaceLink(page: Page, name: string) {
 
 test('an unsaved review card asks before leaving the reader or the deck', async ({ page }) => {
   test.setTimeout(90_000);
+  // Unique per run: the ux02 account keeps cards from earlier runs.
+  const question = `Câu hỏi chưa lưu ${randomUUID().slice(0, 8)}`;
   const fixture = await openReaderFixture(page, 'ux02');
   const created = await page.request.post(`${fixture.path}/highlights`, {
     headers: await readerHeaders(page),
@@ -55,13 +57,13 @@ test('an unsaved review card asks before leaving the reader or the deck', async 
   await page.goBack();
   await page.getByRole('tab', { name: 'Đoạn tô', exact: true }).click();
   await row.getByRole('button', { name: 'Tạo thẻ ôn tập', exact: true }).click();
-  await form.getByLabel('Câu hỏi', { exact: true }).fill('Câu hỏi chưa lưu');
+  await form.getByLabel('Câu hỏi', { exact: true }).fill(question);
   const stay = answerPrompts(page, false);
   await workspaceLink(page, 'Kho học liệu').click();
   expect(stay.seen).toEqual(['Bạn có thẻ ôn tập chưa lưu. Rời trang và bỏ thay đổi?']);
   stay.stop();
   await expect(page).toHaveURL(new RegExp(`${fixture.route}`));
-  await expect(form.getByLabel('Câu hỏi', { exact: true })).toHaveValue('Câu hỏi chưa lưu');
+  await expect(form.getByLabel('Câu hỏi', { exact: true })).toHaveValue(question);
 
   // Saving clears the draft, so the link to the deck leaves without a prompt.
   await form.getByLabel('Đáp án', { exact: true }).fill('Đáp án đã lưu');
@@ -74,7 +76,7 @@ test('an unsaved review card asks before leaving the reader or the deck', async 
   saved.stop();
 
   // Editing the card on the deck guards the same way.
-  const card = page.getByRole('article', { name: 'Câu hỏi chưa lưu' });
+  const card = page.getByRole('article', { name: question });
   await card.getByRole('button', { name: 'Sửa thẻ', exact: true }).click();
   await card.getByLabel('Đáp án', { exact: true }).fill('Đáp án đang sửa');
   const keep = answerPrompts(page, false);

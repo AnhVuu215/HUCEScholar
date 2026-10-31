@@ -10,13 +10,16 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { SessionGuard } from '../auth/session.guard';
 import {
   CalendarDetachDto,
   CalendarDoneDto,
+  CalendarExportDto,
   CalendarOccurrenceDto,
   CalendarRangeDto,
   CalendarRevisionDto,
@@ -32,6 +35,18 @@ export class CalendarController {
   constructor(private readonly calendar: CalendarService) {}
   @Get('items') range(@Req() req: AuthenticatedRequest, @Query() query: CalendarRangeDto) {
     return this.calendar.range(req.user, query);
+  }
+  /** CAL-05. A one-off download; no subscription link or token. */
+  @Get('export') async export(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: CalendarExportDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const file = await this.calendar.exportIcs(req.user, query);
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="hucescholar-lich-hoc.ics"');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return file;
   }
   @Get('tasks') tasks(@Req() req: AuthenticatedRequest, @Query() query: CalendarTasksDto) {
     return this.calendar.tasks(req.user, query);

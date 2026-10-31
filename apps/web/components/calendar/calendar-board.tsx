@@ -38,6 +38,7 @@ import {
 } from '../../lib/calendar';
 import { readingDeadlines, type ReadingDeadline } from '../../lib/reading-lists';
 import { CALENDAR_DRAFT_PROMPT, CalendarEditor, type CalendarDraft } from './calendar-editor';
+import { CalendarExport } from './calendar-export';
 import { ReviewLaterPanel } from './review-later-panel';
 
 type View = 'week' | 'month' | 'agenda';
@@ -877,6 +878,7 @@ export function CalendarBoard() {
           )}
         </aside>
         <ReviewLaterPanel onScheduled={reload} />
+        <CalendarExport />
       </div>
     </div>
   );
