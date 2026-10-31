@@ -70,6 +70,5 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` sau `pnpm test:set
 
 ## Chưa làm
 
-- Link đăng ký riêng (token, thu hồi được) để lịch ngoài tự cập nhật: cần HTTPS và OPS-02.
-- Chọn khoảng thời gian hay chỉ xuất một số mục; xuất cả hạn danh sách đọc.
-- Nhập ngược file `.ics` từ lịch khác vào HUCEScholar.
+- Xuất kèm hạn danh sách đọc, chọn khoảng ngày và nhập file `.ics` đã có ở [CAL-07](2026-10-31-calendar-complete.md).
+- Link đăng ký riêng để lịch ngoài tự cập nhật: cần HTTPS và OPS-02.
