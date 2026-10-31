@@ -125,7 +125,7 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` dựng lại từ 
   - `course-01` "CAL-07" (tài khoản `course4`): giờ hạn trong form giảng viên; nhãn trên lịch; chọn nhắc; đánh dấu đã đọc và ẩn hạn đã đọc; tiến độ trong khung môn; thông báo đổi giờ hạn; bỏ theo dõi.
   - `cal-05`, ca mới: nhập file, nhập lại, xuất một ngày.
   - Spec cũ đổi theo hành vi mới: `cal-02` (nhãn "Lặp lại"), `cal-03` (mục cả ngày có ô nhắc).
-  - **Cả bộ e2e chưa chạy xong**: lượt `pnpm test:e2e` sau khi gộp đủ sáu phần bị Claude Code dừng ngay ở ca 1/208 vì máy thiếu bộ nhớ, nên chưa có kết quả. Các spec liên quan tới lịch, danh sách đọc, thông báo, trang đầu, cài đặt và UX-02 đã chạy riêng và đạt. Cần chạy lại cả bộ trước khi gộp.
+  - Cả bộ e2e (`pnpm test:e2e`, một worker), chia làm ba lượt theo file vì một lượt chạy liền bị dừng do máy thiếu bộ nhớ: 70 + 74 + 56 = **200 đạt, 8 bỏ qua, 0 hỏng** (208 ca).
 - `pnpm format:check`, `pnpm check` (lint, typecheck, unit, build) đạt.
 - **Chưa thử:** nhập file thật xuất từ Google Calendar hay Outlook, và nhập file `.ics` xuất từ đây vào các ứng dụng đó; chưa thử với trình đọc màn hình.
 
