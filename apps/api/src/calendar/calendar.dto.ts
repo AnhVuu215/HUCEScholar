@@ -90,6 +90,20 @@ export class CalendarRangeDto {
   @IsISO8601({ strict: true }) from!: string;
   @IsISO8601({ strict: true }) to!: string;
 }
+/** CAL-05. The browser's offset dates all-day items outside a series; notes are opt-in. */
+export class CalendarExportDto {
+  @Transform(({ value }) =>
+    typeof value === 'string' && /^-?\d{1,3}$/.test(value) ? Number(value) : value,
+  )
+  @IsInt()
+  @Min(-840)
+  @Max(840)
+  utcOffset!: number;
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  details = false;
+}
 export class CalendarTasksDto {
   @Transform(integer) @IsInt() @Min(1) @Max(100000) page = 1;
   @Transform(integer) @IsInt() @Min(1) @Max(100) limit = 50;

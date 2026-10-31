@@ -114,4 +114,4 @@ Worker thật (`worker:files`) chưa chạy cùng SMTP thật. Lời nhắc đã
 - Nhiều lời nhắc cho một mục; lời nhắc cho mục cả ngày (ví dụ 8:00 sáng ngày đó), vì cần biết múi giờ người dùng.
 - Thông báo đẩy của trình duyệt / Web Push. Chuông vẫn kiểm mỗi 60 giây khi tab đang hiện.
 - Tùy chọn tắt email cho cả tài khoản; hiện bật/tắt theo từng mục.
-- Hạn danh sách đọc trong lịch (CAL-04), xuất `.ics` (CAL-05).
+- Hạn danh sách đọc trong lịch (CAL-04), xuất `.ics` (CAL-05) đã có ở [mốc CAL-05](2026-10-31-calendar-ics-export.md).
