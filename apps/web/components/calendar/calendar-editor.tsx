@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from 'react';
 import {
   addDays,
   calendarColors,
@@ -27,6 +27,10 @@ import {
   type CalendarKind,
   type CalendarRepeatInput,
 } from '../../lib/calendar';
+import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
+
+/** Asked before leaving the page, or before another item replaces an edited form. */
+export const CALENDAR_DRAFT_PROMPT = 'Bạn có mục lịch chưa lưu. Rời trang và bỏ thay đổi?';
 
 /** What a new item starts with: a clicked slot, a quick-add, or "Lên lịch đọc" in the reader. */
 export type CalendarDraft = {
@@ -103,16 +107,20 @@ export function CalendarEditor({
   saved,
   deleted,
   cancel,
+  dirtyChanged,
 }: {
   item: CalendarItem | null;
   draft: CalendarDraft;
   saved: (item: CalendarItem) => void;
   deleted: () => void;
   cancel: () => void;
+  /** Lets the board ask before another open replaces this form. */
+  dirtyChanged?: (dirty: boolean) => void;
 }) {
   const occurrence = item?.occurrenceStart ? item : null;
   const [scope, setScope] = useState<Scope>('one');
-  const [form, setForm] = useState(() => initial(item, draft, 'one'));
+  const [baseline] = useState(() => initial(item, draft, 'one'));
+  const [form, setForm] = useState(baseline);
   // Repeat is set on a whole series or a single item, never on one occurrence.
   const repeatable = form.kind === 'EVENT' && !(occurrence && scope === 'one');
   // Reminders need a time: a timed session, or a task with a due date that is not all-day.
@@ -129,6 +137,16 @@ export function CalendarEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  // Switching scope only reloads the dates for that scope; it is not an edit by itself.
+  const unchanged = occurrence ? { ...baseline, ...times(occurrence, scope) } : baseline;
+  const dirty =
+    JSON.stringify(form) !== JSON.stringify(unchanged) ||
+    keepLink !== (link !== null) ||
+    pageNumber !== (link && link !== 'unavailable' ? String(link.pageNumber) : '');
+  useNotesLeaveGuard(dirty, busy, CALENDAR_DRAFT_PROMPT);
+  const reportDirty = useEffectEvent((value: boolean) => dirtyChanged?.(value));
+  useEffect(() => reportDirty(dirty), [dirty]);
+  useEffect(() => () => reportDirty(false), []);
   const title = useRef<HTMLInputElement>(null);
   useEffect(() => {
     title.current?.focus();

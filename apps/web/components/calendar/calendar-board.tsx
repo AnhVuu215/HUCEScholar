@@ -37,7 +37,7 @@ import {
   type CalendarTasks,
 } from '../../lib/calendar';
 import { readingDeadlines, type ReadingDeadline } from '../../lib/reading-lists';
-import { CalendarEditor, type CalendarDraft } from './calendar-editor';
+import { CALENDAR_DRAFT_PROMPT, CalendarEditor, type CalendarDraft } from './calendar-editor';
 import { ReviewLaterPanel } from './review-later-panel';
 
 type View = 'week' | 'month' | 'agenda';
@@ -241,6 +241,9 @@ export function CalendarBoard() {
   /** Day (ms) or 'tasks' under the pointer while dragging, for the dashed outline. */
   const [dropTarget, setDropTarget] = useState<number | 'tasks' | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+  /** Whether the open form has edits; another open would remount it and drop them. */
+  const editorDirty = useRef(false);
+  const replaceable = () => !editorDirty.current || window.confirm(CALENDAR_DRAFT_PROMPT);
   const { from, to } = useMemo(() => bounds(view, anchor), [view, anchor]);
   const loaded = range !== null;
 
@@ -297,12 +300,14 @@ export function CalendarBoard() {
       else if (key === 'ArrowLeft') setAnchor((v) => shift(view, v, -1));
       else if (key === 'ArrowRight') setAnchor((v) => shift(view, v, 1));
       else if (key === 'n') {
-        setNotice('');
-        setEditor((v) => ({
-          item: null,
-          draft: { kind: 'EVENT', start: sessionStart(anchor, new Date()) },
-          seq: (v?.seq ?? 0) + 1,
-        }));
+        if (replaceable()) {
+          setNotice('');
+          setEditor((v) => ({
+            item: null,
+            draft: { kind: 'EVENT', start: sessionStart(anchor, new Date()) },
+            seq: (v?.seq ?? 0) + 1,
+          }));
+        }
       } else return;
       event.preventDefault();
     }
@@ -312,10 +317,12 @@ export function CalendarBoard() {
 
   const reload = () => setAttempt((v) => v + 1);
   function open(item: CalendarItem) {
+    if (!replaceable()) return;
     setNotice('');
     setEditor((v) => ({ item, draft: { kind: item.kind, start: null }, seq: (v?.seq ?? 0) + 1 }));
   }
   function create(draft: CalendarDraft) {
+    if (!replaceable()) return;
     setNotice('');
     setEditor((v) => ({ item: null, draft, seq: (v?.seq ?? 0) + 1 }));
   }
@@ -552,6 +559,9 @@ export function CalendarBoard() {
               item={editor.item}
               draft={editor.draft}
               cancel={() => setEditor(null)}
+              dirtyChanged={(dirty) => {
+                editorDirty.current = dirty;
+              }}
               saved={(item) => {
                 setEditor(null);
                 setNotice(`Đã lưu: ${item.title}`);

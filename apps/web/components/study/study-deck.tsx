@@ -9,6 +9,7 @@ import {
   type StudyCard,
   type StudyCardList,
 } from '../../lib/study-cards';
+import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
 
 function Card({
   card,
@@ -26,6 +27,8 @@ function Card({
   const [answer, setAnswer] = useState(card.answer);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const dirty = editing && (question !== card.question || answer !== card.answer);
+  useNotesLeaveGuard(dirty, busy, 'Bạn có thay đổi thẻ ôn tập chưa lưu. Rời trang và bỏ thay đổi?');
   async function save() {
     setBusy(true);
     setError('');
