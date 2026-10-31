@@ -39,12 +39,17 @@ export class AnnotationSearchDto {
   @Max(50)
   limit?: number;
 }
-/** LEARN-03: the same filters across every readable document, optionally one course. */
+/** LEARN-03: the same filters across every readable document, optionally one course or version. */
 export class NotebookSearchDto extends AnnotationSearchDto {
   @ValidateIf((_, value: unknown) => value !== undefined)
   @IsString()
   @Matches(/^[1-9]\d{0,18}$/)
   courseId?: string;
+  /** LEARN-02: one document, for a review session started from the calendar's "Cần xem lại". */
+  @ValidateIf((_, value: unknown) => value !== undefined)
+  @IsString()
+  @Matches(/^[1-9]\d{0,18}$/)
+  versionId?: string;
 }
 /** EXPORT-02: the notebook's filters (paging fields are ignored) and a file format. */
 export class NotebookExportDto extends NotebookSearchDto {

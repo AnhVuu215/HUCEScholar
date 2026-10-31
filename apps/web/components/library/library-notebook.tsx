@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../lib/auth';
 import { readerHref } from '../../lib/calendar';
@@ -33,15 +34,38 @@ import {
  * reader notebook's filters plus a course. Entries are edited or deleted in place (LEARN-03b);
  * moving a pin or reshaping a highlight stays in the reader, which each entry links to.
  */
+/**
+ * `?review=marked` (from the calendar's "Cần xem lại") opens a review session over the marked
+ * entries, optionally of one course or one document; ids that are not ids are ignored.
+ */
+function linkedSession(params: URLSearchParams): NotebookFilters | null {
+  if (params.get('review') !== 'marked') return null;
+  const id = (key: string) => {
+    const value = params.get(key);
+    return value && /^[1-9]\d{0,18}$/.test(value) ? value : undefined;
+  };
+  const courseId = id('courseId'),
+    versionId = id('versionId');
+  return {
+    reviewLater: true,
+    ...(courseId ? { courseId } : {}),
+    ...(versionId ? { versionId } : {}),
+  };
+}
 export function LibraryNotebook() {
-  const [fields, setFields] = useState<FilterState>(emptyFilterState);
-  const [courseId, setCourseId] = useState('');
+  const params = useSearchParams();
+  // Read once: the session it opens is then the page's own state.
+  const [linked] = useState(() => linkedSession(new URLSearchParams(params.toString())));
+  const [fields, setFields] = useState<FilterState>(
+    linked ? { ...emptyFilterState, reviewOnly: true } : emptyFilterState,
+  );
+  const [courseId, setCourseId] = useState(linked?.courseId ?? '');
   const [courses, setCourses] = useState<NotebookCourse[]>([]);
   const [search, setSearch] = useState<{ filters: NotebookFilters; iteration: number }>({
-    filters: {},
+    filters: linked ?? {},
     iteration: 0,
   });
-  const [reviewing, setReviewing] = useState(false);
+  const [reviewing, setReviewing] = useState(linked !== null);
   useEffect(() => {
     const controller = new AbortController();
     // Without the list the filter only offers "Mọi môn"; searching still works.
@@ -101,7 +125,11 @@ export function LibraryNotebook() {
           filters={search.filters}
           close={() => {
             setReviewing(false);
-            setSearch((v) => ({ ...v, iteration: v.iteration + 1 }));
+            // The list shows what the form can express; a one-document session ends there.
+            setSearch((v) => ({
+              filters: { ...v.filters, versionId: undefined },
+              iteration: v.iteration + 1,
+            }));
           }}
         />
       ) : (

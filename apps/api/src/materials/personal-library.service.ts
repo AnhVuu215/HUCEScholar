@@ -11,6 +11,7 @@ import { Prisma, type annotations } from '../generated/prisma/client';
 import { DraftListDto } from './materials.dto';
 import { available, LibraryService } from './library.service';
 import { NotebookExportDto, NotebookSearchDto } from './annotation-search.dto';
+import { ReviewLaterListDto } from './personal-library.dto';
 import {
   colorNames,
   exportNotebook,
@@ -156,12 +157,20 @@ export class PersonalLibraryService {
    * CAL-04: the owner's "cần xem lại" marks across documents, newest version first, then by page.
    * Marks on versions that are no longer readable stay stored (LEARN-02) but are not listed.
    */
-  reviewLater(actor: Profile, query: DraftListDto) {
+  reviewLater(actor: Profile, query: ReviewLaterListDto) {
     return this.run(actor, false, async (tx, user_id) => {
       const where: Prisma.annotationsWhereInput = {
         user_id,
         review_later: true,
-        document_versions: available(),
+        ...(query.versionId ? { version_id: academicId(query.versionId) } : {}),
+        document_versions: {
+          AND: [
+            available(),
+            ...(query.courseId
+              ? [{ version_courses: { some: { course_id: academicId(query.courseId) } } }]
+              : []),
+          ],
+        },
       };
       const rows = await tx.annotations.findMany({
         where,
@@ -197,14 +206,51 @@ export class PersonalLibraryService {
       };
     });
   }
+  /** CAL-04: documents and courses that have readable "cần xem lại" marks, for the filters. */
+  reviewLaterFilters(actor: Profile) {
+    return this.run(actor, false, async (tx, user_id) => {
+      const counts = await tx.annotations.groupBy({
+        by: ['version_id'],
+        where: { user_id, review_later: true, document_versions: available() },
+        _count: { _all: true },
+      });
+      const ids = counts.map((c) => c.version_id);
+      const versions = await tx.document_versions.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, title: true },
+      });
+      const courses = await tx.courses.findMany({
+        where: { version_courses: { some: { version_id: { in: ids } } } },
+        orderBy: [{ code: 'asc' }, { id: 'asc' }],
+        select: { id: true, code: true, name: true },
+      });
+      const count = new Map(counts.map((c) => [c.version_id, c._count._all]));
+      return {
+        documents: versions
+          .map((v) => ({ versionId: String(v.id), title: v.title, marks: count.get(v.id)! }))
+          .sort(
+            (a, b) =>
+              a.title.localeCompare(b.title, 'vi') ||
+              Number(BigInt(a.versionId) - BigInt(b.versionId)),
+          ),
+        courses: courses.map((c) => ({ id: String(c.id), code: c.code, name: c.name })),
+      };
+    });
+  }
   /** Readable versions the owner has annotated, optionally only those taught in one course. */
-  private async annotatedVersions(tx: Prisma.TransactionClient, user_id: bigint, course?: bigint) {
+  private async annotatedVersions(
+    tx: Prisma.TransactionClient,
+    user_id: bigint,
+    course?: bigint,
+    version?: bigint,
+  ) {
     const rows = await tx.document_versions.findMany({
       where: {
         AND: [
           available(),
           { annotations: { some: { user_id } } },
           ...(course ? [{ version_courses: { some: { course_id: course } } }] : []),
+          ...(version ? [{ id: version }] : []),
         ],
       },
       select: { id: true },
@@ -230,7 +276,7 @@ export class PersonalLibraryService {
    */
   notebook(actor: Profile, query: NotebookSearchDto) {
     return this.run(actor, false, async (tx, owner) => {
-      const filter = annotationFilter(query, [query.courseId ?? null]);
+      const filter = annotationFilter(query, [query.courseId ?? null, query.versionId ?? null]);
       const head = [2, String(owner)];
       const after = query.cursor
         ? decodeCursor(query.cursor, head, 3, filter.fingerprint, ([version, page, id]) =>
@@ -244,7 +290,8 @@ export class PersonalLibraryService {
         : undefined;
       const limit = query.limit ?? 20;
       const course = query.courseId ? academicId(query.courseId) : undefined;
-      const versions = await this.annotatedVersions(tx, owner, course);
+      const version = query.versionId ? academicId(query.versionId) : undefined;
+      const versions = await this.annotatedVersions(tx, owner, course, version);
       if (!versions.length) return { items: [], nextCursor: null };
       const rows = await tx.$queryRaw<annotations[]>(Prisma.sql`
         SELECT * FROM hucescholar.annotations
@@ -281,7 +328,8 @@ export class PersonalLibraryService {
     return this.run(actor, false, async (tx, owner) => {
       const filter = annotationFilter(query);
       const course = query.courseId ? academicId(query.courseId) : undefined;
-      const versions = await this.annotatedVersions(tx, owner, course);
+      const version = query.versionId ? academicId(query.versionId) : undefined;
+      const versions = await this.annotatedVersions(tx, owner, course, version);
       const rows = versions.length
         ? await tx.$queryRaw<annotations[]>(Prisma.sql`
             SELECT * FROM hucescholar.annotations
@@ -326,6 +374,7 @@ export class PersonalLibraryService {
         course ? `môn ${courseRow ? `${courseRow.code} · ${courseRow.name}` : 'không còn'}` : '',
         kind === 'PAGE_NOTE' ? 'chỉ ghi chú trang' : kind === 'TEXT_HIGHLIGHT' ? 'chỉ đoạn tô' : '',
         query.color ? `màu ${colorNames[query.color] ?? query.color}` : '',
+        version ? 'một tài liệu' : '',
         query.reviewLater ? 'cần xem lại' : '',
         query.query ? `có chữ “${query.query}”` : '',
       ].filter(Boolean);

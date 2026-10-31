@@ -41,6 +41,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 
 ## Chưa làm
 
-- Chưa có nút đánh dấu ngay trong danh sách ghi chú của trang đang đọc; hiện chỉ đánh dấu được từ sổ ghi chú.
-- Chưa lọc "cần xem lại" xuyên nhiều tài liệu; thuộc ý tưởng "Sổ tay theo môn" và "Buổi ôn tập" ở mục 6.
-- File xuất Markdown/văn bản (EXPORT-01) chưa ghi nhãn này.
+- Đã đóng hết ở [hoàn thiện "Cần xem lại"](2026-10-31-review-later-complete.md): đánh dấu ngay trong danh sách của trang, nhãn trong file xuất. Lọc xuyên nhiều tài liệu đã có từ LEARN-03.

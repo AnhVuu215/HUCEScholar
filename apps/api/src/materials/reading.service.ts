@@ -331,7 +331,14 @@ export class ReadingService {
     return this.run(actor, id, false, async (tx, user_id, version_id) => {
       const rows = await tx.annotations.findMany({
         where: { user_id, version_id },
-        select: { page_number: true, kind: true, content: true, anchor: true, color: true },
+        select: {
+          page_number: true,
+          kind: true,
+          content: true,
+          anchor: true,
+          color: true,
+          review_later: true,
+        },
         orderBy: [{ page_number: 'asc' }, { id: 'asc' }],
         take: MAX_EXPORT_ANNOTATIONS + 1,
       });

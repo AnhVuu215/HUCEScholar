@@ -16,7 +16,7 @@ import type { Response } from 'express';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { SessionGuard } from '../auth/session.guard';
 import { NotebookExportDto, NotebookSearchDto } from './annotation-search.dto';
-import { PersonalListDto, SaveDocumentDto } from './personal-library.dto';
+import { PersonalListDto, ReviewLaterListDto, SaveDocumentDto } from './personal-library.dto';
 import { PersonalLibraryService } from './personal-library.service';
 @Controller('personal-library')
 @UseGuards(SessionGuard)
@@ -30,9 +30,12 @@ export class PersonalLibraryController {
   }
   @Get('review-later') reviewLater(
     @Req() req: AuthenticatedRequest,
-    @Query() query: PersonalListDto,
+    @Query() query: ReviewLaterListDto,
   ) {
     return this.library.reviewLater(req.user, query);
+  }
+  @Get('review-later/filters') reviewLaterFilters(@Req() req: AuthenticatedRequest) {
+    return this.library.reviewLaterFilters(req.user);
   }
   @Get('notebook/courses') notebookCourses(@Req() req: AuthenticatedRequest) {
     return this.library.notebookCourses(req.user);

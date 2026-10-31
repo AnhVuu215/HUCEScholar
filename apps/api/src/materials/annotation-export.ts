@@ -12,6 +12,8 @@ export type ExportAnnotation = {
   content: string;
   anchor: unknown;
   color: string;
+  /** LEARN-02: the owner's private "cần xem lại" mark, labelled in the file. */
+  review_later?: boolean;
 };
 
 export const MAX_EXPORT_ANNOTATIONS = 5000;
@@ -67,17 +69,19 @@ function byPage(rows: ExportAnnotation[]) {
   for (const row of rows) pages.set(row.page_number, [...(pages.get(row.page_number) ?? []), row]);
   return [...pages.entries()].sort(([a], [b]) => a - b);
 }
+const REVIEW_LABEL = 'Cần xem lại';
 function textPages(rows: ExportAnnotation[], out: string[]) {
   for (const [page, items] of byPage(rows)) {
     out.push('', `TRANG ${page}`);
     for (const item of items) {
+      const mark = item.review_later ? ` [${REVIEW_LABEL}]` : '';
       if (item.kind === 'TEXT_HIGHLIGHT') {
         out.push(
-          `- Đoạn tô (${colorNames[item.color] ?? 'màu khác'}): “${clean(quoteOf(item.anchor))}”`,
+          `- Đoạn tô (${colorNames[item.color] ?? 'màu khác'})${mark}: “${clean(quoteOf(item.anchor))}”`,
         );
         if (item.content.trim())
           out.push(`  Ghi chú: ${clean(item.content).replace(/\n/g, '\n  ')}`);
-      } else out.push(`- Ghi chú trang: ${clean(item.content).replace(/\n/g, '\n  ')}`);
+      } else out.push(`- Ghi chú trang${mark}: ${clean(item.content).replace(/\n/g, '\n  ')}`);
     }
   }
 }
@@ -87,14 +91,15 @@ function markdownPages(rows: ExportAnnotation[], out: string[], level: number) {
     out.push('', `${'#'.repeat(level)} Trang ${page}`);
     for (const item of items) {
       out.push('');
+      const mark = item.review_later ? ` · ${REVIEW_LABEL}` : '';
       if (item.kind === 'TEXT_HIGHLIGHT') {
         out.push(
-          `**Đoạn tô ${colorNames[item.color] ?? 'màu khác'}**`,
+          `**Đoạn tô ${colorNames[item.color] ?? 'màu khác'}**${mark}`,
           '',
           lines(quoteOf(item.anchor), '> '),
         );
         if (item.content.trim()) out.push('', lines(item.content));
-      } else out.push('**Ghi chú trang**', '', lines(item.content));
+      } else out.push(`**Ghi chú trang**${mark}`, '', lines(item.content));
     }
   }
 }
