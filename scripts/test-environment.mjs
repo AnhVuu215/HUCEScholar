@@ -160,6 +160,8 @@ try {
     ['recover-student', 'STUDENT'],
     ['study-admin', 'ADMIN'],
     ['study-student', 'STUDENT'],
+    ['study2-admin', 'ADMIN'],
+    ['study2-student', 'STUDENT'],
     ['cal1-admin', 'ADMIN'],
     ['cal1-student', 'STUDENT'],
     ['cal2-student', 'STUDENT'],

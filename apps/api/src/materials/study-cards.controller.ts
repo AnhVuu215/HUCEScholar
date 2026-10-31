@@ -17,6 +17,7 @@ import {
   CreateStudyCardDto,
   StudyCardListDto,
   StudyCardRevisionDto,
+  StudyCardScopeDto,
   UpdateStudyCardDto,
 } from './study-cards.dto';
 import { StudyCardsService } from './study-cards.service';
@@ -34,6 +35,15 @@ export class StudyCardsController {
   }
   @Get('study-cards') list(@Req() req: AuthenticatedRequest, @Query() query: StudyCardListDto) {
     return this.cards.list(req.user, query);
+  }
+  @Get('study-cards/filters') filters(@Req() req: AuthenticatedRequest) {
+    return this.cards.filters(req.user);
+  }
+  @Get('study-cards/practice') practice(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: StudyCardScopeDto,
+  ) {
+    return this.cards.practice(req.user, query);
   }
   @Patch('study-cards/:cardId') update(
     @Req() req: AuthenticatedRequest,

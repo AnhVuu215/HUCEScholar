@@ -108,3 +108,54 @@ export function studyCardError(error: unknown) {
   }
   return 'Chưa xác nhận được với máy chủ. Nội dung vẫn còn trong ô; thử lại.';
 }
+
+/** STUDY-02: which cards a list or a practice round covers. */
+export type StudyCardScope = { versionId: string; courseId: string };
+export type StudyCardFilters = {
+  documents: { versionId: string; title: string; cards: number }[];
+  courses: { id: string; code: string; name: string }[];
+};
+export function scopeParams(scope: StudyCardScope) {
+  const params = new URLSearchParams();
+  if (scope.versionId) params.set('versionId', scope.versionId);
+  if (scope.courseId) params.set('courseId', scope.courseId);
+  return params;
+}
+export async function studyCardFilters(signal: AbortSignal): Promise<StudyCardFilters> {
+  const body: unknown = await (await apiRequest('/study-cards/filters', { signal })).json();
+  if (
+    isRecord(body) &&
+    Array.isArray(body.documents) &&
+    body.documents.every(
+      (d) =>
+        isRecord(d) &&
+        isNumericId(d.versionId) &&
+        typeof d.title === 'string' &&
+        Number.isSafeInteger(d.cards),
+    ) &&
+    Array.isArray(body.courses) &&
+    body.courses.every(
+      (c) =>
+        isRecord(c) &&
+        isNumericId(c.id) &&
+        typeof c.code === 'string' &&
+        typeof c.name === 'string',
+    )
+  )
+    return body as unknown as StudyCardFilters;
+  throw new Error('Invalid study card filters.');
+}
+/** Every readable card in the scope for one round, newest first, capped by the API. */
+export async function practiceCards(scope: StudyCardScope, signal: AbortSignal) {
+  const body: unknown = await (
+    await apiRequest(`/study-cards/practice?${scopeParams(scope)}`, { signal })
+  ).json();
+  if (
+    isRecord(body) &&
+    Array.isArray(body.items) &&
+    body.items.every(valid) &&
+    Number.isSafeInteger(body.total)
+  )
+    return body as unknown as { items: StudyCard[]; total: number };
+  throw new Error('Invalid practice cards.');
+}

@@ -3,12 +3,18 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   deleteStudyCard,
+  scopeParams,
   studyCardError,
+  studyCardFilters,
   studyCards,
   updateStudyCard,
   type StudyCard,
+  type StudyCardFilters,
   type StudyCardList,
+  type StudyCardScope,
 } from '../../lib/study-cards';
+import { SelectField } from '../ui/select-field';
+import { StudyPractice } from './study-practice';
 import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
 
 function Card({
@@ -168,9 +174,25 @@ export function StudyDeck() {
   const [data, setData] = useState<StudyCardList | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [scope, setScope] = useState<StudyCardScope>({ versionId: '', courseId: '' });
+  const [filters, setFilters] = useState<StudyCardFilters | null>(null);
+  const [practicing, setPracticing] = useState(false);
+  // The menus only narrow the list; if they fail to load, the whole deck still shows.
   useEffect(() => {
     const controller = new AbortController();
-    void studyCards(new URLSearchParams({ page: String(page), limit: '20' }), controller.signal)
+    studyCardFilters(controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setFilters(result);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [attempt]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = scopeParams(scope);
+    params.set('page', String(page));
+    params.set('limit', '20');
+    void studyCards(params, controller.signal)
       .then((result) => {
         if (!controller.signal.aborted) setData(result);
       })
@@ -178,12 +200,18 @@ export function StudyDeck() {
         if (!controller.signal.aborted) setError(studyCardError(failure));
       });
     return () => controller.abort();
-  }, [page, attempt]);
+  }, [page, attempt, scope]);
   function reload() {
     setError('');
     setData(null);
     setAttempt((v) => v + 1);
   }
+  function narrow(next: Partial<StudyCardScope>) {
+    setData(null);
+    setPage(1);
+    setScope((v) => ({ ...v, ...next }));
+  }
+  const filtered = Boolean(scope.versionId || scope.courseId);
   return (
     <section className="users-directory study-deck" aria-labelledby="study-title">
       <h2 id="study-title">Thẻ ôn tập của tôi</h2>
@@ -191,7 +219,44 @@ export function StudyDeck() {
         Tạo thẻ từ đoạn tô trong trang đọc: tự viết câu hỏi và đáp án, rồi lật để tự kiểm tra. Chỉ
         bạn xem được.
       </p>
-      {error ? (
+      {filters && (filters.documents.length > 1 || filters.courses.length > 0) && (
+        <div className="study-filters">
+          <SelectField
+            id="study-course"
+            label="Môn học"
+            value={scope.courseId}
+            disabled={practicing}
+            options={[
+              { value: '', label: 'Mọi môn' },
+              ...filters.courses.map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` })),
+            ]}
+            onChange={(courseId) => narrow({ courseId })}
+          />
+          <SelectField
+            id="study-document"
+            label="Tài liệu"
+            value={scope.versionId}
+            disabled={practicing}
+            options={[
+              { value: '', label: 'Mọi tài liệu' },
+              ...filters.documents.map((d) => ({
+                value: d.versionId,
+                label: `${d.title} (${d.cards} thẻ)`,
+              })),
+            ]}
+            onChange={(versionId) => narrow({ versionId })}
+          />
+        </div>
+      )}
+      {practicing ? (
+        <StudyPractice
+          scope={scope}
+          close={() => {
+            setPracticing(false);
+            reload();
+          }}
+        />
+      ) : error ? (
         <div className="users-list-message">
           <p role="alert" className="form-error">
             {error}
@@ -210,9 +275,18 @@ export function StudyDeck() {
               giữ.
             </p>
           )}
+          {data.total > 0 && (
+            <div className="note-actions">
+              <button className="primary-button" onClick={() => setPracticing(true)}>
+                Luyện {data.total} thẻ{filtered ? ' đang lọc' : ''}
+              </button>
+            </div>
+          )}
           {data.items.length === 0 ? (
             <p className="users-list-message">
-              Chưa có thẻ nào. Mở một tài liệu, tô một đoạn rồi chọn “Tạo thẻ ôn tập”.
+              {filtered
+                ? 'Không có thẻ nào trong bộ lọc này.'
+                : 'Chưa có thẻ nào. Mở một tài liệu, tô một đoạn rồi chọn “Tạo thẻ ôn tập”.'}
             </p>
           ) : (
             <div className="study-cards">

@@ -61,6 +61,6 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 
 ## Chưa làm
 
-- Ôn theo lịch (spaced repetition), xáo thẻ, đánh dấu nhớ/chưa nhớ.
-- Lọc thẻ theo tài liệu hay môn trên trang thẻ (API đã có `versionId`); xuất thẻ cùng EXPORT-01.
+- Ôn theo lịch (spaced repetition). Xáo thẻ và đánh dấu nhớ/chưa nhớ trong một lượt luyện đã có ở [STUDY-02](2026-10-31-study-card-practice.md).
+- Lọc thẻ theo tài liệu hay môn: đã có ở [STUDY-02](2026-10-31-study-card-practice.md). Xuất thẻ cùng EXPORT-01 chưa làm.
 - Hỏi trước khi rời trang khi form tạo hoặc sửa thẻ còn thay đổi chưa lưu: đã có ở [UX-02](2026-10-31-form-leave-guards.md).
