@@ -8,6 +8,8 @@ export type ReadingItem = {
   note: string;
   /** CAL-04b due date as a calendar day (`YYYY-MM-DD`), or null. */
   dueOn: string | null;
+  /** `HH:MM` in Vietnam time, or null for the end of that day. */
+  dueTime: string | null;
   versionId: string;
   /** COURSE-02: the viewer's own "đã đọc" mark; always false when `material` is null. */
   read: boolean;
@@ -35,10 +37,12 @@ export type ReadingDraftItem = {
   versionId: string;
   note: string;
   dueOn: string | null;
+  dueTime: string | null;
 };
 /** CAL-04b: one due date on a followed course's published list, for the calendar. */
 export type ReadingDeadline = {
   dueOn: string;
+  dueTime: string | null;
   listId: string;
   listTitle: string;
   course: { id: string; code: string; name: string };
@@ -50,6 +54,7 @@ export type ReadingDeadline = {
   read: boolean;
 };
 const day = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const clock = (v: unknown) => v === null || (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v));
 
 function validItem(v: unknown): v is ReadingItem {
   if (
@@ -58,6 +63,7 @@ function validItem(v: unknown): v is ReadingItem {
     typeof v.section !== 'string' ||
     typeof v.note !== 'string' ||
     !(v.dueOn === null || day(v.dueOn)) ||
+    !clock(v.dueTime) ||
     !isNumericId(v.versionId) ||
     typeof v.read !== 'boolean'
   )
@@ -134,15 +140,32 @@ export function dueDay(dueOn: string) {
   const [y, m, d] = dueOn.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
-export const formatDue = (dueOn: string) => dueDay(dueOn).toLocaleDateString('vi-VN');
-/** Show or hide this course's due dates on the signed-in reader's calendar. */
-export async function followReadingLists(courseId: string, following: boolean) {
+export const formatDue = (dueOn: string, dueTime: string | null = null) =>
+  `${dueTime ? `${dueTime} ` : ''}${dueDay(dueOn).toLocaleDateString('vi-VN')}`;
+/** Lead times a follower may choose before an unread due date, in minutes. */
+export const deadlineRemindOptions = [
+  { minutes: 60, label: 'Trước 1 giờ' },
+  { minutes: 180, label: 'Trước 3 giờ' },
+  { minutes: 1440, label: 'Trước 1 ngày' },
+  { minutes: 2880, label: 'Trước 2 ngày' },
+] as const;
+/**
+ * Show or hide this course's due dates on the signed-in reader's calendar. `remindMinutes`
+ * (null for none) changes the reminder before unread due dates; absent keeps it.
+ */
+export async function followReadingLists(
+  courseId: string,
+  following: boolean,
+  remindMinutes?: number | null,
+) {
   const token = await csrfToken();
   const body: unknown = await (
     await apiRequest(`${path(courseId)}/follow`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify({ following }),
+      body: JSON.stringify(
+        remindMinutes === undefined ? { following } : { following, remindMinutes },
+      ),
     })
   ).json();
   if (isRecord(body) && typeof body.following === 'boolean') return body.following;
@@ -166,6 +189,7 @@ function validDeadline(v: unknown): v is ReadingDeadline {
   return (
     isRecord(v) &&
     day(v.dueOn) &&
+    clock(v.dueTime) &&
     isNumericId(v.listId) &&
     typeof v.listTitle === 'string' &&
     isRecord(v.course) &&
@@ -200,8 +224,10 @@ export type FollowedCourse = {
   /** Distinct listed versions the reader can open now, and how many of those are marked read. */
   total: number;
   read: number;
+  /** Minutes before an unread due date to be reminded, or null. */
+  remindMinutes: number | null;
   /** The earliest due date among unread versions, or null. */
-  next: { dueOn: string; versionId: string; title: string } | null;
+  next: { dueOn: string; dueTime: string | null; versionId: string; title: string } | null;
 };
 function validFollowed(v: unknown): v is FollowedCourse {
   return (
@@ -212,9 +238,11 @@ function validFollowed(v: unknown): v is FollowedCourse {
     typeof v.course.name === 'string' &&
     Number.isInteger(v.total) &&
     Number.isInteger(v.read) &&
+    (v.remindMinutes === null || Number.isInteger(v.remindMinutes)) &&
     (v.next === null ||
       (isRecord(v.next) &&
         day(v.next.dueOn) &&
+        clock(v.next.dueTime) &&
         isNumericId(v.next.versionId) &&
         typeof v.next.title === 'string'))
   );

@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -23,6 +24,8 @@ export class ReadingItemDto {
   @Transform(trim) @IsString() @MaxLength(500) note!: string;
   /** CAL-04b: a calendar day (`YYYY-MM-DD`) or null; absent means no due date. */
   @IsOptional() @Matches(DATE) dueOn: string | null = null;
+  /** `HH:MM` in Vietnam time, only with a due date; absent means the end of that day. */
+  @IsOptional() @Matches(/^([01]\d|2[0-3]):[0-5]\d$/) dueTime: string | null = null;
 }
 export class SaveReadingListDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(200) title!: string;
@@ -39,8 +42,12 @@ export class SaveReadingListDto {
 export class ReadMarkDto {
   @IsBoolean() read!: boolean;
 }
+/** Lead times a follower may choose before an unread due date, in minutes. */
+export const deadlineRemindMinutes = [60, 180, 1440, 2880] as const;
 export class FollowReadingListsDto {
   @IsBoolean() following!: boolean;
+  /** Absent keeps the current choice; null turns reminders off. Only while following. */
+  @IsOptional() @IsIn([...deadlineRemindMinutes, null]) remindMinutes?: number | null;
 }
 /** Calendar days; `to` is exclusive. */
 export class ReadingDeadlinesDto {

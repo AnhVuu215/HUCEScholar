@@ -10,7 +10,9 @@ export type NotificationKind =
   | 'REVIEW_REJECTED'
   | 'REPORT_RESOLVED'
   | 'REPORT_DISMISSED'
-  | 'CALENDAR_REMINDER';
+  | 'CALENDAR_REMINDER'
+  | 'READING_DEADLINE_SOON'
+  | 'READING_DEADLINE_CHANGED';
 
 /**
  * Records one notice in the caller's transaction, so it commits or rolls back with the state
@@ -25,14 +27,16 @@ export async function notify(
     eventKey: string;
     versionId: bigint;
     detail?: string | null;
+    /** Reading deadlines: the due time the notice is about. */
+    eventAt?: Date | null;
   },
 ) {
   const version = await tx.document_versions.findUnique({
     where: { id: event.versionId },
     select: { document_id: true, title: true },
   });
-  if (!version) return;
-  await tx.notifications.createMany({
+  if (!version) return 0;
+  const { count } = await tx.notifications.createMany({
     data: [
       {
         user_id: event.userId,
@@ -42,8 +46,10 @@ export async function notify(
         version_id: event.versionId,
         title: version.title,
         detail: event.detail ?? null,
+        event_at: event.eventAt ?? null,
       },
     ],
     skipDuplicates: true,
   });
+  return count;
 }

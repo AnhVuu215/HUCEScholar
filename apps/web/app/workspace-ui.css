@@ -651,7 +651,7 @@
   font-weight: 600;
 }
 .is-done > button,
-.calendar-deadline.is-done > a:first-child {
+.calendar-deadline.is-done > a:first-of-type {
   text-decoration: line-through;
   opacity: 0.75;
 }

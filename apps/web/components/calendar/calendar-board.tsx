@@ -36,10 +36,16 @@ import {
   type CalendarRange,
   type CalendarTasks,
 } from '../../lib/calendar';
-import { readingDeadlines, type ReadingDeadline } from '../../lib/reading-lists';
+import {
+  markRead,
+  readingDeadlines,
+  readingListError,
+  type ReadingDeadline,
+} from '../../lib/reading-lists';
 import { CALENDAR_DRAFT_PROMPT, CalendarEditor, type CalendarDraft } from './calendar-editor';
 import { CalendarExport } from './calendar-export';
 import { DoneTasks } from './done-tasks';
+import { FollowedCourses } from './followed-courses';
 import { ReviewLaterPanel } from './review-later-panel';
 
 type View = 'week' | 'month' | 'agenda';
@@ -141,12 +147,38 @@ function lanes(items: CalendarItem[], day: Date) {
 }
 
 /** CAL-04c: the name says when the reader has already marked the item read. */
-const deadlineLabel = (d: ReadingDeadline) => `Hạn đọc: ${d.title}${d.read ? ' · Đã đọc' : ''}`;
-/** CAL-04b: a lecturer's due date on a followed course's reading list; read-only here. */
-function Deadline({ deadline }: { deadline: ReadingDeadline }) {
+const deadlineLabel = (d: ReadingDeadline) =>
+  `Hạn đọc${d.dueTime ? ` ${d.dueTime}` : ''}: ${d.title}${d.read ? ' · Đã đọc' : ''}`;
+/** The reader's own read mark (COURSE-02), set from the calendar too. */
+function ReadCheck({
+  deadline,
+  markRead,
+}: {
+  deadline: ReadingDeadline;
+  markRead: (deadline: ReadingDeadline, read: boolean) => void;
+}) {
+  return (
+    <input
+      type="checkbox"
+      className="calendar-task-check"
+      aria-label={`Đã đọc: ${deadline.title}`}
+      checked={deadline.read}
+      onChange={(e) => markRead(deadline, e.target.checked)}
+    />
+  );
+}
+/** CAL-04b: a lecturer's due date on a followed course's reading list. */
+function Deadline({
+  deadline,
+  markRead,
+}: {
+  deadline: ReadingDeadline;
+  markRead: (deadline: ReadingDeadline, read: boolean) => void;
+}) {
   const label = deadlineLabel(deadline);
   return (
     <div className={`calendar-chip calendar-deadline${deadline.read ? ' is-done' : ''}`}>
+      <ReadCheck deadline={deadline} markRead={markRead} />
       <Link
         href={`/workspace/library/versions/${deadline.versionId}`}
         title={`${label} · ${deadline.course.code} · ${deadline.listTitle}${
@@ -318,6 +350,23 @@ export function CalendarBoard() {
   }, [view, anchor]);
 
   const reload = () => setAttempt((v) => v + 1);
+  const [hideRead, setHideRead] = useState(false);
+  const shownDeadlines = hideRead ? deadlines.filter((d) => !d.read) : deadlines;
+  /** Ticks at once on every chip of that version in the course, then reloads either way. */
+  async function markDeadline(deadline: ReadingDeadline, read: boolean) {
+    const same = (d: ReadingDeadline) =>
+      d.course.id === deadline.course.id && d.versionId === deadline.versionId;
+    setDeadlines((v) => v.map((d) => (same(d) ? { ...d, read } : d)));
+    try {
+      await markRead(deadline.course.id, deadline.versionId, read);
+      setNotice(read ? `Đã đọc: ${deadline.title}` : `Bỏ dấu đã đọc: ${deadline.title}`);
+      // The followed courses' progress counts the mark too.
+      reload();
+    } catch (failure) {
+      setError(readingListError(failure));
+      reload();
+    }
+  }
   function open(item: CalendarItem) {
     if (!replaceable()) return;
     setNotice('');
@@ -539,6 +588,16 @@ export function CalendarBoard() {
           </button>
         </div>
         <p className="field-hint calendar-shortcuts">{SHORTCUT_HINT}</p>
+        {deadlines.length > 0 && (
+          <label className="calendar-check">
+            <input
+              type="checkbox"
+              checked={hideRead}
+              onChange={(e) => setHideRead(e.target.checked)}
+            />
+            Ẩn hạn đọc đã đọc
+          </label>
+        )}
         {notice && (
           <p role="status" className="field-hint">
             {notice}
@@ -609,8 +668,12 @@ export function CalendarBoard() {
                   className={dropClass(day).trim() || undefined}
                   {...dropZone(day, false)}
                 >
-                  {deadlinesOn(deadlines, day).map((d) => (
-                    <Deadline key={`${d.listId}-${d.position}`} deadline={d} />
+                  {deadlinesOn(shownDeadlines, day).map((d) => (
+                    <Deadline
+                      key={`${d.listId}-${d.position}`}
+                      deadline={d}
+                      markRead={markDeadline}
+                    />
                   ))}
                   {items.filter((i) => !timed(i) && onDay(i, day)).map((i) => chip(i))}
                 </div>
@@ -699,7 +762,7 @@ export function CalendarBoard() {
             ))}
             {days.map((day) => {
               const list = items.filter((i) => onDay(i, day));
-              const due = deadlinesOn(deadlines, day);
+              const due = deadlinesOn(shownDeadlines, day);
               const hidden = list.length + due.length - MONTH_CHIPS;
               const outside = day.getMonth() !== anchor.getMonth();
               return (
@@ -720,7 +783,11 @@ export function CalendarBoard() {
                     {day.getDate()}
                   </button>
                   {due.slice(0, MONTH_CHIPS).map((d) => (
-                    <Deadline key={`${d.listId}-${d.position}`} deadline={d} />
+                    <Deadline
+                      key={`${d.listId}-${d.position}`}
+                      deadline={d}
+                      markRead={markDeadline}
+                    />
                   ))}
                   {list.slice(0, Math.max(MONTH_CHIPS - due.length, 0)).map((i) => chip(i))}
                   {hidden > 0 && (
@@ -742,7 +809,8 @@ export function CalendarBoard() {
         ) : (
           <div className="calendar-agenda">
             {days.every(
-              (day) => !items.some((i) => onDay(i, day)) && !deadlinesOn(deadlines, day).length,
+              (day) =>
+                !items.some((i) => onDay(i, day)) && !deadlinesOn(shownDeadlines, day).length,
             ) ? (
               <p className="users-list-message">
                 Không có lịch trong {AGENDA_DAYS} ngày tính từ {formatLongDay(from)}.
@@ -750,7 +818,7 @@ export function CalendarBoard() {
             ) : (
               days.map((day) => {
                 const list = items.filter((i) => onDay(i, day));
-                const due = deadlinesOn(deadlines, day);
+                const due = deadlinesOn(shownDeadlines, day);
                 if (!list.length && !due.length) return null;
                 return (
                   <section key={day.getTime()} aria-label={formatLongDay(day)}>
@@ -764,6 +832,7 @@ export function CalendarBoard() {
                           key={`${d.listId}-${d.position}`}
                           className={`calendar-deadline${d.read ? ' is-done' : ''}`}
                         >
+                          <ReadCheck deadline={d} markRead={markDeadline} />
                           <Link href={`/workspace/library/versions/${d.versionId}`}>
                             {deadlineLabel(d)}
                           </Link>
@@ -879,6 +948,7 @@ export function CalendarBoard() {
           )}
           <DoneTasks attempt={attempt} busy={busy} toggle={toggle} open={open} />
         </aside>
+        <FollowedCourses attempt={attempt} changed={reload} />
         <ReviewLaterPanel onScheduled={reload} />
         <CalendarExport />
       </div>

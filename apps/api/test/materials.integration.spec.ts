@@ -788,6 +788,7 @@ describe('private material drafts', () => {
       section: 'Tuần 2',
       note: '',
       dueOn: null,
+      dueTime: null,
       versionId: second.versionId,
       read: false,
       material: null,
@@ -812,6 +813,148 @@ describe('private material drafts', () => {
       );
     }
     expect((await listed()).items.filter(mine)).toHaveLength(1);
+  });
+  it('CAL-07: due times, change notices to followers and reminders before unread due dates', async () => {
+    const first = await readingFixture();
+    const second = await readingFixture();
+    const course = courses[0];
+    const ours = [first.versionId, second.versionId];
+    const follow = async (name: string, body: object) => {
+      const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+      return agents[name]
+        .put(`/api/v1/courses/${course}/reading-lists/follow`)
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send(body);
+    };
+    expect((await follow('student', { following: true, remindMinutes: 1440 })).body).toEqual({
+      following: true,
+      remindMinutes: 1440,
+    });
+    // Absent keeps the choice; other values are refused.
+    expect((await follow('student', { following: true })).body.remindMinutes).toBe(1440);
+    expect((await follow('other', { following: true, remindMinutes: null })).body).toEqual({
+      following: true,
+      remindMinutes: null,
+    });
+    for (const remindMinutes of [7, '60'])
+      expect((await follow('student', { following: true, remindMinutes })).status).toBe(400);
+
+    const revision = async () =>
+      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+        ?.revision ?? 0;
+    const save = async (published: boolean, items: object[]) =>
+      listWrite('lecturer', course, {
+        title: 'Danh sách có giờ',
+        published,
+        revision: await revision(),
+        items,
+      });
+    const item = (versionId: string, dueOn: string | null, dueTime: string | null) => ({
+      section: '',
+      versionId,
+      note: '',
+      dueOn,
+      dueTime,
+    });
+    for (const bad of [
+      [item(first.versionId, null, '08:00')],
+      [item(first.versionId, '2027-08-10', '24:00')],
+      [item(first.versionId, '2027-08-10', '8:00')],
+    ])
+      expect((await save(true, bad)).status).toBe(400);
+    // Built unpublished, then published: neither is a change for followers to hear about.
+    const draft = await save(false, [
+      item(first.versionId, '2027-08-10', '17:00'),
+      item(second.versionId, '2027-08-12', null),
+    ]);
+    expect(draft.status).toBe(200);
+    expect(draft.body.item.items.map((i: { dueTime: string | null }) => i.dueTime)).toEqual([
+      '17:00',
+      null,
+    ]);
+    const changed = async (name: string) =>
+      (
+        (await notices(name, '?limit=50')).items as {
+          kind: string;
+          versionId: string;
+          detail: string | null;
+          eventAt: string | null;
+        }[]
+      )
+        .filter((n) => n.kind === 'READING_DEADLINE_CHANGED' && ours.includes(n.versionId))
+        .map((n) => [n.versionId, n.detail, n.eventAt]);
+    await save(true, [
+      item(first.versionId, '2027-08-10', '17:00'),
+      item(second.versionId, '2027-08-12', null),
+    ]);
+    expect(await changed('student')).toEqual([]);
+    // Moved and removed due dates reach every follower, never the owner.
+    await save(true, [
+      item(first.versionId, '2027-08-10', '09:00'),
+      item(second.versionId, null, null),
+    ]);
+    const expected = [
+      [second.versionId, 'DUE_REMOVED', null],
+      [first.versionId, null, '2027-08-10T02:00:00.000Z'],
+    ];
+    expect((await changed('student')).sort()).toEqual(expected.sort());
+    expect((await changed('other')).sort()).toEqual(expected.sort());
+    expect(await changed('lecturer')).toEqual([]);
+    // Saving the same dates again announces nothing new.
+    await save(true, [
+      item(first.versionId, '2027-08-10', '09:00'),
+      item(second.versionId, null, null),
+    ]);
+    expect(await changed('student')).toHaveLength(2);
+
+    const deadline = (
+      await agents.student
+        .get('/api/v1/calendar/reading-deadlines')
+        .query({ from: '2027-08-01', to: '2027-09-01' })
+        .expect(200)
+    ).body.items.find((d: { versionId: string }) => d.versionId === first.versionId);
+    expect(deadline).toMatchObject({ dueOn: '2027-08-10', dueTime: '09:00' });
+    const followed = (
+      await agents.student.get('/api/v1/reading-lists/following').expect(200)
+    ).body.items.find((c: { course: { id: string } }) => c.course.id === course);
+    expect(followed).toMatchObject({ remindMinutes: 1440 });
+
+    // One day before 09:00 Vietnam time, once, and only for the follower who asked.
+    const reminders = app.get(CalendarReminders);
+    const soon = async (name: string) =>
+      ((await notices(name, '?limit=50')).items as { kind: string; versionId: string }[]).filter(
+        (n) => n.kind === 'READING_DEADLINE_SOON' && ours.includes(n.versionId),
+      );
+    expect(await reminders.dispatch(new Date('2027-08-09T01:58:00.000Z'))).toBe(0);
+    expect(await reminders.dispatch(new Date('2027-08-09T02:01:00.000Z'))).toBe(1);
+    expect(await reminders.dispatch(new Date('2027-08-09T02:03:00.000Z'))).toBe(0);
+    expect(await soon('student')).toMatchObject([
+      { versionId: first.versionId, eventAt: '2027-08-10T02:00:00.000Z' },
+    ]);
+    expect(await soon('other')).toEqual([]);
+    // A version already marked read is not reminded.
+    const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+    await agents.student
+      .put(`/api/v1/courses/${course}/reading-lists/read/${first.versionId}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send({ read: true })
+      .expect(200);
+    await save(true, [
+      item(first.versionId, '2027-08-20', '09:00'),
+      item(second.versionId, null, null),
+    ]);
+    expect(await reminders.dispatch(new Date('2027-08-19T02:01:00.000Z'))).toBe(0);
+    // Leave the course as other tests expect it: nothing followed, nothing read.
+    await agents.student
+      .put(`/api/v1/courses/${course}/reading-lists/read/${first.versionId}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send({ read: false })
+      .expect(200);
+    await follow('student', { following: false });
+    await follow('other', { following: false });
   });
   it('CAL-04b: due dates show on the calendar only for followed courses and readable items', async () => {
     const first = await readingFixture();
@@ -875,7 +1018,7 @@ describe('private material drafts', () => {
       .put(`/api/v1/courses/${course}/reading-lists/follow`)
       .send({ following: true })
       .expect(403);
-    expect((await follow('student', true)).body).toEqual({ following: true });
+    expect((await follow('student', true)).body).toEqual({ following: true, remindMinutes: null });
     expect((await follow('student', true)).status).toBe(200);
     expect(
       (await agents.student.get(`/api/v1/courses/${course}/reading-lists`)).body.following,
@@ -886,6 +1029,7 @@ describe('private material drafts', () => {
     expect(shown).toEqual([
       {
         dueOn: '2026-11-03',
+        dueTime: null,
         listId: saved.body.item.id,
         listTitle: 'Danh sách có hạn',
         course: { id: course, code: expect.any(String), name: expect.any(String) },
@@ -962,7 +1106,10 @@ describe('private material drafts', () => {
       .get(deadlines)
       .query({ from: '2026-11-01', to: '2026-12-01' })
       .expect(401);
-    expect((await follow('student', false)).body).toEqual({ following: false });
+    expect((await follow('student', false)).body).toEqual({
+      following: false,
+      remindMinutes: null,
+    });
     expect(await titles()).toEqual([]);
   });
   it('COURSE-02: readers keep private read marks on listed, readable versions', async () => {
@@ -1089,7 +1236,13 @@ describe('private material drafts', () => {
       course: { id: course, code: expect.any(String), name: expect.any(String) },
       total: 3,
       read: 0,
-      next: { dueOn: '2026-11-03', versionId: second.versionId, title: expect.any(String) },
+      remindMinutes: null,
+      next: {
+        dueOn: '2026-11-03',
+        dueTime: null,
+        versionId: second.versionId,
+        title: expect.any(String),
+      },
     });
     // Reading the earliest item moves "next" to the following unread due date.
     await put('student', `read/${second.versionId}`, { read: true });

@@ -71,7 +71,9 @@ export function ReadingListItems({
                 ) : (
                   <p>Tài liệu không còn khả dụng với tài khoản của bạn.</p>
                 )}
-                {item.dueOn && <p className="reading-due">Hạn đọc: {formatDue(item.dueOn)}</p>}
+                {item.dueOn && (
+                  <p className="reading-due">Hạn đọc: {formatDue(item.dueOn, item.dueTime)}</p>
+                )}
                 {item.note && <p className="reading-note">{item.note}</p>}
               </li>
             ))}

@@ -11,6 +11,7 @@ import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { formatDate, parseDate } from '../calendar/calendar-repeat';
 import { available } from '../materials/library.service';
+import { notify } from '../notifications/notify';
 import {
   FollowReadingListsDto,
   ReadingDeadlinesDto,
@@ -34,8 +35,25 @@ function dueDate(value: string | null) {
     throw invalid('Hạn đọc phải là một ngày hợp lệ.');
   return date;
 }
+/** Course deadlines are Vietnam time: UTC+7, no daylight saving. */
+const COURSE_OFFSET_MS = 7 * 3_600_000;
+const END_OF_DAY = 23 * 60 + 59;
+/** `HH:MM` as a time-of-day value; a time needs a due date. */
+function dueTime(value: string | null, dueOn: Date | null) {
+  if (value === null) return null;
+  if (!dueOn) throw invalid('Chọn ngày hạn trước khi đặt giờ hạn.');
+  const [hours, minutes] = value.split(':').map(Number);
+  return new Date(Date.UTC(1970, 0, 1, hours, minutes));
+}
+export const formatDueTime = (time: Date | null) =>
+  time ? time.toISOString().slice(11, 16) : null;
+/** The instant a due date ends: its time, or 23:59, in Vietnam time. */
+export function dueInstant(dueOn: Date, time: Date | null) {
+  const minutes = time ? time.getUTCHours() * 60 + time.getUTCMinutes() : END_OF_DAY;
+  return new Date(dueOn.getTime() + minutes * 60_000 - COURSE_OFFSET_MS);
+}
 /** Published lists of a course whose owner is still active and assigned to that course. */
-const shown = (courseId: bigint) =>
+export const shown = (courseId: bigint) =>
   ({
     published: true,
     users: {
@@ -54,7 +72,14 @@ const listSelect = {
   updated_at: true,
   users: { select: { id: true, display_name: true } },
   reading_list_items: {
-    select: { position: true, section: true, note: true, version_id: true, due_on: true },
+    select: {
+      position: true,
+      section: true,
+      note: true,
+      version_id: true,
+      due_on: true,
+      due_time: true,
+    },
     orderBy: { position: 'asc' },
   },
 } satisfies Prisma.reading_listsSelect;
@@ -152,6 +177,7 @@ export class ReadingListsService {
           section: item.section,
           note: item.note,
           dueOn: item.due_on ? formatDate(item.due_on) : null,
+          dueTime: formatDueTime(item.due_time),
           versionId: String(item.version_id),
           read: !!v && marked.has(item.version_id),
           material: v
@@ -224,6 +250,7 @@ export class ReadingListsService {
         throw fail('STALE_REVISION', 'Danh sách đã thay đổi ở lượt khác. Tải lại trước khi lưu.');
       const versionIds = body.items.map((i) => academicId(i.versionId));
       const dues = body.items.map((i) => dueDate(i.dueOn));
+      const times = body.items.map((i, index) => dueTime(i.dueTime, dues[index]));
       const distinct = [...new Set(versionIds)];
       if (distinct.length !== versionIds.length)
         throw fail('DUPLICATE_ITEM', 'Mỗi phiên bản chỉ xuất hiện một lần trong danh sách.');
@@ -243,6 +270,17 @@ export class ReadingListsService {
           'Có tài liệu không thuộc môn này hoặc không còn đọc được. Tải lại rồi chọn lại.',
         );
       const now = new Date();
+      // Due dates before this save, to tell followers what changed on a list they already see.
+      const before = new Map(
+        existing
+          ? (
+              await tx.reading_list_items.findMany({
+                where: { list_id: existing.id },
+                select: { version_id: true, due_on: true, due_time: true },
+              })
+            ).map((i) => [i.version_id, i.due_on ? dueInstant(i.due_on, i.due_time) : null])
+          : [],
+      );
       const list = existing
         ? await tx.reading_lists.update({
             where: { id: existing.id },
@@ -271,8 +309,11 @@ export class ReadingListsService {
             version_id: versionIds[index],
             note: item.note,
             due_on: dues[index],
+            due_time: times[index],
           })),
         });
+      if (existing?.published && body.published)
+        await this.announceDueChanges(tx, list, user.id, before, versionIds, dues, times);
       await tx.audit_events.create({
         data: {
           actor_id: user.id,
@@ -289,6 +330,44 @@ export class ReadingListsService {
     });
   }
 
+  /**
+   * Tells the course's followers about due dates added, moved or removed on a list that was and
+   * stays published. A new list, or one being published now, is not a change to announce.
+   */
+  private async announceDueChanges(
+    tx: Prisma.TransactionClient,
+    list: { id: bigint; course_id: bigint; revision: number },
+    ownerId: bigint,
+    before: Map<bigint, Date | null>,
+    versionIds: bigint[],
+    dues: (Date | null)[],
+    times: (Date | null)[],
+  ) {
+    const changes = versionIds.flatMap((versionId, index) => {
+      const due = dues[index];
+      const after = due ? dueInstant(due, times[index]) : null;
+      const known = before.has(versionId);
+      const previous = before.get(versionId) ?? null;
+      if (known ? previous?.getTime() === after?.getTime() : after === null) return [];
+      const detail = !after ? 'DUE_REMOVED' : !previous ? 'DUE_ADDED' : null;
+      return [{ versionId, after, detail }];
+    });
+    if (!changes.length) return;
+    const followers = await tx.reading_list_follows.findMany({
+      where: { course_id: list.course_id, user_id: { not: ownerId }, users: { status: 'ACTIVE' } },
+      select: { user_id: true },
+    });
+    for (const { user_id } of followers)
+      for (const change of changes)
+        await notify(tx, {
+          userId: user_id,
+          kind: 'READING_DEADLINE_CHANGED',
+          eventKey: `duechange:${list.id}:${change.versionId}:${list.revision}`,
+          versionId: change.versionId,
+          detail: change.detail,
+          eventAt: change.after,
+        });
+  }
   /** CAL-04b. A private opt-in to see this course's due dates on one's own calendar. */
   async follow(actor: Profile, rawCourseId: string, body: FollowReadingListsDto) {
     const courseId = academicId(rawCourseId);
@@ -296,16 +375,19 @@ export class ReadingListsService {
       const user = await this.reader(tx, actor);
       if (body.following) {
         await this.activeCourse(tx, courseId);
-        await tx.reading_list_follows.upsert({
+        const remind =
+          body.remindMinutes === undefined ? {} : { remind_minutes: body.remindMinutes };
+        const row = await tx.reading_list_follows.upsert({
           where: { user_id_course_id: { user_id: user.id, course_id: courseId } },
-          create: { user_id: user.id, course_id: courseId },
-          update: {},
+          create: { user_id: user.id, course_id: courseId, ...remind },
+          update: remind,
         });
-      } else
-        await tx.reading_list_follows.deleteMany({
-          where: { user_id: user.id, course_id: courseId },
-        });
-      return { following: body.following };
+        return { following: true, remindMinutes: row.remind_minutes };
+      }
+      await tx.reading_list_follows.deleteMany({
+        where: { user_id: user.id, course_id: courseId },
+      });
+      return { following: false, remindMinutes: null };
     });
   }
 
@@ -355,7 +437,10 @@ export class ReadingListsService {
             user_id: user.id,
             courses: { is_active: true, faculties: { is_active: true } },
           },
-          select: { courses: { select: { id: true, code: true, name: true } } },
+          select: {
+            remind_minutes: true,
+            courses: { select: { id: true, code: true, name: true } },
+          },
           orderBy: { courses: { code: 'asc' } },
         });
         const rows = followed.length
@@ -368,6 +453,7 @@ export class ReadingListsService {
               },
               select: {
                 due_on: true,
+                due_time: true,
                 version_id: true,
                 document_versions: { select: { title: true } },
                 reading_lists: { select: { course_id: true } },
@@ -383,20 +469,26 @@ export class ReadingListsService {
             })
           ).map((m) => m.version_id),
         );
-        const items = followed.map(({ courses: course }) => {
+        const items = followed.map(({ courses: course, remind_minutes }) => {
           const own = rows.filter((r) => r.reading_lists.course_id === course.id);
           const versions = new Set(own.map((r) => r.version_id));
           let next: (typeof own)[number] | undefined;
           for (const r of own)
-            if (r.due_on && !marked.has(r.version_id) && (!next || r.due_on < next.due_on!))
+            if (
+              r.due_on &&
+              !marked.has(r.version_id) &&
+              (!next || dueInstant(r.due_on, r.due_time) < dueInstant(next.due_on!, next.due_time))
+            )
               next = r;
           return {
             course: { id: String(course.id), code: course.code, name: course.name },
             total: versions.size,
             read: [...versions].filter((v) => marked.has(v)).length,
+            remindMinutes: remind_minutes,
             next: next
               ? {
                   dueOn: formatDate(next.due_on!),
+                  dueTime: formatDueTime(next.due_time),
                   versionId: String(next.version_id),
                   title: next.document_versions.title,
                 }
@@ -407,7 +499,9 @@ export class ReadingListsService {
         // due. The sort is stable, so ties keep course-code order; YYYY-MM-DD sorts as text.
         items.sort((a, b) =>
           a.next && b.next
-            ? a.next.dueOn.localeCompare(b.next.dueOn)
+            ? `${a.next.dueOn}${a.next.dueTime ?? '23:59'}`.localeCompare(
+                `${b.next.dueOn}${b.next.dueTime ?? '23:59'}`,
+              )
             : Number(!a.next) - Number(!b.next),
         );
         return { items };
@@ -446,6 +540,7 @@ export class ReadingListsService {
               },
               select: {
                 due_on: true,
+                due_time: true,
                 position: true,
                 section: true,
                 version_id: true,
@@ -458,7 +553,12 @@ export class ReadingListsService {
                   },
                 },
               },
-              orderBy: [{ due_on: 'asc' }, { list_id: 'asc' }, { position: 'asc' }],
+              orderBy: [
+                { due_on: 'asc' },
+                { due_time: { sort: 'asc', nulls: 'last' } },
+                { list_id: 'asc' },
+                { position: 'asc' },
+              ],
               take: MAX_DEADLINES + 1,
             })
           : [];
@@ -475,6 +575,7 @@ export class ReadingListsService {
         return {
           items: shownRows.map((r) => ({
             dueOn: formatDate(r.due_on!),
+            dueTime: formatDueTime(r.due_time),
             listId: String(r.reading_lists.id),
             listTitle: r.reading_lists.title,
             course: {
