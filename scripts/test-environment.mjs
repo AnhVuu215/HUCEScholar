@@ -121,6 +121,8 @@ try {
     ['learn03-student', 'STUDENT'],
     ['learn03b-admin', 'ADMIN'],
     ['learn03b-student', 'STUDENT'],
+    ['learn04-admin', 'ADMIN'],
+    ['learn04-student', 'STUDENT'],
     ['cal4-admin', 'ADMIN'],
     ['cal4-student', 'STUDENT'],
     ['pins-admin', 'ADMIN'],
