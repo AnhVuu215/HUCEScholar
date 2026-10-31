@@ -25,6 +25,11 @@ export const calendarColors = ['blue', 'green', 'orange', 'purple', 'red', 'gray
 /** CAL-03 lead times in minutes; 0 reminds at the start (or due time). */
 export const remindMinutes = [0, 5, 10, 15, 30, 60, 120, 1440] as const;
 /**
+ * CAL-07 leads for an all-day item, which starts at local midnight: -480 is 08:00 that day,
+ * 240 is 20:00 the evening before, 960 is 08:00 the day before.
+ */
+export const allDayRemindMinutes = [-480, 240, 960] as const;
+/**
  * CAL-02/CAL-07 repeat. Weekly on `weekdays`, or monthly on the first date's day of the month,
  * every `interval` weeks or months; it ends on `until` or after `count` times (exactly one).
  * Weekdays and dates are local to `utcOffset` (minutes east of UTC).
@@ -75,8 +80,15 @@ export class CalendarFieldsDto {
   repeat: CalendarRepeatDto | null = null;
   /** Only items with a time can remind; absent means no reminder. */
   @IsOptional()
-  @IsIn(remindMinutes)
-  remindMinutes: (typeof remindMinutes)[number] | null = null;
+  @IsIn([...remindMinutes, ...allDayRemindMinutes])
+  remindMinutes: number | null = null;
+  /** CAL-07: up to two more reminders, besides `remindMinutes`. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(2)
+  @ArrayUnique()
+  @IsIn([...remindMinutes, ...allDayRemindMinutes], { each: true })
+  remindMore: number[] = [];
   /** Also email the owner; needs a reminder. */
   @IsOptional() @IsBoolean() remindEmail = false;
 }

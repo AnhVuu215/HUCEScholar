@@ -14,7 +14,7 @@ const item = (overrides: Partial<IcsItem> = {}): IcsItem => ({
   allDay: false,
   series: null,
   skipped: [],
-  remindMinutes: null,
+  remindLeads: [],
   material: null,
   ...overrides,
 });
@@ -101,7 +101,7 @@ describe('CAL-05 iCalendar export', () => {
           title: 'Nộp báo cáo',
           start: new Date('2026-11-06T16:59:00.000Z'),
           end: null,
-          remindMinutes: 60,
+          remindLeads: [60, 1440],
         }),
       ]),
     );
@@ -110,6 +110,20 @@ describe('CAL-05 iCalendar export', () => {
     expect(text).toContain('SUMMARY:Việc: Nộp báo cáo');
     expect(text).toContain('TRANSP:TRANSPARENT');
     expect(text).toContain('TRIGGER:-PT60M');
+    expect(text).toContain('TRIGGER:-PT1440M');
+    // An all-day item reminds at 08:00 that day: after its local midnight start.
+    expect(
+      lines(
+        file([
+          item({
+            allDay: true,
+            start: new Date('2026-11-02T17:00:00.000Z'),
+            end: null,
+            remindLeads: [-480],
+          }),
+        ]),
+      ),
+    ).toContain('TRIGGER:PT480M');
   });
   it('writes a series as a weekly rule with skipped sessions excluded', () => {
     const series = {

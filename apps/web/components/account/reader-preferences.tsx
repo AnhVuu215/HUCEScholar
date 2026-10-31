@@ -35,7 +35,8 @@ function PreferencesEditor({ userId }: { userId: string }) {
     saved &&
     (draft.highlightColor !== saved.preferences.highlightColor ||
       draft.defaultZoom !== saved.preferences.defaultZoom ||
-      draft.annotationPanelOpen !== saved.preferences.annotationPanelOpen),
+      draft.annotationPanelOpen !== saved.preferences.annotationPanelOpen ||
+      draft.reminderEmail !== saved.preferences.reminderEmail),
   );
   useNotesLeaveGuard(dirty, pending, 'Bạn có cài đặt đọc chưa lưu. Rời trang và bỏ thay đổi?');
   useEffect(() => {
@@ -170,6 +171,18 @@ function PreferencesEditor({ userId }: { userId: string }) {
               }}
             />
             Mở bảng ghi chú khi vào tài liệu
+          </label>
+          <label className="preferences-checkbox">
+            <input
+              type="checkbox"
+              checked={draft.reminderEmail}
+              disabled={pending}
+              onChange={(event) => {
+                setDraft((value) => ({ ...value, reminderEmail: event.target.checked }));
+                setNotice('');
+              }}
+            />
+            Cho phép gửi email nhắc lịch (mục nào bật “Gửi cả email”)
           </label>
           {blocked && (
             <>

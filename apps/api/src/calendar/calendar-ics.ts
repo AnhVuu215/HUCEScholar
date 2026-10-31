@@ -23,7 +23,8 @@ export type IcsItem = {
   series: Series | null;
   /** Original starts (ms) removed from a series, including detached ones. */
   skipped: number[];
-  remindMinutes: number | null;
+  /** Minutes before the start; an all-day item's may be negative (08:00 that day is -480). */
+  remindLeads: number[];
   /** Readable linked page, or null when there is none or it is withheld. */
   material: { title: string; pageNumber: number; href: string } | null;
 };
@@ -147,12 +148,12 @@ function eventLines(item: IcsItem, options: IcsOptions, origin: string) {
     if (description) lines.push(`DESCRIPTION:${icsText(description)}`);
   }
   lines.push(`TRANSP:${item.kind === 'TASK' ? 'TRANSPARENT' : 'OPAQUE'}`);
-  if (item.remindMinutes !== null && !item.allDay)
+  for (const lead of item.remindLeads)
     lines.push(
       'BEGIN:VALARM',
       'ACTION:DISPLAY',
       `DESCRIPTION:${icsText(item.title)}`,
-      `TRIGGER:-PT${item.remindMinutes}M`,
+      `TRIGGER:${lead > 0 ? '-' : ''}PT${Math.abs(lead)}M`,
       'END:VALARM',
     );
   lines.push('END:VEVENT');
