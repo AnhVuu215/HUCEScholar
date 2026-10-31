@@ -63,4 +63,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` và Redis DB 15:
 
 - Ôn theo lịch (spaced repetition), xáo thẻ, đánh dấu nhớ/chưa nhớ.
 - Lọc thẻ theo tài liệu hay môn trên trang thẻ (API đã có `versionId`); xuất thẻ cùng EXPORT-01.
-- Form tạo thẻ chưa được bảo vệ bởi bước hỏi trước khi rời trang như ghi chú; rời reader khi form đang mở thì nội dung form mất.
+- Hỏi trước khi rời trang khi form tạo hoặc sửa thẻ còn thay đổi chưa lưu: đã có ở [UX-02](2026-10-31-form-leave-guards.md).

@@ -8,9 +8,12 @@ import {
   dateKey,
   fromInputs,
 } from '../../lib/calendar';
+import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
 import { SelectField } from '../ui/select-field';
 
 const durations = [30, 45, 60, 90, 120];
+const DEFAULT_CLOCK = '19:00';
+const DEFAULT_MINUTES = '60';
 
 const purposes = {
   read: { action: 'Lên lịch đọc', noun: 'buổi đọc', prefix: 'Đọc', color: 'green' },
@@ -41,12 +44,22 @@ export function ScheduleReading({
   const text = purposes[purpose];
   const fieldId = useId();
   const [requestId, setRequestId] = useState<string | null>(null);
+  /** Tomorrow as of opening; the form only counts as a draft once a field moves off its defaults. */
+  const [openedDay, setOpenedDay] = useState('');
   const [day, setDay] = useState('');
-  const [clock, setClock] = useState('19:00');
-  const [minutes, setMinutes] = useState('60');
+  const [clock, setClock] = useState(DEFAULT_CLOCK);
+  const [minutes, setMinutes] = useState(DEFAULT_MINUTES);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState(false);
+  const dirty =
+    requestId !== null &&
+    (day !== openedDay || clock !== DEFAULT_CLOCK || minutes !== DEFAULT_MINUTES);
+  useNotesLeaveGuard(
+    dirty,
+    busy,
+    `Bạn có ${text.noun} chưa thêm vào lịch. Rời trang và bỏ thay đổi?`,
+  );
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!requestId) return;
@@ -93,8 +106,12 @@ export function ScheduleReading({
           className="secondary-button"
           disabled={disabled}
           onClick={() => {
+            const tomorrow = dateKey(addDays(new Date(), 1));
             setRequestId(crypto.randomUUID());
-            setDay(dateKey(addDays(new Date(), 1)));
+            setOpenedDay(tomorrow);
+            setDay(tomorrow);
+            setClock(DEFAULT_CLOCK);
+            setMinutes(DEFAULT_MINUTES);
             setCreated(false);
             setError('');
           }}

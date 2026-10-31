@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { createStudyCard, studyCardError } from '../../lib/study-cards';
+import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
 
 /**
  * Turns one of the reader's own highlights into a private question/answer card. The request id
@@ -22,6 +23,9 @@ export function StudyCardMaker({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState(false);
+  // An opened form nobody typed in is not a draft; leaving it asks nothing.
+  const dirty = requestId !== null && (question.trim() !== '' || answer.trim() !== '');
+  useNotesLeaveGuard(dirty, busy, 'Bạn có thẻ ôn tập chưa lưu. Rời trang và bỏ thay đổi?');
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!requestId) return;
@@ -103,6 +107,8 @@ export function StudyCardMaker({
           disabled={busy}
           onClick={() => {
             setRequestId(null);
+            setQuestion('');
+            setAnswer('');
             setError('');
           }}
         >
