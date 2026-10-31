@@ -1074,3 +1074,28 @@
 .signup-roles input {
   margin-top: 4px;
 }
+
+/* STUDY-02: deck filters and practice rounds. */
+.study-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  margin-block: 16px;
+}
+.study-practice {
+  display: grid;
+  gap: 12px;
+  margin-block: 16px;
+}
+.study-practice-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.study-practice-head h3 {
+  margin: 0 auto 0 0;
+}
+.study-practice .study-card h3 {
+  font-size: 1.25rem;
+}

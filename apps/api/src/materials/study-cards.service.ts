@@ -8,8 +8,12 @@ import {
   CreateStudyCardDto,
   StudyCardListDto,
   StudyCardRevisionDto,
+  StudyCardScopeDto,
   UpdateStudyCardDto,
 } from './study-cards.dto';
+
+/** A practice round loads at most this many cards, newest first. */
+export const MAX_PRACTICE_CARDS = 200;
 
 const stale = () =>
   new ConflictException({
@@ -87,13 +91,26 @@ export class StudyCardsService {
     });
   }
   /** The owner's cards on versions they can read now; unreadable ones are only counted. */
-  async list(actor: Profile, query: StudyCardListDto) {
-    const user_id = academicId(actor.id);
+  /** Cards in the filter, and those of them whose version the owner can still read. */
+  private scope(actor: Profile, query: StudyCardScopeDto) {
     const scope: Prisma.study_cardsWhereInput = {
-      user_id,
+      user_id: academicId(actor.id),
       ...(query.versionId ? { version_id: academicId(query.versionId) } : {}),
+      ...(query.courseId
+        ? {
+            document_versions: {
+              version_courses: { some: { course_id: academicId(query.courseId) } },
+            },
+          }
+        : {}),
     };
-    const readable: Prisma.study_cardsWhereInput = { ...scope, document_versions: available() };
+    const readable: Prisma.study_cardsWhereInput = {
+      AND: [scope, { document_versions: available() }],
+    };
+    return { scope, readable };
+  }
+  async list(actor: Profile, query: StudyCardListDto) {
+    const { scope, readable } = this.scope(actor, query);
     const [rows, total, all] = await this.db.$transaction(
       [
         this.db.study_cards.findMany({
@@ -115,6 +132,58 @@ export class StudyCardsService {
       page: query.page,
       limit: query.limit,
     };
+  }
+  /** STUDY-02: the documents and courses that have readable cards, for the filter menus. */
+  async filters(actor: Profile) {
+    const { readable } = this.scope(actor, {});
+    return this.db.$transaction(
+      async (tx) => {
+        const counts = await tx.study_cards.groupBy({
+          by: ['version_id'],
+          where: readable,
+          _count: { _all: true },
+        });
+        const ids = counts.map((c) => c.version_id);
+        const versions = await tx.document_versions.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, title: true },
+        });
+        const courses = await tx.courses.findMany({
+          where: { version_courses: { some: { version_id: { in: ids } } } },
+          orderBy: [{ code: 'asc' }, { id: 'asc' }],
+          select: { id: true, code: true, name: true },
+        });
+        const count = new Map(counts.map((c) => [c.version_id, c._count._all]));
+        return {
+          documents: versions
+            .map((v) => ({ versionId: String(v.id), title: v.title, cards: count.get(v.id)! }))
+            .sort(
+              (a, b) =>
+                a.title.localeCompare(b.title, 'vi') ||
+                Number(BigInt(a.versionId) - BigInt(b.versionId)),
+            ),
+          courses: courses.map((c) => ({ id: String(c.id), code: c.code, name: c.name })),
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  /** STUDY-02: every readable card in the filter for one round, up to MAX_PRACTICE_CARDS. */
+  async practice(actor: Profile, query: StudyCardScopeDto) {
+    const { readable } = this.scope(actor, query);
+    const [rows, total] = await this.db.$transaction(
+      [
+        this.db.study_cards.findMany({
+          where: readable,
+          include: { document_versions: { select: { title: true } } },
+          orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+          take: MAX_PRACTICE_CARDS,
+        }),
+        this.db.study_cards.count({ where: readable }),
+      ],
+      { isolationLevel: 'RepeatableRead' },
+    );
+    return { items: rows.map(cardItem), total };
   }
   private async owned(tx: Prisma.TransactionClient, actor: Profile, rawId: string) {
     const user_id = academicId(actor.id);

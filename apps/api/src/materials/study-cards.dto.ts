@@ -26,8 +26,12 @@ export class UpdateStudyCardDto extends StudyCardFieldsDto {
 export class StudyCardRevisionDto {
   @IsInt() @Min(1) @Max(2147483646) revision!: number;
 }
-export class StudyCardListDto {
+/** STUDY-02: which cards a list or a practice round covers; both filters may be combined. */
+export class StudyCardScopeDto {
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,18}$/) versionId?: string;
+  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,18}$/) courseId?: string;
+}
+export class StudyCardListDto extends StudyCardScopeDto {
   @Transform(integer) @IsInt() @Min(1) @Max(100000) page = 1;
   @Transform(integer) @IsInt() @Min(1) @Max(50) limit = 20;
-  @IsOptional() @IsString() @Matches(/^[1-9]\d{0,18}$/) versionId?: string;
 }
