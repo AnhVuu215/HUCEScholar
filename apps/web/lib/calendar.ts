@@ -524,12 +524,55 @@ export function resizedTimes(
  * CAL-05: the whole calendar as one `.ics` file. The browser's offset dates all-day items;
  * notes and linked pages are included only when asked.
  */
-export async function exportCalendar(details: boolean) {
+export async function exportCalendar(
+  details: boolean,
+  options: { deadlines?: boolean; from?: string; to?: string } = {},
+) {
   const params = new URLSearchParams({
     utcOffset: String(utcOffset(new Date())),
     details: String(details),
+    deadlines: String(!!options.deadlines),
+    ...(options.from && options.to ? { from: options.from, to: options.to } : {}),
   });
   const response = await apiRequest(`/calendar/export?${params}`, {}, 20_000);
   const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1];
   return { blob: await response.blob(), name: name ?? 'hucescholar-lich-hoc.ics' };
+}
+
+/** CAL-07: what an import added, found already there, and left out with the reason. */
+export type CalendarImportResult = {
+  created: number;
+  existing: number;
+  skippedCount: number;
+  skipped: { title: string; reason: string }[];
+  notes: { title: string; reason: string }[];
+};
+/** Sends an .ics file as is; the API reads what fits and reports the rest. */
+export async function importCalendar(file: File) {
+  const token = await csrfToken();
+  const params = new URLSearchParams({ utcOffset: String(utcOffset(new Date())) });
+  const body: unknown = await (
+    await apiRequest(
+      `/calendar/import?${params}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/calendar', 'X-CSRF-Token': token },
+        body: await file.text(),
+      },
+      30_000,
+    )
+  ).json();
+  const list = (v: unknown) =>
+    Array.isArray(v) &&
+    v.every((e) => isRecord(e) && typeof e.title === 'string' && typeof e.reason === 'string');
+  if (
+    isRecord(body) &&
+    Number.isInteger(body.created) &&
+    Number.isInteger(body.existing) &&
+    Number.isInteger(body.skippedCount) &&
+    list(body.skipped) &&
+    list(body.notes)
+  )
+    return body as unknown as CalendarImportResult;
+  throw new Error('Invalid import result.');
 }

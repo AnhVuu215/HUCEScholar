@@ -123,6 +123,24 @@ export class CalendarExportDto {
   @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   details = false;
+  /** CAL-07: also the due dates of followed courses' reading lists. */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  deadlines = false;
+  /** CAL-07: local dates (inclusive) to export; both or neither. */
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) to?: string;
+}
+/** CAL-07: the importer's offset places dates and floating times of the file. */
+export class CalendarImportDto {
+  @Transform(({ value }) =>
+    typeof value === 'string' && /^-?\d{1,3}$/.test(value) ? Number(value) : value,
+  )
+  @IsInt()
+  @Min(-840)
+  @Max(840)
+  utcOffset!: number;
 }
 export class CalendarTasksDto {
   @Transform(integer) @IsInt() @Min(1) @Max(100000) page = 1;

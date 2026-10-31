@@ -44,6 +44,7 @@ import {
 } from '../../lib/reading-lists';
 import { CALENDAR_DRAFT_PROMPT, CalendarEditor, type CalendarDraft } from './calendar-editor';
 import { CalendarExport } from './calendar-export';
+import { CalendarImport } from './calendar-import';
 import { DoneTasks } from './done-tasks';
 import { FollowedCourses } from './followed-courses';
 import { ReviewLaterPanel } from './review-later-panel';
@@ -956,6 +957,7 @@ export function CalendarBoard() {
         <FollowedCourses attempt={attempt} changed={reload} />
         <ReviewLaterPanel onScheduled={reload} />
         <CalendarExport />
+        <CalendarImport imported={reload} />
       </div>
     </div>
   );

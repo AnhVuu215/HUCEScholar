@@ -28,6 +28,20 @@ export type IcsItem = {
   /** Readable linked page, or null when there is none or it is withheld. */
   material: { title: string; pageNumber: number; href: string } | null;
 };
+/** CAL-07: a followed course's reading-list due date; `due` is its end instant. */
+export type IcsDeadline = {
+  listId: string;
+  versionId: string;
+  title: string;
+  course: string;
+  courseId: string;
+  listTitle: string;
+  dueOn: string;
+  due: Date;
+  /** False: a whole day (the lecturer set no time). */
+  timed: boolean;
+  read: boolean;
+};
 export type IcsOptions = {
   /** Minutes east of UTC, for all-day items outside a series. */
   offset: number;
@@ -160,8 +174,35 @@ function eventLines(item: IcsItem, options: IcsOptions, origin: string) {
   return lines;
 }
 
+function deadlineLines(d: IcsDeadline, options: IcsOptions, origin: string) {
+  const lines = [
+    'BEGIN:VEVENT',
+    `UID:deadline-${d.listId}-${d.versionId}@hucescholar`,
+    `DTSTAMP:${icsTime(options.now)}`,
+  ];
+  if (d.timed) lines.push(`DTSTART:${icsTime(d.due)}`);
+  else {
+    const day = d.dueOn.replace(/-/g, '');
+    const next = new Date(Date.parse(`${d.dueOn}T00:00:00Z`) + DAY).toISOString().slice(0, 10);
+    lines.push(`DTSTART;VALUE=DATE:${day}`, `DTEND;VALUE=DATE:${next.replace(/-/g, '')}`);
+  }
+  lines.push(`SUMMARY:${icsText(`Hạn đọc: ${d.title} (${d.course})${d.read ? ' · đã đọc' : ''}`)}`);
+  if (options.details)
+    lines.push(
+      `DESCRIPTION:${icsText(
+        `${d.listTitle}\n${origin}/workspace/library/reading-lists?courseId=${d.courseId}`,
+      )}`,
+    );
+  lines.push('TRANSP:TRANSPARENT', 'END:VEVENT');
+  return lines;
+}
 /** The whole file, CRLF line endings, lines folded. */
-export function calendarIcs(items: IcsItem[], options: IcsOptions, origin: string) {
+export function calendarIcs(
+  items: IcsItem[],
+  options: IcsOptions,
+  origin: string,
+  deadlines: IcsDeadline[] = [],
+) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -170,6 +211,7 @@ export function calendarIcs(items: IcsItem[], options: IcsOptions, origin: strin
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${icsText('HUCEScholar — Lịch học')}`,
     ...items.flatMap((item) => eventLines(item, options, origin)),
+    ...deadlines.flatMap((d) => deadlineLines(d, options, origin)),
     'END:VCALENDAR',
   ];
   return lines.map(foldLine).join('\r\n') + '\r\n';

@@ -11,7 +11,9 @@ import { Prisma, type calendar_items } from '../generated/prisma/client';
 import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { available } from '../materials/library.service';
-import { calendarIcs } from './calendar-ics';
+import { calendarIcs, type IcsDeadline } from './calendar-ics';
+import { importRequestId, parseIcs } from './calendar-ics-import';
+import { dueInstant, shown } from '../reading-lists/reading-lists.service';
 import {
   formatDate,
   isOccurrence,
@@ -319,6 +321,33 @@ export class CalendarService {
    */
   async exportIcs(actor: Profile, query: CalendarExportDto) {
     const user_id = academicId(actor.id);
+    if ((query.from === undefined) !== (query.to === undefined))
+      throw invalid('Chọn cả ngày đầu và ngày cuối, hoặc bỏ cả hai.');
+    const first = query.from ? parseDate(query.from) : null;
+    const last = query.to ? parseDate(query.to) : null;
+    if (query.from && (!first || !last || last < first))
+      throw invalid('Khoảng ngày xuất chưa hợp lệ.');
+    // Local dates at the browser's offset, as instants: [from 00:00, the day after `to`).
+    const window = first
+      ? {
+          from: first.getTime() - query.utcOffset * 60_000,
+          to: last!.getTime() + DAY - query.utcOffset * 60_000,
+        }
+      : null;
+    const inside = (row: calendar_items) => {
+      if (!window) return true;
+      const plan = series(row);
+      if (!plan) {
+        const start = row.starts_at!.getTime();
+        const end = row.ends_at?.getTime() ?? start;
+        return start < window.to && (row.ends_at ? end > window.from : start >= window.from);
+      }
+      for (const start of occurrenceStarts(plan)) {
+        if (start >= window.to) return false;
+        if (start >= window.from) return true;
+      }
+      return false;
+    };
     return this.db.$transaction(
       async (tx) => {
         const rows = await tx.calendar_items.findMany({
@@ -333,9 +362,11 @@ export class CalendarService {
           },
           orderBy: [{ starts_at: 'asc' }, { id: 'asc' }],
         });
-        const items = await this.serialize(tx, rows);
+        const kept = rows.filter(inside);
+        const items = await this.serialize(tx, kept);
+        const deadlines = query.deadlines ? await this.exportDeadlines(tx, user_id, window) : [];
         return calendarIcs(
-          rows.map((row, index) => {
+          kept.map((row, index) => {
             const { material } = items[index];
             return {
               id: String(row.id),
@@ -361,10 +392,132 @@ export class CalendarService {
           }),
           { offset: query.utcOffset, details: query.details, now: new Date() },
           this.config.origin,
+          deadlines,
         );
       },
       { isolationLevel: 'RepeatableRead' },
     );
+  }
+  /** Due dates of the courses the owner follows, readable versions only, at most 500. */
+  private async exportDeadlines(
+    tx: Prisma.TransactionClient,
+    user_id: bigint,
+    window: { from: number; to: number } | null,
+  ): Promise<IcsDeadline[]> {
+    const followed = await tx.reading_list_follows.findMany({
+      where: { user_id, courses: { is_active: true, faculties: { is_active: true } } },
+      select: { course_id: true },
+    });
+    if (!followed.length) return [];
+    const rows = await tx.reading_list_items.findMany({
+      where: {
+        due_on: { not: null },
+        document_versions: available(),
+        reading_lists: {
+          OR: followed.map((f) => ({ course_id: f.course_id, ...shown(f.course_id) })),
+        },
+      },
+      select: {
+        due_on: true,
+        due_time: true,
+        version_id: true,
+        document_versions: { select: { title: true } },
+        reading_lists: {
+          select: { id: true, title: true, courses: { select: { id: true, code: true } } },
+        },
+      },
+      orderBy: [{ due_on: 'asc' }, { list_id: 'asc' }, { position: 'asc' }],
+      take: 500,
+    });
+    const marks = new Set(
+      (
+        await tx.reading_marks.findMany({
+          where: { user_id, version_id: { in: rows.map((r) => r.version_id) } },
+          select: { version_id: true },
+        })
+      ).map((m) => m.version_id),
+    );
+    return rows
+      .map((r) => ({
+        listId: String(r.reading_lists.id),
+        versionId: String(r.version_id),
+        title: r.document_versions.title,
+        course: r.reading_lists.courses.code,
+        courseId: String(r.reading_lists.courses.id),
+        listTitle: r.reading_lists.title,
+        dueOn: formatDate(r.due_on!),
+        due: dueInstant(r.due_on!, r.due_time),
+        timed: r.due_time !== null,
+        read: marks.has(r.version_id),
+      }))
+      .filter((d) => !window || (d.due.getTime() >= window.from && d.due.getTime() < window.to));
+  }
+  /**
+   * CAL-07. Adds what an iCalendar file holds that fits this calendar. Each UID is imported once
+   * per owner, so a second import of the same file adds nothing; what does not fit is reported.
+   */
+  async importIcs(actor: Profile, text: string, utcOffset: number) {
+    const user_id = academicId(actor.id);
+    const parsed = parseIcs(text, utcOffset);
+    const skipped = [...parsed.skipped];
+    const notes: { title: string; reason: string }[] = [];
+    let created = 0,
+      existing = 0;
+    await this.db.$transaction(
+      async (tx) => {
+        await this.lock(tx, user_id);
+        for (const item of parsed.items) {
+          let fields: Fields;
+          try {
+            fields = normalize(item.fields as unknown as CalendarFieldsDto);
+          } catch (failure) {
+            const response = failure instanceof BadRequestException ? failure.getResponse() : null;
+            skipped.push({
+              title: item.fields.title,
+              reason:
+                response && typeof response === 'object' && 'message' in response
+                  ? String(response.message)
+                  : 'Không hợp lệ.',
+            });
+            continue;
+          }
+          const request_id = importRequestId(String(user_id), item.uid);
+          const found = await tx.calendar_items.findUnique({
+            where: { user_id_request_id: { user_id, request_id } },
+            select: { id: true },
+          });
+          if (found) {
+            existing++;
+            continue;
+          }
+          const row = await tx.calendar_items.create({
+            data: {
+              ...fields,
+              user_id,
+              request_id,
+              ...(item.done ? { done_at: new Date() } : {}),
+            },
+          });
+          const plan = series(row);
+          const skips = plan ? item.skips.filter((s) => isOccurrence(plan, new Date(s))) : [];
+          if (skips.length)
+            await tx.calendar_item_skips.createMany({
+              data: skips.map((s) => ({ item_id: row.id, occurrence_start: new Date(s) })),
+              skipDuplicates: true,
+            });
+          created++;
+          if (item.note) notes.push({ title: row.title, reason: item.note });
+        }
+      },
+      { timeout: 30_000 },
+    );
+    return {
+      created,
+      existing,
+      skippedCount: skipped.length,
+      skipped: skipped.slice(0, 50),
+      notes: notes.slice(0, 50),
+    };
   }
   /**
    * Open tasks: dated ones by due time (overdue first), then those without a date. A repeating

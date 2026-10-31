@@ -2379,6 +2379,125 @@ describe('private material drafts', () => {
         expect((await agents.student.get(exported).query(query)).status).toBe(400);
       await request(app.getHttpServer()).get(exported).query({ utcOffset: 420 }).expect(401);
     });
+    it('CAL-07: imports an .ics file once, and exports a date range with reading-list due dates', async () => {
+      const imported = '/api/v1/calendar/import';
+      const upload = async (body: string, type = 'text/calendar', who = 'student') => {
+        const csrf = (await agents[who].get('/api/v1/auth/csrf')).body.csrfToken;
+        return agents[who]
+          .post(`${imported}?utcOffset=420`)
+          .set('Origin', origin)
+          .set('X-CSRF-Token', csrf)
+          .set('Content-Type', type)
+          .send(body);
+      };
+      const uid = randomUUID();
+      const file = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        `UID:${uid}-weekly`,
+        'DTSTART;TZID=Asia/Ho_Chi_Minh:20271004T070000',
+        'DTEND;TZID=Asia/Ho_Chi_Minh:20271004T083000',
+        'RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=3',
+        'EXDATE;TZID=Asia/Ho_Chi_Minh:20271011T070000',
+        'SUMMARY:Nhập: học nhóm',
+        'END:VEVENT',
+        'BEGIN:VTODO',
+        `UID:${uid}-todo`,
+        'DUE:20271006T100000Z',
+        'SUMMARY:Nhập: nộp bài',
+        'END:VTODO',
+        'BEGIN:VEVENT',
+        `UID:${uid}-moved`,
+        'RECURRENCE-ID:20271011T000000Z',
+        'DTSTART:20271012T000000Z',
+        'SUMMARY:Nhập: buổi dời',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n');
+      const first = await upload(file);
+      expect(first.status).toBe(200);
+      expect(first.body).toMatchObject({
+        created: 2,
+        existing: 0,
+        skippedCount: 1,
+        skipped: [{ title: 'Nhập: buổi dời', reason: expect.any(String) }],
+      });
+      // The same file again adds nothing.
+      expect((await upload(file)).body).toMatchObject({ created: 0, existing: 2 });
+      const october = (
+        await agents.student
+          .get(items)
+          .query({ from: '2027-10-01T00:00:00.000Z', to: '2027-10-31T00:00:00.000Z' })
+          .expect(200)
+      ).body.items.filter((i: { title: string }) => i.title.startsWith('Nhập: '));
+      expect(
+        october.map((i: { title: string; startsAt: string }) => [i.title, i.startsAt]),
+      ).toEqual([
+        ['Nhập: học nhóm', '2027-10-04T00:00:00.000Z'],
+        ['Nhập: nộp bài', '2027-10-06T10:00:00.000Z'],
+        ['Nhập: học nhóm', '2027-10-18T00:00:00.000Z'],
+      ]);
+      expect(october[0]).toMatchObject({ color: 'gray', repeat: { count: 3, weekdays: [1] } });
+      expect((await upload(file, 'text/plain')).status).toBe(415);
+      expect((await upload('x'.repeat(513 * 1024))).status).toBe(413);
+      await agents.student
+        .post(`${imported}?utcOffset=420`)
+        .set('Content-Type', 'text/calendar')
+        .send(file)
+        .expect(403);
+      expect((await upload(file, 'text/calendar', 'other')).body).toMatchObject({ created: 2 });
+
+      // Export: a date range keeps only what falls in it; due dates of followed courses join.
+      const course = courses[0];
+      const reading = await readingFixture();
+      const revision =
+        (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+          ?.revision ?? 0;
+      await listWrite('lecturer', course, {
+        title: 'Danh sách xuất lịch',
+        published: true,
+        revision,
+        items: [
+          {
+            section: '',
+            versionId: reading.versionId,
+            note: '',
+            dueOn: '2027-10-06',
+            dueTime: '17:00',
+          },
+        ],
+      });
+      const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+      const follow = (following: boolean) =>
+        agents.student
+          .put(`/api/v1/courses/${course}/reading-lists/follow`)
+          .set('Origin', origin)
+          .set('X-CSRF-Token', csrf)
+          .send({ following });
+      await follow(true).expect(200);
+      const ranged = await agents.student
+        .get(exported)
+        .query({ utcOffset: 420, from: '2027-10-05', to: '2027-10-07', deadlines: true })
+        .expect(200);
+      expect(ranged.text).toContain('SUMMARY:Việc: Nhập: nộp bài');
+      expect(ranged.text).not.toContain('SUMMARY:Nhập: học nhóm');
+      expect(ranged.text).toContain(`UID:deadline-`);
+      expect(ranged.text).toContain('DTSTART:20271006T100000Z');
+      expect(ranged.text.replace(/\r\n /g, '')).toMatch(/SUMMARY:Hạn đọc: .+ \(/);
+      const without = await agents.student
+        .get(exported)
+        .query({ utcOffset: 420, from: '2027-10-05', to: '2027-10-07' })
+        .expect(200);
+      expect(without.text).not.toContain('UID:deadline-');
+      for (const query of [
+        { utcOffset: 420, from: '2027-10-05' },
+        { utcOffset: 420, from: '2027-10-07', to: '2027-10-05' },
+        { utcOffset: 420, from: '2027-02-30', to: '2027-03-01' },
+      ])
+        expect((await agents.student.get(exported).query(query)).status).toBe(400);
+      await follow(false).expect(200);
+    });
   });
   it('STUDY-02: practice and the card list filter by course or document, from readable cards only', async () => {
     const first = await readingFixture();
