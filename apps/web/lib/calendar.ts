@@ -435,3 +435,17 @@ export function resizedTimes(
     ? null
     : { startsAt: item.startsAt, endsAt: end.toISOString(), allDay: false };
 }
+
+/**
+ * CAL-05: the whole calendar as one `.ics` file. The browser's offset dates all-day items;
+ * notes and linked pages are included only when asked.
+ */
+export async function exportCalendar(details: boolean) {
+  const params = new URLSearchParams({
+    utcOffset: String(utcOffset(new Date())),
+    details: String(details),
+  });
+  const response = await apiRequest(`/calendar/export?${params}`, {}, 20_000);
+  const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1];
+  return { blob: await response.blob(), name: name ?? 'hucescholar-lich-hoc.ics' };
+}

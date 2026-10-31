@@ -1813,6 +1813,103 @@ describe('private material drafts', () => {
       ]);
     });
   });
+  describe('CAL-05 iCalendar export', () => {
+    const items = '/api/v1/calendar/items';
+    const exported = '/api/v1/calendar/export';
+    // Monday 3 May 2027 in Hanoi (UTC+7); away from the CAL-01…03 dates.
+    const fields = (overrides: object = {}) => ({
+      kind: 'EVENT',
+      title: 'Thực hành Địa chất',
+      details: 'Mang búa; sổ tay',
+      startsAt: '2027-05-03T00:00:00.000Z',
+      endsAt: '2027-05-03T01:30:00.000Z',
+      allDay: false,
+      color: 'blue',
+      versionId: null,
+      pageNumber: null,
+      requestId: randomUUID(),
+      ...overrides,
+    });
+    /** Unfolded lines of one VEVENT, by item id. */
+    const event = (text: string, id: string) => {
+      const all = text.replace(/\r\n /g, '').split('\r\n');
+      const start = all.indexOf(`UID:calendar-${id}@hucescholar`);
+      return start < 0 ? null : all.slice(start, all.indexOf('END:VEVENT', start));
+    };
+    it('downloads the owner’s sessions and dated open tasks, with notes only on request', async () => {
+      const weekly = await readingWrite(
+        'student',
+        items,
+        fields({ repeat: { weekdays: [1, 3], until: '2027-05-19', utcOffset: 420 } }),
+      );
+      expect(weekly.status).toBe(201);
+      const skipped = await readingWrite('student', `${items}/${weekly.body.item.id}/skip`, {
+        revision: 1,
+        occurrenceStart: '2027-05-05T00:00:00.000Z',
+      });
+      expect(skipped.status).toBe(204);
+      const task = await readingWrite(
+        'student',
+        items,
+        fields({ kind: 'TASK', title: 'Nộp bản vẽ', endsAt: null, details: '' }),
+      );
+      const done = await readingWrite(
+        'student',
+        items,
+        fields({ kind: 'TASK', title: 'Đã xong', endsAt: null }),
+      );
+      await readingWrite('student', `${items}/${done.body.item.id}/done`, { done: true }, 'put');
+      const undated = await readingWrite(
+        'student',
+        items,
+        fields({ kind: 'TASK', title: 'Chưa có ngày', startsAt: null, endsAt: null }),
+      );
+      const theirs = await readingWrite('other', items, fields({ title: 'Của người khác' }));
+      expect(theirs.status).toBe(201);
+
+      const plain = await agents.student.get(exported).query({ utcOffset: 420 });
+      expect(plain.status).toBe(200);
+      expect(plain.headers['content-type']).toBe('text/calendar; charset=utf-8');
+      expect(plain.headers['content-disposition']).toBe(
+        'attachment; filename="hucescholar-lich-hoc.ics"',
+      );
+      expect(plain.headers['cache-control']).toContain('no-store');
+      expect(plain.text.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
+      expect(event(plain.text, weekly.body.item.id)).toEqual(
+        expect.arrayContaining([
+          'DTSTART:20270503T000000Z',
+          'DTEND:20270503T013000Z',
+          'RRULE:FREQ=WEEKLY;WKST=MO;BYDAY=MO,WE;UNTIL=20270519T165959Z',
+          'EXDATE:20270505T000000Z',
+          'SUMMARY:Thực hành Địa chất',
+        ]),
+      );
+      expect(event(plain.text, task.body.item.id)).toEqual(
+        expect.arrayContaining(['SUMMARY:Việc: Nộp bản vẽ', 'TRANSP:TRANSPARENT']),
+      );
+      for (const id of [done.body.item.id, undated.body.item.id, theirs.body.item.id])
+        expect(event(plain.text, id)).toBeNull();
+      // Reminder alarms carry a DESCRIPTION of their own, so look at this event and the notes text.
+      expect(
+        event(plain.text, weekly.body.item.id)!.some((line) => line.startsWith('DESCRIPTION')),
+      ).toBe(false);
+      expect(plain.text).not.toContain('Mang búa');
+
+      const detailed = await agents.student.get(exported).query({ utcOffset: 420, details: true });
+      expect(event(detailed.text, weekly.body.item.id)).toContain('DESCRIPTION:Mang búa\\; sổ tay');
+      expect((await agents.other.get(exported).query({ utcOffset: 420 })).text).not.toContain(
+        `calendar-${weekly.body.item.id}@`,
+      );
+      for (const query of [
+        {},
+        { utcOffset: 900 },
+        { utcOffset: 'x' },
+        { utcOffset: 0, details: 'yes' },
+      ])
+        expect((await agents.student.get(exported).query(query)).status).toBe(400);
+      await request(app.getHttpServer()).get(exported).query({ utcOffset: 420 }).expect(401);
+    });
+  });
   it('study cards are private, keep their source after the highlight is deleted, and follow read access', async () => {
     const { path, id, versionId } = await readingFixture();
     const highlight = (
