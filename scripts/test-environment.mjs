@@ -171,6 +171,8 @@ try {
     ['cal2-student', 'STUDENT'],
     ['cal3-student', 'STUDENT'],
     ['cal5-student', 'STUDENT'],
+    ['cal6-admin', 'ADMIN'],
+    ['cal6-student', 'STUDENT'],
     ['ux02-admin', 'ADMIN'],
     ['ux02-student', 'STUDENT'],
     ['course1-admin', 'ADMIN'],

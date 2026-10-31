@@ -135,7 +135,14 @@ export async function calendarRange(from: Date, to: Date, signal?: AbortSignal) 
   throw new Error('Invalid calendar range.');
 }
 export async function openTasks(signal?: AbortSignal) {
-  const body: unknown = await (await apiRequest('/calendar/tasks?limit=100', { signal })).json();
+  return taskList('/calendar/tasks?limit=100', signal);
+}
+/** Done tasks, most recently finished first, one page at a time. */
+export async function doneTasks(page: number, signal?: AbortSignal) {
+  return taskList(`/calendar/tasks?status=done&limit=20&page=${page}`, signal);
+}
+async function taskList(path: string, signal?: AbortSignal) {
+  const body: unknown = await (await apiRequest(path, { signal })).json();
   if (
     isRecord(body) &&
     Array.isArray(body.items) &&
