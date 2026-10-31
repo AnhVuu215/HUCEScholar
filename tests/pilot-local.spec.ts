@@ -413,9 +413,10 @@ test('lecturer creates the next version; old notes stay on the old version', asy
 
   const student = await login(browser, 'student');
   await student.goto(`/workspace/library/versions/${versions.vi}`);
-  await expect(student.getByText('Bản công bố trước', { exact: false })).toBeVisible({
-    timeout: 30_000,
-  });
+  // VERSION-01: the notice says this is the earlier published version.
+  await expect(
+    student.getByText('Bạn đang đọc phiên bản 1, là bản công bố trước.', { exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
   const h = await headers(student);
   const old = await student.request.post(
     `/api/v1/library/versions/${versions.vi}/annotations/search`,
