@@ -44,6 +44,13 @@ test('thumbnails jump to a page and continuous scroll follows the page being rea
     ).status(),
   ).toBe(201);
 
+  // Continuous scroll is the default; the thumbnail checks below run page by page.
+  const toggle = page.getByRole('button', { name: 'Cuộn liền các trang', exact: true });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.reader-slot')).toHaveCount(2);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
   // "Các trang": one picture per page, the page being read marked, a click opens a page.
   await page.getByRole('button', { name: 'Các trang', exact: true }).click();
   const thumbnails = page.getByRole('list', { name: 'Các trang của tài liệu' });
@@ -72,7 +79,6 @@ test('thumbnails jump to a page and continuous scroll follows the page being rea
   await expect(shown(page, 1)).toBeVisible();
 
   // Continuous scroll: both pages in one column; scrolling down reads page 2.
-  const toggle = page.getByRole('button', { name: 'Cuộn liền các trang', exact: true });
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.reader-slot')).toHaveCount(2);
@@ -93,6 +99,12 @@ test('thumbnails jump to a page and continuous scroll follows the page being rea
   await expect(shown(page, 2)).toBeVisible();
   await expect(page.getByLabel('Số trang', { exact: true })).toHaveValue('2');
   await expect(page.locator('.reader-slot[data-page="2"] .reader-page')).toHaveCount(1);
+  // Resizing the window resizes every page; the page being read stays the same.
+  for (const width of [900, 1280]) {
+    await page.setViewportSize({ width, height: 720 });
+    await page.waitForTimeout(300);
+    await expect(page.getByLabel('Số trang', { exact: true })).toHaveValue('2');
+  }
   // Page 1 keeps its picture while page 2 carries the layers, including its sticky note.
   await expect(page.locator('.reader-slot[data-page="1"] .reader-slot-preview')).toHaveCount(1);
   await expect(page.locator('.reader-slot[data-page="1"] .reader-page')).toHaveCount(0);
@@ -149,4 +161,8 @@ test('thumbnails jump to a page and continuous scroll follows the page being rea
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.reader-slot')).toHaveCount(0);
   await expect(page.locator('.reader-page')).toHaveCount(1);
+  // A reader who chose page by page keeps it.
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false', { timeout: 15000 });
+  await expect(page.locator('.reader-slot')).toHaveCount(0);
 });
