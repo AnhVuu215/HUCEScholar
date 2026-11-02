@@ -31,17 +31,20 @@ export class ScanQueue implements OnModuleDestroy {
     this.queue.on('error', () => undefined);
   }
   async enqueue(id: string) {
-    const operation = this.queue.add(
-      'scan',
-      { fileId: id },
-      {
-        jobId: `file-${id}`,
-        attempts: SCAN_ATTEMPTS,
-        backoff: { type: 'exponential', delay: SCAN_BACKOFF_MS },
-        removeOnComplete: { age: 86400 },
-        removeOnFail: { age: 604800 },
-      },
-    );
+    await this.add('scan', { fileId: id }, `file-${id}`);
+  }
+  /** CANVAS-01: a re-encoded notebook image waits for the same ClamAV check as PDFs. */
+  async enqueueImage(id: string) {
+    await this.add('image', { assetId: id }, `image-${id}`);
+  }
+  private async add(name: string, data: Record<string, string>, jobId: string) {
+    const operation = this.queue.add(name, data, {
+      jobId,
+      attempts: SCAN_ATTEMPTS,
+      backoff: { type: 'exponential', delay: SCAN_BACKOFF_MS },
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+    });
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([

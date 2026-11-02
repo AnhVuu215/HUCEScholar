@@ -19,9 +19,19 @@ import {
 } from './ops/readiness.service';
 import { PdfScanner } from './files/pdf-scanner';
 import { CalendarReminders, CalendarRemindersModule } from './calendar/calendar-reminders';
+import {
+  NotebookImagesModule,
+  NotebookImagesProcessor,
+} from './notebooks/notebook-images.processor';
 
 @Module({
-  imports: [DatabaseModule, FilesModule, MaterialDraftCoreModule, CalendarRemindersModule],
+  imports: [
+    DatabaseModule,
+    FilesModule,
+    MaterialDraftCoreModule,
+    CalendarRemindersModule,
+    NotebookImagesModule,
+  ],
 })
 class FileWorkerModule {}
 async function bootstrap() {
@@ -43,10 +53,16 @@ async function bootstrap() {
   sourceWorker.on('failed', () =>
     Logger.warn('Source conversion attempt interrupted.', 'FileWorker'),
   );
+  // CANVAS-01: notebook images share the scan queue; their jobs are named 'image'.
+  const images = app.get(NotebookImagesProcessor);
   const worker = new Worker(
     PDF_QUEUE,
-    (job) =>
-      processor.process(String(job.data.fileId), job.attemptsMade + 1 >= (job.opts.attempts ?? 1)),
+    (job) => {
+      const final = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+      return job.name === 'image'
+        ? images.process(String(job.data.assetId), final)
+        : processor.process(String(job.data.fileId), final);
+    },
     { connection: queueConnection(config.redisUrl, true), concurrency: 2 },
   );
   worker.on('error', () => Logger.warn('PDF worker connection interrupted.', 'FileWorker'));
@@ -60,6 +76,7 @@ async function bootstrap() {
     try {
       await processor.reconcile();
       await sources.reconcile();
+      await images.reconcile();
     } catch {
       Logger.warn('PDF reconciliation interrupted; will retry.', 'FileWorker');
     } finally {
@@ -84,6 +101,21 @@ async function bootstrap() {
   };
   await remind();
   const remindTimer = setInterval(() => void remind(), 60_000);
+  // CANVAS-01: the notebook trash empties after 30 days; unused images are removed.
+  let sweeping = false;
+  const sweep = async () => {
+    if (sweeping) return;
+    sweeping = true;
+    try {
+      await images.sweep();
+    } catch {
+      Logger.warn('Notebook cleanup interrupted; will retry.', 'FileWorker');
+    } finally {
+      sweeping = false;
+    }
+  };
+  void sweep();
+  const sweepTimer = setInterval(() => void sweep(), 3_600_000);
   // Heartbeat and scanner state for API readiness. Both expire if this process dies without cleanup.
   const heartbeat = new Redis(queueConnection(config.redisUrl));
   heartbeat.on('error', () => undefined);
@@ -105,6 +137,7 @@ async function bootstrap() {
     closing = true;
     clearInterval(interval);
     clearInterval(remindTimer);
+    clearInterval(sweepTimer);
     clearInterval(beating);
     await heartbeat
       .del(WORKER_HEARTBEAT_KEY, SCANNER_STATUS_KEY)
