@@ -158,6 +158,7 @@ model courses {
   version_courses      version_courses[]
   reading_lists reading_lists[]
   reading_list_follows reading_list_follows[]
+  notebooks notebooks[]
 
   @@schema("hucescholar")
 }
@@ -507,6 +508,8 @@ model users {
   reading_marks reading_marks[]
   study_cards study_cards[]
   calendar_items calendar_items[]
+  notebooks notebooks[]
+  notebook_assets notebook_assets[]
 
   @@schema("hucescholar")
 }
@@ -700,6 +703,8 @@ model calendar_items {
   repeat_interval Int? @db.SmallInt
   repeat_count Int? @db.SmallInt
   remind_more Int[] @default([]) @db.SmallInt
+  notebook_id BigInt?
+  notebooks notebooks? @relation(fields: [notebook_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document_versions document_versions? @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   calendar_item_skips calendar_item_skips[]
@@ -709,6 +714,7 @@ model calendar_items {
   @@index([user_id, starts_at, id], map: "ix_calendar_owner_time")
   @@index([user_id, starts_at, id], map: "ix_calendar_open_tasks", where: raw("(((kind)::text = 'TASK'::text) AND (done_at IS NULL))"))
   @@index([version_id], map: "ix_calendar_version")
+  @@index([notebook_id], map: "ix_calendar_notebook", where: raw("(notebook_id IS NOT NULL)"))
   @@index([user_id, repeat_until], map: "ix_calendar_series", where: raw("(repeat_freq IS NOT NULL)"))
   @@index([starts_at], map: "ix_calendar_remind_single", where: raw("((remind_minutes IS NOT NULL) AND (repeat_freq IS NULL) AND (done_at IS NULL))"))
   @@index([repeat_until], map: "ix_calendar_remind_series", where: raw("((remind_minutes IS NOT NULL) AND (repeat_freq IS NOT NULL))"))
@@ -731,5 +737,76 @@ model calendar_item_skips {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   calendar_items calendar_items @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   @@id([item_id, occurrence_start])
+  @@schema("hucescholar")
+}
+
+/// CANVAS-01. Free-form notebooks private to their owner; deleted_at is the 30-day trash.
+model notebooks {
+  id BigInt @id @default(autoincrement())
+  request_id String @db.Uuid
+  user_id BigInt
+  title String @db.VarChar(120)
+  cover String @default("navy") @db.VarChar(12)
+  course_id BigInt?
+  default_size String @default("A4_PORTRAIT") @db.VarChar(16)
+  default_paper String @default("RULED_NARROW") @db.VarChar(16)
+  default_color String @default("white") @db.VarChar(8)
+  revision Int @default(1)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  deleted_at DateTime? @db.Timestamptz(6)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  courses courses? @relation(fields: [course_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  notebook_pages notebook_pages[]
+  calendar_items calendar_items[]
+  @@unique([user_id, request_id], map: "ux_notebook_request")
+  @@index([user_id, updated_at(sort: Desc), id], map: "ix_notebook_owner", where: raw("(deleted_at IS NULL)"))
+  @@index([user_id, deleted_at], map: "ix_notebook_trash", where: raw("(deleted_at IS NOT NULL)"))
+  @@index([course_id], map: "ix_notebook_course", where: raw("(course_id IS NOT NULL)"))
+  @@schema("hucescholar")
+}
+
+/// CANVAS-01. One page of a notebook; content is the API-validated vector document.
+model notebook_pages {
+  id BigInt @id @default(autoincrement())
+  request_id String @db.Uuid
+  notebook_id BigInt
+  position Int
+  size String @db.VarChar(16)
+  paper String @db.VarChar(16)
+  paper_color String @db.VarChar(8)
+  content Json @default("{\"v\": 1, \"items\": []}")
+  search_text String @default("")
+  revision Int @default(1)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  notebooks notebooks @relation(fields: [notebook_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  @@unique([notebook_id, request_id], map: "ux_notebook_page_request")
+  @@unique([notebook_id, position], map: "ux_notebook_page_position")
+  @@index([content(ops: JsonbPathOps)], map: "ix_notebook_page_content", type: Gin)
+  @@schema("hucescholar")
+}
+
+/// CANVAS-01. A re-encoded WebP image placed in a notebook; served to its owner only once SAFE.
+model notebook_assets {
+  id BigInt @id @default(autoincrement())
+  request_id String @db.Uuid
+  user_id BigInt
+  object_key String @unique @db.VarChar(80)
+  byte_size Int
+  thumb_size Int
+  width Int
+  height Int
+  sha256 String @db.Char(64)
+  scan_status String @default("CHECKING") @db.VarChar(8)
+  check_error String? @db.VarChar(24)
+  checked_at DateTime? @db.Timestamptz(6)
+  source String @db.VarChar(8)
+  source_host String? @db.VarChar(253)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  @@unique([user_id, request_id], map: "ux_notebook_asset_request")
+  @@index([user_id, created_at], map: "ix_notebook_asset_owner")
+  @@index([id], map: "ix_notebook_asset_checking", where: raw("((scan_status)::text = 'CHECKING'::text)"))
   @@schema("hucescholar")
 }

@@ -73,6 +73,12 @@ export class CalendarFieldsDto {
   @Min(1)
   @Max(2147483647)
   pageNumber!: number | null;
+  /** CANVAS-01: one of the owner's notebooks to open from this item; absent means none. */
+  @IsOptional()
+  @ValidateIf((_, value: unknown) => value !== null)
+  @IsString()
+  @Matches(/^[1-9]\d{0,18}$/)
+  notebookId: string | null = null;
   /** Only sessions repeat; absent means no repeat. */
   @IsOptional()
   @ValidateNested()

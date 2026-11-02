@@ -7,7 +7,7 @@ import {
   HeadBucketCommand,
 } from '@aws-sdk/client-s3';
 import { constants, createReadStream } from 'node:fs';
-import { access, copyFile, mkdir, rm } from 'node:fs/promises';
+import { access, copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
@@ -47,6 +47,71 @@ export class PrivateStore implements OnModuleDestroy {
     if (!(source ? /^sources\/[a-f0-9-]{36}\.docx$/ : /^quarantine\/[a-f0-9-]{36}\.pdf$/).test(key))
       throw new Error('Invalid private object key.');
     return join(this.config.root, key);
+  }
+  /** CANVAS-01: re-encoded notebook images and their thumbnails (`-t`). */
+  private imagePath(key: string) {
+    if (!/^notebook\/[a-f0-9-]{36}(?:-t)?\.webp$/.test(key))
+      throw new Error('Invalid private image key.');
+    return join(this.config.root, key);
+  }
+  async putImage(key: string, data: Buffer) {
+    const path = this.imagePath(key);
+    if (this.s3) {
+      await this.s3.send(
+        new PutObjectCommand({
+          Bucket: this.config.bucket,
+          Key: key,
+          Body: data,
+          ContentLength: data.length,
+          ContentType: 'image/webp',
+          IfNoneMatch: '*',
+        }),
+        { abortSignal: AbortSignal.timeout(30_000) },
+      );
+    } else {
+      await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+      await writeFile(path, data, { flag: 'wx', mode: 0o600 });
+    }
+  }
+  async readImage(key: string): Promise<Readable> {
+    const path = this.imagePath(key);
+    if (!this.s3) {
+      await access(path, constants.R_OK).catch((error: unknown) => {
+        throw notFound(error) ? new MissingObjectError() : error;
+      });
+      return createReadStream(path);
+    }
+    const object = await this.s3
+      .send(new GetObjectCommand({ Bucket: this.config.bucket, Key: key }), {
+        abortSignal: AbortSignal.timeout(30_000),
+      })
+      .catch((error: unknown) => {
+        throw notFound(error) ? new MissingObjectError() : error;
+      });
+    if (!(object.Body instanceof Readable)) throw new Error('Private object unavailable.');
+    return object.Body;
+  }
+  /** The local file to scan; S3 objects are copied to `target` first. */
+  async imageFile(key: string, target: string) {
+    const path = this.imagePath(key);
+    if (!this.s3) {
+      await access(path, constants.R_OK).catch((error: unknown) => {
+        throw notFound(error) ? new MissingObjectError() : error;
+      });
+      return path;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of await this.readImage(key)) chunks.push(chunk as Buffer);
+    await writeFile(target, Buffer.concat(chunks), { flag: 'wx', mode: 0o600 });
+    return target;
+  }
+  async removeImage(key: string) {
+    const path = this.imagePath(key);
+    if (this.s3)
+      await this.s3.send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: key }), {
+        abortSignal: AbortSignal.timeout(10_000),
+      });
+    else await rm(path, { force: true });
   }
   putSource(key: string, source: string, size: number) {
     return this.put(key, source, size, true);

@@ -28,6 +28,10 @@ import { SourceConversionQueue } from '../src/files/source-conversion-queue';
 import { CalendarReminders } from '../src/calendar/calendar-reminders';
 import { Mailer } from '../src/auth/mailer';
 import { AUTH_CONFIG } from '../src/auth/auth.config';
+import { thumbKey } from '../src/notebooks/notebook-assets.service';
+import { NotebookImagesProcessor } from '../src/notebooks/notebook-images.processor';
+import { PAGE_CONTENT_TYPE } from '../src/notebooks/notebooks.controller';
+import sharp from 'sharp';
 
 type Browser = ReturnType<typeof request.agent>;
 const origin = 'http://127.0.0.1:3100';
@@ -130,6 +134,16 @@ describe('private material drafts', () => {
         )
       ).rows;
       for (const row of sources) await app.get(PrivateStore).removeSource(row.object_key);
+      const images = (
+        await db.query(
+          'SELECT object_key FROM hucescholar.notebook_assets WHERE user_id=ANY($1::bigint[])',
+          [Object.values(users)],
+        )
+      ).rows;
+      for (const row of images) {
+        await app.get(PrivateStore).removeImage(row.object_key);
+        await app.get(PrivateStore).removeImage(thumbKey(row.object_key));
+      }
     }
     await app?.close();
     if (db) {
@@ -6565,5 +6579,505 @@ describe('private material drafts', () => {
     expect((await publication('lecturer', submitted.id, 'submit', { revision: 4 })).body.code).toBe(
       'ASSIGNMENT_REQUIRED',
     );
+  });
+
+  // ---- CANVAS-01 "Vở ghi" ------------------------------------------------------------------
+
+  async function nb(
+    name: string,
+    method: 'post' | 'patch' | 'delete' | 'put',
+    path: string,
+    data?: object,
+  ) {
+    const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+    return agents[name][method](`/api/v1${path}`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .send(data);
+  }
+  async function notebook(name = 'student', fields: object = {}) {
+    const result = await nb(name, 'post', '/notebooks', {
+      requestId: randomUUID(),
+      title: 'Vở Vật lý đại cương',
+      ...fields,
+    });
+    expect(result.status).toBe(201);
+    return result.body as {
+      item: { id: string; revision: number; firstPageId: string; title: string };
+      pages: { id: string; revision: number; position: number }[];
+    };
+  }
+  async function savePage(
+    name: string,
+    notebookId: string,
+    pageId: string,
+    revision: number,
+    content: unknown,
+    type = PAGE_CONTENT_TYPE,
+  ) {
+    const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+    return agents[name]
+      .put(`/api/v1/notebooks/${notebookId}/pages/${pageId}/content`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .set('Content-Type', type)
+      .set('If-Match', `"${revision}"`)
+      .send(typeof content === 'string' ? content : JSON.stringify(content));
+  }
+  async function uploadImage(name: string, bytes: Buffer, requestId = randomUUID()) {
+    const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
+    return agents[name]
+      .post('/api/v1/notebook-assets')
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .set('Content-Type', 'image/png')
+      .set('X-Upload-Id', requestId)
+      .send(bytes);
+  }
+  const textItem = (t: string) => ({
+    id: `t${randomBytes(4).toString('hex')}`,
+    type: 'text',
+    x: 40,
+    y: 40,
+    w: 300,
+    font: 'be-vietnam-pro',
+    size: 16,
+    color: '#172b45',
+    align: 'left',
+    bg: null,
+    blocks: [{ list: null, runs: [{ t }] }],
+  });
+  const smallPng = () =>
+    sharp({ create: { width: 8, height: 8, channels: 3, background: '#ffffff' } })
+      .png()
+      .toBuffer();
+
+  it('CANVAS-01 notebooks are private to their owner, admins included', async () => {
+    const { item, pages } = await notebook('student', { cover: 'mint', courseId: courses[0] });
+    expect(pages).toHaveLength(1);
+    expect(item).toMatchObject({ pageCount: 1, cover: 'mint', course: { id: courses[0] } });
+    const page = `/api/v1/notebooks/${item.id}/pages/${pages[0].id}`;
+    for (const name of ['other', 'admin', 'lecturer']) {
+      await agents[name].get(`/api/v1/notebooks/${item.id}`).expect(404);
+      await agents[name].get(page).expect(404);
+      expect((await savePage(name, item.id, pages[0].id, 1, { v: 1, items: [] })).status).toBe(404);
+      const edit = {
+        revision: 1,
+        title: 'Đổi tên',
+        cover: 'red',
+        courseId: null,
+        defaultSize: 'A4_PORTRAIT',
+        defaultPaper: 'GRID',
+        defaultColor: 'white',
+      };
+      expect((await nb(name, 'patch', `/notebooks/${item.id}`, edit)).status).toBe(404);
+      expect((await nb(name, 'delete', `/notebooks/${item.id}`, { revision: 1 })).status).toBe(404);
+      const listed = (await agents[name].get('/api/v1/notebooks').expect(200)).body.items;
+      expect(listed.map((n: { id: string }) => n.id)).not.toContain(item.id);
+    }
+    await request(app.getHttpServer()).get(`/api/v1/notebooks/${item.id}`).expect(401);
+    // Without the CSRF header a write is refused before it reaches the notebook.
+    await agents.student
+      .post('/api/v1/notebooks')
+      .set('Origin', origin)
+      .send({ requestId: randomUUID(), title: 'x' })
+      .expect(403);
+  });
+
+  it('CANVAS-01 saves pages by revision, validates content and searches typed text', async () => {
+    const { item, pages } = await notebook();
+    const pageId = pages[0].id;
+    const first = await savePage('student', item.id, pageId, 1, {
+      v: 1,
+      items: [textItem('Định luật Ôm cho đoạn mạch')],
+    });
+    expect(first.status).toBe(200);
+    expect(first.body.revision).toBe(2);
+    // The editor still on revision 1 is told, not silently overwritten.
+    const stale = await savePage('student', item.id, pageId, 1, { v: 1, items: [] });
+    expect(stale.status).toBe(409);
+    expect(stale.body).toMatchObject({ code: 'NOTEBOOK_PAGE_CONFLICT', revision: 2 });
+    expect((await savePage('student', item.id, pageId, 2, '{not json')).status).toBe(400);
+    expect(
+      (await savePage('student', item.id, pageId, 2, { v: 1, items: [{ id: 'x', type: 'html' }] }))
+        .body.code,
+    ).toBe('NOTEBOOK_PAGE_INVALID');
+    expect(
+      (await savePage('student', item.id, pageId, 2, { v: 1, items: [] }, 'application/json'))
+        .status,
+    ).toBe(415);
+    const big = { v: 1, items: [textItem('x'), { pad: 'y'.repeat(2_200_000) }] };
+    expect((await savePage('student', item.id, pageId, 2, big)).status).toBe(413);
+    const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
+    await agents.student
+      .put(`/api/v1/notebooks/${item.id}/pages/${pageId}/content`)
+      .set('Origin', origin)
+      .set('X-CSRF-Token', csrf)
+      .set('Content-Type', PAGE_CONTENT_TYPE)
+      .send('{"v":1,"items":[]}')
+      .expect(400);
+    // Another user's image cannot be placed on the page.
+    const foreign = (
+      await db.query(
+        "INSERT INTO hucescholar.notebook_assets(request_id,user_id,object_key,byte_size,thumb_size,width,height,sha256,source) VALUES(gen_random_uuid(),$1,'notebook/'||gen_random_uuid()||'.webp',10,10,1,1,repeat('0',64),'UPLOAD') RETURNING id",
+        [users.other],
+      )
+    ).rows[0].id;
+    const image = { id: 'i1', type: 'image', assetId: String(foreign), x: 0, y: 0, w: 10, h: 10 };
+    expect((await savePage('student', item.id, pageId, 2, { v: 1, items: [image] })).status).toBe(
+      400,
+    );
+    // Search folds diacritics, as in the library and the Sổ tay.
+    const found = (await agents.student.get('/api/v1/notebooks?q=dinh%20luat%20om').expect(200))
+      .body.items;
+    expect(found.map((n: { id: string }) => n.id)).toContain(item.id);
+    expect(
+      (await agents.student.get('/api/v1/notebooks?q=ohm%20xyz').expect(200)).body.items,
+    ).toEqual([]);
+    expect(
+      (await agents.other.get('/api/v1/notebooks?q=dinh%20luat').expect(200)).body.items,
+    ).toEqual([]);
+    const loaded = (
+      await agents.student.get(`/api/v1/notebooks/${item.id}/pages/${pageId}`).expect(200)
+    ).body;
+    expect(loaded.page.content.items[0].blocks[0].runs[0].t).toBe('Định luật Ôm cho đoạn mạch');
+  });
+
+  it('CANVAS-01 inserts, duplicates, reorders and deletes pages', async () => {
+    const { item, pages } = await notebook();
+    const first = pages[0].id;
+    await savePage('student', item.id, first, 1, { v: 1, items: [textItem('Trang một')] });
+    const second = (
+      await nb('student', 'post', `/notebooks/${item.id}/pages`, {
+        requestId: randomUUID(),
+        paper: 'O_LI',
+      })
+    ).body;
+    expect(second.pages.map((p: { id: string }) => p.id)).toEqual([first, second.page.id]);
+    const copy = (
+      await nb('student', 'post', `/notebooks/${item.id}/pages`, {
+        requestId: randomUUID(),
+        afterPageId: first,
+        duplicateOf: first,
+      })
+    ).body;
+    expect(copy.pages.map((p: { id: string }) => p.id)).toEqual([
+      first,
+      copy.page.id,
+      second.page.id,
+    ]);
+    const copied = (
+      await agents.student.get(`/api/v1/notebooks/${item.id}/pages/${copy.page.id}`).expect(200)
+    ).body.page;
+    expect(copied.content.items[0].blocks[0].runs[0].t).toBe('Trang một');
+    const order = [second.page.id, first, copy.page.id];
+    const reordered = (
+      await nb('student', 'post', `/notebooks/${item.id}/pages/reorder`, { order })
+    ).body;
+    expect(reordered.pages.map((p: { id: string }) => p.id)).toEqual(order);
+    expect(
+      (
+        await nb('student', 'post', `/notebooks/${item.id}/pages/reorder`, {
+          order: [first, copy.page.id],
+        })
+      ).status,
+    ).toBe(409);
+    const after = (
+      await nb('student', 'delete', `/notebooks/${item.id}/pages/${first}`, { revision: 2 })
+    ).body;
+    expect(after.pages.map((p: { id: string; position: number }) => [p.id, p.position])).toEqual([
+      [second.page.id, 0],
+      [copy.page.id, 1],
+    ]);
+    await nb('student', 'delete', `/notebooks/${item.id}/pages/${copy.page.id}`, { revision: 1 });
+    const last = await nb('student', 'delete', `/notebooks/${item.id}/pages/${second.page.id}`, {
+      revision: 1,
+    });
+    expect(last.body.code).toBe('NOTEBOOK_LAST_PAGE');
+    const changed = await nb('student', 'patch', `/notebooks/${item.id}/pages/${second.page.id}`, {
+      revision: 1,
+      size: 'INFINITE',
+      paper: 'DOT',
+      paperColor: 'dark',
+    });
+    expect(changed.body).toMatchObject({ size: 'INFINITE', paper: 'DOT', paperColor: 'dark' });
+  });
+
+  it('CANVAS-01 trash, restore, permanent delete and duplicate', async () => {
+    const { item } = await notebook('student', { title: 'Vở sẽ xóa' });
+    expect((await nb('student', 'delete', `/notebooks/${item.id}`, { revision: 9 })).status).toBe(
+      409,
+    );
+    expect((await nb('student', 'delete', `/notebooks/${item.id}`, { revision: 1 })).status).toBe(
+      204,
+    );
+    await agents.student.get(`/api/v1/notebooks/${item.id}`).expect(404);
+    const trash = (await agents.student.get('/api/v1/notebooks?trash=1').expect(200)).body;
+    expect(trash.items.map((n: { id: string }) => n.id)).toContain(item.id);
+    expect(trash.trashDays).toBe(30);
+    expect((await nb('student', 'post', `/notebooks/${item.id}/restore`)).status).toBe(200);
+    const copy = await nb('student', 'post', `/notebooks/${item.id}/duplicate`, {
+      requestId: randomUUID(),
+    });
+    expect(copy.body.item.title).toBe('Vở sẽ xóa (bản sao)');
+    // Permanent delete works only from the trash.
+    expect((await nb('student', 'delete', `/notebooks/${item.id}/permanent`)).status).toBe(404);
+    await nb('student', 'delete', `/notebooks/${item.id}`, { revision: 3 });
+    expect((await nb('other', 'delete', `/notebooks/${item.id}/permanent`)).status).toBe(404);
+    expect((await nb('student', 'delete', `/notebooks/${item.id}/permanent`)).status).toBe(204);
+    expect(
+      (await db.query('SELECT 1 FROM hucescholar.notebook_pages WHERE notebook_id=$1', [item.id]))
+        .rowCount,
+    ).toBe(0);
+  });
+
+  it("CANVAS-01 quote cards follow the owner's current access to the document", async () => {
+    const material = await published();
+    const highlight = (
+      await db.query(
+        "INSERT INTO hucescholar.annotations(user_id,version_id,page_number,kind,content,anchor,color) VALUES($1,$2,1,'TEXT_HIGHLIGHT','Ghi chú kèm',$3,'#FFF59D') RETURNING id",
+        [
+          users.student,
+          material.versionId,
+          JSON.stringify({
+            coordinateSpace: 'normalized-pdf-v1',
+            quads: [[0.1, 0.1, 0.4, 0.1, 0.4, 0.15, 0.1, 0.15]],
+            quote: 'Định luật bảo toàn năng lượng',
+          }),
+        ],
+      )
+    ).rows[0].id;
+    const othersNote = (
+      await db.query(
+        "INSERT INTO hucescholar.annotations(user_id,version_id,page_number,kind,content) VALUES($1,$2,1,'PAGE_NOTE','của người khác') RETURNING id",
+        [users.other, material.versionId],
+      )
+    ).rows[0].id;
+    const { item } = await notebook();
+    expect(
+      (
+        await nb('student', 'post', `/notebooks/${item.id}/quotes`, {
+          requestId: randomUUID(),
+          annotationIds: [String(othersNote)],
+        })
+      ).status,
+    ).toBe(404);
+    const requestId = randomUUID();
+    const added = await nb('student', 'post', `/notebooks/${item.id}/quotes`, {
+      requestId,
+      annotationIds: [String(highlight)],
+    });
+    expect(added.status).toBe(201);
+    expect(added.body.pages).toHaveLength(2);
+    // Retrying the same request does not add a second page.
+    const again = await nb('student', 'post', `/notebooks/${item.id}/quotes`, {
+      requestId,
+      annotationIds: [String(highlight)],
+    });
+    expect(again.body.pages).toHaveLength(2);
+    const path = `/api/v1/notebooks/${item.id}/pages/${added.body.page.id}`;
+    const shown = (await agents.student.get(path).expect(200)).body;
+    expect(shown.quotes[String(highlight)]).toMatchObject({
+      available: true,
+      kind: 'TEXT_HIGHLIGHT',
+      quote: 'Định luật bảo toàn năng lượng',
+      note: 'Ghi chú kèm',
+      versionId: material.versionId,
+      pageNumber: 1,
+    });
+    // A quote of someone else's note cannot be saved onto a page either.
+    const content = shown.page.content;
+    const foreignQuote = { ...content.items[0], id: 'q2', annotationId: String(othersNote) };
+    expect(
+      (
+        await savePage('student', item.id, added.body.page.id, shown.page.revision, {
+          v: 1,
+          items: [...content.items, foreignQuote],
+        })
+      ).status,
+    ).toBe(400);
+    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [
+      material.id,
+    ]);
+    try {
+      const hidden = (await agents.student.get(path).expect(200)).body;
+      expect(hidden.quotes[String(highlight)]).toEqual({ available: false });
+      expect(JSON.stringify(hidden)).not.toContain('bảo toàn');
+      // The card stays on the page and the page still saves.
+      expect(
+        (await savePage('student', item.id, added.body.page.id, shown.page.revision, content))
+          .status,
+      ).toBe(200);
+      expect(
+        (
+          await nb('student', 'post', `/notebooks/${item.id}/quotes`, {
+            requestId: randomUUID(),
+            annotationIds: [String(highlight)],
+          })
+        ).body.code,
+      ).toBe('NOTEBOOK_QUOTE_UNAVAILABLE');
+    } finally {
+      await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
+        material.id,
+      ]);
+    }
+  });
+
+  it('CANVAS-01 images are re-encoded, private and served only once checked', async () => {
+    const png = await sharp({
+      create: { width: 64, height: 32, channels: 4, background: '#33669980' },
+    })
+      .png()
+      .withExif({ IFD0: { Artist: 'gps-secret' } })
+      .toBuffer();
+    const requestId = randomUUID();
+    const uploaded = await uploadImage('student', png, requestId);
+    expect(uploaded.status).toBe(201);
+    expect(uploaded.body.item).toMatchObject({ status: 'CHECKING', width: 64, height: 32 });
+    const id = uploaded.body.item.id as string;
+    // The same request id returns the same image.
+    expect((await uploadImage('student', png, requestId)).body.item.id).toBe(id);
+    await agents.student.get(`/api/v1/notebook-assets/${id}`).expect(409);
+    const key = (
+      await db.query('SELECT object_key FROM hucescholar.notebook_assets WHERE id=$1', [id])
+    ).rows[0].object_key as string;
+    const stored = await readFile(join(app.get<FileConfiguration>(FILE_CONFIG).root, key));
+    expect(stored.subarray(8, 12).toString('latin1')).toBe('WEBP');
+    expect(stored.includes(Buffer.from('gps-secret'))).toBe(false);
+    await db.query("UPDATE hucescholar.notebook_assets SET scan_status='SAFE' WHERE id=$1", [id]);
+    const served = await agents.student
+      .get(`/api/v1/notebook-assets/${id}`)
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(served.headers['content-type']).toBe('image/webp');
+    expect(served.headers['cache-control']).toBe('no-store');
+    expect(served.headers['x-content-type-options']).toBe('nosniff');
+    expect((served.body as Buffer).equals(stored)).toBe(true);
+    await agents.student.get(`/api/v1/notebook-assets/${id}?size=thumb`).expect(200);
+    for (const name of ['other', 'admin'])
+      await agents[name].get(`/api/v1/notebook-assets/${id}`).expect(404);
+    expect(
+      (await agents.other.get(`/api/v1/notebook-assets?ids=${id}`).expect(200)).body.items,
+    ).toEqual([]);
+    expect(
+      (await agents.student.get(`/api/v1/notebook-assets?ids=${id}`).expect(200)).body.items[0],
+    ).toMatchObject({ id, status: 'SAFE' });
+    // Not an image, or an SVG that claims to be one.
+    expect((await uploadImage('student', Buffer.from('<svg onload="x"/>'))).body.code).toBe(
+      'IMAGE_UNSUPPORTED',
+    );
+    // The fetcher refuses internal addresses.
+    const fetched = await nb('student', 'post', '/notebook-assets/from-url', {
+      requestId: randomUUID(),
+      url: 'http://169.254.169.254/latest/meta-data',
+    });
+    expect(fetched.body.code).toBe('IMAGE_URL_BLOCKED');
+    const usage = (await agents.student.get('/api/v1/notebooks/usage').expect(200)).body;
+    expect(usage.imageCount).toBeGreaterThanOrEqual(1);
+    expect(usage.imageLimit).toBe(1024 * 1024 * 1024);
+  });
+
+  it('CANVAS-01 refuses images past the 1 GB quota', async () => {
+    await db.query(
+      "INSERT INTO hucescholar.notebook_assets(request_id,user_id,object_key,byte_size,thumb_size,width,height,sha256,source) SELECT gen_random_uuid(),$1,'notebook/'||gen_random_uuid()||'.webp',10485760,10485760,1,1,repeat('0',64),'UPLOAD' FROM generate_series(1,52)",
+      [users.lecturer],
+    );
+    try {
+      const refused = await uploadImage('lecturer', await smallPng());
+      expect(refused.status).toBe(413);
+      expect(refused.body.code).toBe('NOTEBOOK_QUOTA');
+    } finally {
+      await db.query('DELETE FROM hucescholar.notebook_assets WHERE user_id=$1', [users.lecturer]);
+    }
+  });
+
+  it('CANVAS-01 worker empties the trash after 30 days and removes unused images', async () => {
+    const processor = new NotebookImagesProcessor(
+      app.get(DatabaseService),
+      app.get(PrivateStore),
+      app.get(ScanQueue),
+      app.get<FileConfiguration>(FILE_CONFIG),
+    );
+    const used = (await uploadImage('student', await smallPng())).body.item.id as string;
+    const unused = (await uploadImage('student', await smallPng())).body.item.id as string;
+    const old = (await notebook('student', { title: 'Vở cũ' })).item;
+    const kept = await notebook('student', { title: 'Vở giữ ảnh' });
+    const image = { id: 'i1', type: 'image', assetId: used, x: 0, y: 0, w: 8, h: 8 };
+    await savePage('student', kept.item.id, kept.pages[0].id, 1, { v: 1, items: [image] });
+    await db.query(
+      "UPDATE hucescholar.notebooks SET deleted_at=now()-interval '31 days' WHERE id=$1",
+      [old.id],
+    );
+    await db.query(
+      "UPDATE hucescholar.notebook_assets SET created_at=now()-interval '2 days' WHERE id=ANY($1::bigint[])",
+      [[used, unused]],
+    );
+    const unusedKey = (
+      await db.query('SELECT object_key FROM hucescholar.notebook_assets WHERE id=$1', [unused])
+    ).rows[0].object_key as string;
+    const result = await processor.sweep();
+    expect(result.notebooks).toBeGreaterThanOrEqual(1);
+    expect(
+      (await db.query('SELECT 1 FROM hucescholar.notebooks WHERE id=$1', [old.id])).rowCount,
+    ).toBe(0);
+    const left = (
+      await db.query(
+        'SELECT id::text FROM hucescholar.notebook_assets WHERE id=ANY($1::bigint[])',
+        [[used, unused]],
+      )
+    ).rows.map((r) => r.id);
+    expect(left).toEqual([used]);
+    await expect(
+      readFile(join(app.get<FileConfiguration>(FILE_CONFIG).root, unusedKey)),
+    ).rejects.toThrow();
+    // An image whose bytes vanished is recorded as such, not retried forever.
+    const vanished = (await uploadImage('student', await smallPng())).body.item.id as string;
+    const key = (
+      await db.query('SELECT object_key FROM hucescholar.notebook_assets WHERE id=$1', [vanished])
+    ).rows[0].object_key as string;
+    await app.get(PrivateStore).removeImage(key);
+    await expect(processor.process(vanished, false)).rejects.toBeInstanceOf(UnrecoverableError);
+    expect(
+      (
+        await db.query(
+          'SELECT scan_status, check_error FROM hucescholar.notebook_assets WHERE id=$1',
+          [vanished],
+        )
+      ).rows[0],
+    ).toEqual({ scan_status: 'FAILED', check_error: 'FILE_MISSING' });
+  });
+
+  it("CANVAS-01 a calendar item opens one of the owner's notebooks", async () => {
+    const mine = (await notebook('student', { title: 'Vở ôn thi' })).item;
+    const theirs = (await notebook('other', { title: 'Vở người khác' })).item;
+    const event = (notebookId: string | null) => ({
+      requestId: randomUUID(),
+      kind: 'EVENT',
+      title: 'Ôn chương 2',
+      startsAt: '2026-11-10T01:00:00.000Z',
+      endsAt: '2026-11-10T02:00:00.000Z',
+      allDay: false,
+      versionId: null,
+      pageNumber: null,
+      notebookId,
+    });
+    expect((await nb('student', 'post', '/calendar/items', event(theirs.id))).status).toBe(404);
+    const created = await nb('student', 'post', '/calendar/items', event(mine.id));
+    expect(created.status).toBe(201);
+    expect(created.body.item.notebook).toEqual({ id: mine.id, title: 'Vở ôn thi' });
+    const plain = await nb('student', 'post', '/calendar/items', event(null));
+    expect(plain.body.item.notebook).toBeNull();
+    await nb('student', 'delete', `/notebooks/${mine.id}`, { revision: 1 });
+    const range = (
+      await agents.student
+        .get('/api/v1/calendar/items?from=2026-11-09T00:00:00.000Z&to=2026-11-11T00:00:00.000Z')
+        .expect(200)
+    ).body.items;
+    expect(range.find((i: { id: string }) => i.id === created.body.item.id).notebook).toBeNull();
   });
 });
