@@ -1,4 +1,5 @@
 import { expect, test } from './helpers/test';
+import { navLink } from './helpers/navigation';
 import { randomBytes } from 'node:crypto';
 import { captureCatalog } from './catalog-capture';
 
@@ -24,7 +25,7 @@ test('admin assigns and revokes a course; lecturer sees only their assignments a
     headers,
     data: { code, name: 'Môn kiểm thử phân công', facultyId: faculty.item.id },
   });
-  await page.getByRole('link', { name: 'Phân công giảng viên', exact: true }).click();
+  await (await navLink(page, 'Phân công giảng viên')).click();
   await page.getByRole('button', { name: 'Phân công giảng viên', exact: true }).click();
   await page.getByLabel('Tìm giảng viên', { exact: true }).fill('e2e-lecturer@example.test');
   const lecturerOption = page
@@ -63,7 +64,7 @@ test('admin assigns and revokes a course; lecturer sees only their assignments a
     await lecturer.getByLabel('Email', { exact: true }).fill('e2e-lecturer@example.test');
     await lecturer.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
     await lecturer.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-    await lecturer.getByRole('link', { name: 'Phân công của tôi', exact: true }).click();
+    await (await navLink(lecturer, 'Phân công của tôi')).click();
     await lecturer.getByLabel('Tìm phân công', { exact: true }).fill(code);
     await lecturer.getByRole('button', { name: 'Áp dụng', exact: true }).click();
     await expect(lecturer.getByRole('row').filter({ hasText: code })).toContainText('Hiện hành');

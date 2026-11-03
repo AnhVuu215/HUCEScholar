@@ -56,7 +56,8 @@ const views: [View, string, string][] = [
   ['agenda', 'Lịch biểu', 'A'],
 ];
 const AGENDA_DAYS = 30;
-const HOUR_PX = 48;
+/** Height of one hour in the week grid; matches `--calendar-hour` in workspace-ui.css. */
+const HOUR_PX = 64;
 const MONTH_CHIPS = 3;
 
 function bounds(view: View, anchor: Date) {

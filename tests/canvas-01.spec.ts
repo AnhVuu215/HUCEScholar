@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './helpers/test';
+import { closeNavigation, navLink } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
 import { openReaderFixture, readerHeaders, readerLogin } from './helpers/reader-session';
@@ -66,8 +67,8 @@ test('a notebook keeps ink, Vietnamese text and images, pages reorder, conflicts
   const title = `Vở Giải tích ${randomUUID().slice(0, 8)}`;
 
   await page.goto('/workspace/notes');
-  // The shelf keeps the usual sidebar; only an open notebook folds it into the ☰ menu.
-  await expect(page.getByRole('link', { name: 'Vở ghi', exact: true })).toBeVisible();
+  await expect(await navLink(page, 'Vở ghi')).toHaveAttribute('aria-current', 'page');
+  await closeNavigation(page);
   await page.getByRole('button', { name: '+ Vở mới' }).click();
   await page.getByLabel('Tên vở').fill(title);
   await page.getByRole('radio', { name: 'Vở ô li (4 ô)' }).check();
