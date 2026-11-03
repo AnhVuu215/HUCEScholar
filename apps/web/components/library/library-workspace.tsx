@@ -11,6 +11,7 @@ export function LibraryWorkspace({
   readingLists = false,
   study = false,
   notebook = false,
+  notes = false,
   calendar = false,
 }: {
   children: ReactNode;
@@ -21,6 +22,7 @@ export function LibraryWorkspace({
   readingLists?: boolean;
   study?: boolean;
   notebook?: boolean;
+  notes?: boolean;
   calendar?: boolean;
 }) {
   const [role, setRole] = useState<Role | null>(null),
@@ -72,15 +74,17 @@ export function LibraryWorkspace({
           ? undefined
           : calendar
             ? 'calendar'
-            : notebook
-              ? 'notebook'
-              : study
-                ? 'study'
-                : readingLists
-                  ? 'readingLists'
-                  : personal
-                    ? 'personal'
-                    : 'library'
+            : notes
+              ? 'notes'
+              : notebook
+                ? 'notebook'
+                : study
+                  ? 'study'
+                  : readingLists
+                    ? 'readingLists'
+                    : personal
+                      ? 'personal'
+                      : 'library'
       }
     >
       {children}

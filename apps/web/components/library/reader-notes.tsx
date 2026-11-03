@@ -16,6 +16,7 @@ import { pagePointToPosition, pinBox, type HighlightSurface } from '../../lib/hi
 import { useNotesLeaveGuard } from './use-notes-leave-guard';
 import { useAnnotationEditor, useAnnotationPanel } from './reader-annotation-panel';
 import { ReviewMarkButton, useReviewMark } from './notebook-parts';
+import { AddToNotebookButton } from '../notes/add-to-notebook';
 const samePosition = (a: NotePosition | null, b: NotePosition | null) =>
   a === b || (!!a && !!b && a.x === b.x && a.y === b.y);
 /** Pointer travel (CSS px) before a press on a sticky note counts as dragging, not a click. */
@@ -539,6 +540,7 @@ export function ReaderNotes({
                 busy={review.marking === note.id}
                 onClick={() => void review.mark(note)}
               />
+              <AddToNotebookButton annotationIds={[note.id]} disabled={!!editing} />
             </div>
             {deleting?.id === note.id && (
               <div className="note-delete">

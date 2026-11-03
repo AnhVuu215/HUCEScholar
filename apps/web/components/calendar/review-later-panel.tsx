@@ -11,6 +11,7 @@ import {
 } from '../../lib/personal-library';
 import { SelectField } from '../ui/select-field';
 import { ScheduleReading } from './schedule-reading';
+import { CourseNotebooks } from '../notes/course-notebooks';
 
 /** The notebook's review session (LEARN-04) over these marks, under the same filters. */
 function sessionHref(scope: ReviewLaterScope) {
@@ -98,6 +99,7 @@ export function ReviewLaterPanel({ onScheduled }: { onScheduled: () => void }) {
           />
         </div>
       )}
+      <CourseNotebooks courseId={scope.courseId || undefined} />
       {items && items.length > 0 && (
         <Link className="secondary-button" href={sessionHref(scope)}>
           Ôn lần lượt {total} mục{filtered ? ' đang lọc' : ''}
