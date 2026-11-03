@@ -6141,6 +6141,14 @@ describe('private material drafts', () => {
       expect((await review(item.requestId, decision())).body.code).toBe('MANAGER_UNAVAILABLE');
     } finally {
       await db.query("UPDATE hucescholar.users SET status='ACTIVE' WHERE id=$1", [users.other]);
+      // The lock revoked the shared fixture's session (database trigger); later suites use it.
+      const csrf = (await agents.other.get('/api/v1/auth/csrf')).body.csrfToken;
+      await agents.other
+        .post('/api/v1/auth/login')
+        .set('Origin', origin)
+        .set('X-CSRF-Token', csrf)
+        .send({ email: `${prefix}-other@example.test`, password })
+        .expect(200);
     }
   });
   async function wordUpload(
