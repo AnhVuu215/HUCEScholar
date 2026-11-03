@@ -38,19 +38,15 @@ import {
   type ShapeKind,
   type StickerItem,
   type StrokeItem,
+  type TableItem,
   type TextItem,
 } from '../../lib/note-model';
 import type { PageSummary } from '../../lib/notes';
 import { NotePaper } from './note-paper';
-import {
-  NoteDefs,
-  NoteItems,
-  ShapeNode,
-  StrokeShape,
-  strokeOutline,
-  type RenderContext,
-} from './note-render';
+import { NoteDefs, NoteItems, ShapeNode, strokeOutline, type RenderContext } from './note-render';
 import { NoteTextEditor } from './note-text-editor';
+import { NoteTableEditor } from './note-table-editor';
+import { edgeRail, hitRuler, knobAngle, onRail, RulerView, type Ruler } from './note-ruler';
 
 export type Tool =
   'pen' | 'highlighter' | 'eraser' | 'shape' | 'text' | 'select' | 'lasso' | 'hand';
@@ -89,7 +85,13 @@ type Gesture =
       timer?: ReturnType<typeof setTimeout>;
       shape?: Omit<ShapeItem, 'id' | 'type'>;
       straight: boolean;
+      /** Set when the stroke started along the ruler: every point lands on this line. */
+      rail?: { a: Point; u: Point };
+      /** Where the pointer is predicted to be next; drawn ahead of the ink, never saved. */
+      ahead?: number[];
     }
+  | { kind: 'ruler-move'; pointerId: number; start: Point; from: Ruler }
+  | { kind: 'ruler-turn'; pointerId: number; from: Ruler }
   | { kind: 'erase'; pointerId: number; base: PageItem[]; last: Point }
   | { kind: 'shape'; pointerId: number; start: Point; current: Point; constrain: boolean }
   | {
@@ -116,7 +118,6 @@ type Gesture =
   | { kind: 'pinch'; ids: [number, number]; startDistance: number; startMid: Point; view: View };
 
 type Live =
-  | { kind: 'stroke'; tool: PenTool; color: string; width: number; points: number[] }
   | { kind: 'shape'; shape: Omit<ShapeItem, 'id' | 'type'> }
   | { kind: 'marquee'; rect: Rect }
   | { kind: 'lasso'; points: Point[] }
@@ -195,6 +196,8 @@ export function NoteCanvas({
   onImageEdit,
   spaceHeld,
   onSelectionChange,
+  ruler = null,
+  setRuler,
 }: {
   summary: PageSummary;
   items: PageItem[];
@@ -210,13 +213,17 @@ export function NoteCanvas({
   setView: (view: View | ((view: View) => View)) => void;
   heights: Map<string, number>;
   onMeasure: (id: string, height: number) => void;
-  editing: { item: TextItem; isNew: boolean } | null;
-  setEditing: (editing: { item: TextItem; isNew: boolean } | null) => void;
+  /** A text box or a table being edited in place (CANVAS-03). */
+  editing: { item: TextItem | TableItem; isNew: boolean } | null;
+  setEditing: (editing: { item: TextItem | TableItem; isNew: boolean } | null) => void;
   onDropFiles: (files: File[], at: Point) => void;
   onDropData: (data: DataTransfer, at: Point) => void;
   onImageEdit: (item: ImageItem) => void;
   spaceHeld: boolean;
   onSelectionChange?: () => void;
+  /** CANVAS-03: the straightedge, when shown. */
+  ruler?: Ruler | null;
+  setRuler?: (ruler: Ruler) => void;
 }) {
   const svg = useRef<SVGSVGElement>(null);
   const container = useRef<HTMLDivElement>(null);
@@ -224,6 +231,11 @@ export function NoteCanvas({
   const touches = useRef(new Map<number, Point>());
   const penSeen = useRef(false);
   const frame = useRef(0);
+  // The stroke being drawn is painted straight into this path once per frame, outside React,
+  // so a long stroke does not re-render the canvas at every pointer move.
+  const inkPath = useRef<SVGPathElement>(null);
+  const inkFrame = useRef(0);
+  const inkClear = useRef(false);
   const [live, setLive] = useState<Live>(null);
   const [hover, setHover] = useState<Point | null>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -257,6 +269,36 @@ export function NoteCanvas({
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => setLive(next));
   };
+  function paintInk() {
+    const path = inkPath.current;
+    const g = gesture.current;
+    if (!path) return;
+    if (g?.kind !== 'draw' || g.shape) {
+      path.setAttribute('d', '');
+      return;
+    }
+    const points = g.ahead?.length ? g.points.concat(g.ahead) : g.points;
+    path.setAttribute('d', strokeOutline({ tool: g.tool, width: g.width, points }, false));
+    path.setAttribute('fill', g.color);
+    path.setAttribute(
+      'opacity',
+      g.tool === 'highlighter' ? '0.42' : g.tool === 'pencil' ? '0.82' : '1',
+    );
+    if (g.tool === 'pencil') path.setAttribute('filter', 'url(#note-pencil)');
+    else path.removeAttribute('filter');
+    path.style.mixBlendMode = g.tool === 'highlighter' ? 'multiply' : '';
+  }
+  const scheduleInk = () => {
+    cancelAnimationFrame(inkFrame.current);
+    inkFrame.current = requestAnimationFrame(paintInk);
+  };
+  // A finished stroke leaves the live path only once React has drawn the saved one, so the
+  // ink never blinks between the two.
+  useLayoutEffect(() => {
+    if (!inkClear.current) return;
+    inkClear.current = false;
+    if (gesture.current?.kind !== 'draw') inkPath.current?.setAttribute('d', '');
+  }, [items]);
 
   // Wheel: scroll pans, Ctrl/⌘ + wheel (and trackpad pinch) zooms around the pointer.
   useEffect(() => {
@@ -296,11 +338,15 @@ export function NoteCanvas({
     return item && (item.type === 'image' || item.type === 'sticker') ? item : null;
   }, [items, selection]);
 
-  function endGesture() {
+  function endGesture(committed = false) {
     const g = gesture.current;
     if (g?.kind === 'draw' && g.timer) clearTimeout(g.timer);
     gesture.current = null;
     cancelAnimationFrame(frame.current);
+    cancelAnimationFrame(inkFrame.current);
+    // A committed stroke clears the live ink after its own render; anything else clears now.
+    if (committed) inkClear.current = true;
+    else inkPath.current?.setAttribute('d', '');
     setLive(null);
   }
 
@@ -360,23 +406,40 @@ export function NoteCanvas({
       startPan(event);
       return;
     }
+    // The ruler sits over the page: its knob turns it, its body moves it, and ink started
+    // along an edge follows that edge.
+    const onRuler = ruler && setRuler ? hitRuler(ruler, p, view.zoom) : null;
+    if (ruler && (onRuler === 'knob' || onRuler === 'body')) {
+      gesture.current =
+        onRuler === 'knob'
+          ? { kind: 'ruler-turn', pointerId: event.pointerId, from: ruler }
+          : { kind: 'ruler-move', pointerId: event.pointerId, start: p, from: ruler };
+      return;
+    }
     switch (tool) {
       case 'pen':
       case 'highlighter': {
         const pressure = event.pointerType === 'pen' ? event.pressure || 0.5 : 0.5;
         const highlighter = tool === 'highlighter';
+        const inkWidth = highlighter ? settings.hlWidth : settings.penWidth;
+        const rail =
+          ruler && onRuler && typeof onRuler === 'object'
+            ? edgeRail(ruler, onRuler.edge, inkWidth)
+            : undefined;
+        const start = rail ? onRail(rail, p) : p;
         gesture.current = {
           kind: 'draw',
           pointerId: event.pointerId,
           tool: highlighter ? 'highlighter' : settings.pen,
           color: highlighter ? settings.hlColor : settings.penColor,
           width: highlighter ? settings.hlWidth : settings.penWidth,
-          points: [round(p.x), round(p.y), pressure],
+          points: [round(start.x), round(start.y), pressure],
           anchor: p,
           straight: highlighter && event.shiftKey,
+          rail,
         };
         armHold();
-        schedule(liveStroke());
+        scheduleInk();
         return;
       }
       case 'eraser': {
@@ -401,7 +464,7 @@ export function NoteCanvas({
         return;
       case 'text': {
         const hit = topItemAt(itemsRef.current, p, 4 / view.zoom, heights);
-        if (hit?.type === 'text') setEditing({ item: hit, isNew: false });
+        if (hit?.type === 'text' || hit?.type === 'table') setEditing({ item: hit, isNew: false });
         else
           setEditing({
             item: emptyText(p.x - 6, p.y - settings.textSize * 0.75, {
@@ -494,16 +557,10 @@ export function NoteCanvas({
     }
   }
 
-  function liveStroke(): Live {
-    const g = gesture.current;
-    if (g?.kind !== 'draw') return null;
-    if (g.shape) return { kind: 'shape', shape: g.shape };
-    return { kind: 'stroke', tool: g.tool, color: g.color, width: g.width, points: g.points };
-  }
   /** "Vẽ rồi giữ yên": after half a second without moving, the stroke becomes a clean shape. */
   function armHold() {
     const g = gesture.current;
-    if (g?.kind !== 'draw' || g.tool === 'highlighter') return;
+    if (g?.kind !== 'draw' || g.tool === 'highlighter' || g.rail) return;
     if (g.timer) clearTimeout(g.timer);
     g.timer = setTimeout(() => {
       const current = gesture.current;
@@ -522,6 +579,7 @@ export function NoteCanvas({
         dash: false,
       };
       setLive({ kind: 'shape', shape: g.shape });
+      inkPath.current?.setAttribute('d', '');
     }, 550);
   }
   function shapeFrom(a: Point, b: Point): Omit<ShapeItem, 'id' | 'type'> {
@@ -602,21 +660,41 @@ export function NoteCanvas({
         }
         const events = event.nativeEvent.getCoalescedEvents?.() ?? [event.nativeEvent];
         for (const e of events.length ? events : [event.nativeEvent]) {
-          const q = toPage(e.clientX, e.clientY);
+          const raw = toPage(e.clientX, e.clientY);
+          const q = g.rail ? onRail(g.rail, raw) : raw;
           const pressure = e.pointerType === 'pen' ? e.pressure || 0.5 : 0.5;
           if (g.straight)
             g.points = [g.points[0], g.points[1], g.points[2], round(q.x), round(q.y), pressure];
           else g.points.push(round(q.x), round(q.y), pressure);
         }
+        // Predicted points (Chrome) keep the ink under the pen tip; they are dropped on release.
+        if (!g.straight) {
+          const ahead = event.nativeEvent.getPredictedEvents?.() ?? [];
+          g.ahead = ahead.slice(0, 2).flatMap((e) => {
+            const raw = toPage(e.clientX, e.clientY);
+            const q = g.rail ? onRail(g.rail, raw) : raw;
+            return [round(q.x), round(q.y), e.pointerType === 'pen' ? e.pressure || 0.5 : 0.5];
+          });
+        }
         if (Math.hypot(p.x - g.anchor.x, p.y - g.anchor.y) > 3 / view.zoom) {
           g.anchor = p;
           armHold();
         }
-        schedule(liveStroke());
+        scheduleInk();
         return;
       }
       case 'erase':
         erase(p);
+        return;
+      case 'ruler-move':
+        setRuler?.({
+          ...g.from,
+          x: round(g.from.x + p.x - g.start.x),
+          y: round(g.from.y + p.y - g.start.y),
+        });
+        return;
+      case 'ruler-turn':
+        setRuler?.({ ...g.from, angle: knobAngle(g.from, p, event.shiftKey) });
         return;
       case 'shape': {
         const end = event.shiftKey ? constrainShape(settings.shape, g.start, p) : p;
@@ -672,6 +750,7 @@ export function NoteCanvas({
     }
     if (g.pointerId !== event.pointerId) return;
     const cancelled = event.type === 'pointercancel';
+    let inked = false;
     switch (g.kind) {
       case 'draw': {
         if (g.timer) clearTimeout(g.timer);
@@ -689,6 +768,7 @@ export function NoteCanvas({
           points: simplifyStroke(g.points, g.tool === 'highlighter' ? 0.8 : 0.3),
         };
         commit([...itemsRef.current, ...splitLongStroke(stroke)]);
+        inked = true;
         break;
       }
       case 'erase':
@@ -722,7 +802,7 @@ export function NoteCanvas({
         break;
       }
     }
-    endGesture();
+    endGesture(inked);
     onSelectionChange?.();
   }
 
@@ -730,7 +810,7 @@ export function NoteCanvas({
     if (tool !== 'select' && tool !== 'lasso') return;
     const p = toPage(event.clientX, event.clientY);
     const hit = topItemAt(itemsRef.current, p, 6 / view.zoom, heights);
-    if (hit?.type === 'text') setEditing({ item: hit, isNew: false });
+    if (hit?.type === 'text' || hit?.type === 'table') setEditing({ item: hit, isNew: false });
     if (hit?.type === 'image') onImageEdit(hit);
   }
 
@@ -852,15 +932,7 @@ export function NoteCanvas({
           />
           <g clipPath={box ? `url(#${clip})` : undefined}>
             <NoteItems items={items} ctx={renderCtx} />
-            {live?.kind === 'stroke' && (
-              <StrokeShape
-                item={live}
-                d={strokeOutline(
-                  { tool: live.tool, width: live.width, points: live.points },
-                  false,
-                )}
-              />
-            )}
+            <path ref={inkPath} d="" pointerEvents="none" />
             {live?.kind === 'shape' && <ShapeNode item={live.shape} />}
           </g>
           {live?.kind === 'marquee' && (
@@ -884,6 +956,7 @@ export function NoteCanvas({
               strokeDasharray={`${4 / view.zoom} ${3 / view.zoom}`}
             />
           )}
+          {ruler && <RulerView ruler={ruler} zoom={view.zoom} />}
           {selectionRect && !editing && (tool === 'select' || tool === 'lasso') && (
             <g className="note-selection" data-note-selection={selection.length}>
               <rect
@@ -949,24 +1022,34 @@ export function NoteCanvas({
           )}
         </g>
       </svg>
-      {editing && (
+      {editing?.item.type === 'text' && (
         <NoteTextEditor
           key={editing.item.id}
           item={editing.item}
           view={view}
           onChange={(item) => setEditing({ ...editing, item })}
-          onDone={(item) => finishText(item)}
+          onDone={(item) => finishEdit(item)}
+        />
+      )}
+      {editing?.item.type === 'table' && (
+        <NoteTableEditor
+          key={editing.item.id}
+          item={editing.item}
+          view={view}
+          onChange={(item) => setEditing({ ...editing, item })}
+          onDone={(item) => finishEdit(item)}
         />
       )}
       {dragOver && <div className="note-drop-hint">Thả ảnh vào trang</div>}
     </div>
   );
 
-  function finishText(item: TextItem) {
+  function finishEdit(item: TextItem | TableItem) {
     const draft = editing;
     setEditing(null);
     if (!draft) return;
-    const empty = !item.blocks.some((b) => b.runs.some((r) => r.t.trim()));
+    // An empty text box is dropped; a table stays even with blank cells (it is a layout).
+    const empty = item.type === 'text' && !item.blocks.some((b) => b.runs.some((r) => r.t.trim()));
     const current = itemsRef.current;
     if (draft.isNew) {
       if (!empty) commit([...current, item]);
