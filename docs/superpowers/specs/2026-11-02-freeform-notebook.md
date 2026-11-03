@@ -1,6 +1,6 @@
 # CANVAS — Vở ghi tự do
 
-Trạng thái: đề xuất ngày 02/11/2026, **chưa triển khai**. Mã hạng mục: CANVAS-01.
+Trạng thái: đề xuất ngày 02/11/2026, **đã triển khai** ngày 03/11/2026 ([mốc triển khai](../../implementation/2026-11-03-freeform-notebook.md), có ghi phần khác thiết kế và phần chưa làm). Mã hạng mục: CANVAS-01.
 
 ## Mục tiêu
 

@@ -14,6 +14,7 @@ export type WorkspaceSection =
   | 'readingEditor'
   | 'study'
   | 'notebook'
+  | 'notes'
   | 'calendar';
 export interface WorkspaceLink {
   section: WorkspaceSection;
@@ -37,6 +38,7 @@ export function workspaceNavigation(role: Role): WorkspaceGroup[] {
       },
       { section: 'personal', href: '/workspace/personal-library', label: 'Thư viện của tôi' },
       { section: 'notebook', href: '/workspace/notebook', label: 'Sổ tay' },
+      { section: 'notes', href: '/workspace/notes', label: 'Vở ghi' },
       { section: 'study', href: '/workspace/study', label: 'Thẻ ôn tập' },
       { section: 'calendar', href: '/workspace/calendar', label: 'Lịch học' },
     ],

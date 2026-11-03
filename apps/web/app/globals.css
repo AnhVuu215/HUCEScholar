@@ -2,6 +2,8 @@
 @import 'pdfjs-dist/web/pdf_viewer.css';
 @import './workspace-ui.css';
 @import './reader-annotations.css';
+@import './notes-fonts.css';
+@import './notes.css';
 
 .library-list {
   list-style: none;

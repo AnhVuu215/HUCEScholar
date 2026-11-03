@@ -42,7 +42,7 @@ QA-02 [chạy lại cả bộ e2e](../implementation/2026-10-31-e2e-rerun.md) sa
 
 ## Cập nhật 02/11
 
-Chủ dự án đề xuất CANVAS-01 **Vở ghi tự do**: một chỗ ghi chép giống app take note trên iPad. Có trang mới với nhiều kiểu giấy (gồm vở ô li), bút, bút dạ, tẩy, gõ chữ chọn font, kéo ảnh từ Google, trang trí, và thẻ trích dẫn mở lại đúng tài liệu/trang. [Thiết kế](../superpowers/specs/2026-11-02-freeform-notebook.md) đã viết, **chưa triển khai**.
+Chủ dự án đề xuất CANVAS-01 **Vở ghi tự do**: một chỗ ghi chép giống app take note trên iPad. Có trang mới với nhiều kiểu giấy (gồm vở ô li), bút, bút dạ, tẩy, gõ chữ chọn font, kéo ảnh từ Google, trang trí, và thẻ trích dẫn mở lại đúng tài liệu/trang. [Thiết kế](../superpowers/specs/2026-11-02-freeform-notebook.md) đã viết và [đã triển khai ngày 03/11](../implementation/2026-11-03-freeform-notebook.md) trong một PR. Còn lại cache canvas theo ô cho trang rất nhiều nét (chờ số đo PERF-01) và kiểm chứng trên thiết bị cảm ứng (đang hoãn).
 
 ## Bổ sung yêu cầu V2 ngày 17/10
 

@@ -17,6 +17,8 @@ import { personalError } from '../../lib/reading';
 import { SelectField } from '../ui/select-field';
 import { NotebookEntryEdit } from './notebook-entry-edit';
 import { NotebookReview } from './notebook-review';
+import { AddToNotebookButton } from '../notes/add-to-notebook';
+import { CourseNotebooks } from '../notes/course-notebooks';
 import {
   AnnotationFilterFields,
   AnnotationSummary,
@@ -201,6 +203,14 @@ function NotebookResults({ filters }: { filters: NotebookFilters }) {
           <Link href="/workspace/library">kho học liệu</Link> để ghi chú khi đọc.
         </p>
       )}
+      <CourseNotebooks courseId={filters.courseId} />
+      {/* CANVAS-01: the listed entries (up to 20) become quote cards in a notebook. */}
+      {items.some((entry) => entry.material) && (
+        <AddToNotebookButton
+          annotationIds={items.filter((entry) => entry.material).map((entry) => entry.id)}
+          label="Ghi các mục đang hiện vào vở (tối đa 20)"
+        />
+      )}
       {/* Focus lands here after a delete, since the entry and its buttons are gone. */}
       <p ref={removedNotice} role="status" className="field-hint" tabIndex={-1}>
         {removed}
@@ -237,6 +247,7 @@ function NotebookResults({ filters }: { filters: NotebookFilters }) {
                     busy={review.marking === item.id}
                     onClick={() => void review.mark(item)}
                   />
+                  {group.material && <AddToNotebookButton annotationIds={[item.id]} />}
                   {group.material && (
                     <NotebookEntryEdit
                       item={item}
