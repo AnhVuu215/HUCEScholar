@@ -11,6 +11,7 @@ import {
   type ShapeItem,
   type StickerItem,
   type StrokeItem,
+  type TableItem,
   type TextItem,
 } from '../../lib/note-model';
 import { assetUrl, type AssetInfo, type QuoteView } from '../../lib/notes';
@@ -510,7 +511,83 @@ function ItemNode({ item, ctx }: { item: PageItem; ctx: RenderContext }) {
       return <StickerNode item={item} />;
     case 'quote':
       return <QuoteNode item={item} ctx={ctx} />;
+    case 'table':
+      return <TableNode item={item} onMeasure={ctx.onMeasure} />;
   }
+}
+
+// ---- Tables ------------------------------------------------------------------------------------
+
+/** The shared look of a table on the page and in its editor; cells are plain text. */
+export function tableStyles(item: TableItem) {
+  const table: CSSProperties = {
+    width: `${item.w}px`,
+    tableLayout: 'fixed',
+    borderCollapse: 'collapse',
+    fontFamily: fontFamily(item.font),
+    fontSize: `${item.size}px`,
+    lineHeight: 1.4,
+    color: item.color,
+    background: '#ffffff',
+    margin: 0,
+  };
+  const cell = (row: number): CSSProperties => ({
+    border: `1px solid ${item.border}`,
+    padding: '5px 8px',
+    verticalAlign: 'top',
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'anywhere',
+    textAlign: 'left',
+    fontWeight: item.header && row === 0 ? 700 : 400,
+    background: item.header && row === 0 ? `${item.border}33` : 'transparent',
+  });
+  return { table, cell };
+}
+function TableNode({
+  item,
+  onMeasure,
+}: {
+  item: TableItem;
+  onMeasure?: RenderContext['onMeasure'];
+}) {
+  const ref = useRef<HTMLTableElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || !onMeasure) return;
+    onMeasure(item.id, node.offsetHeight);
+    const observer = new ResizeObserver(() => onMeasure(item.id, node.offsetHeight));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [item.id, onMeasure]);
+  const styles = tableStyles(item);
+  return (
+    <foreignObject
+      x={item.x}
+      y={item.y}
+      width={item.w + 2}
+      height={8000}
+      style={{ overflow: 'visible', pointerEvents: 'none' }}
+    >
+      <table ref={ref} data-note-table={item.id} style={styles.table}>
+        <colgroup>
+          {item.cols.map((c, i) => (
+            <col key={i} style={{ width: `${c * 100}%` }} />
+          ))}
+        </colgroup>
+        <tbody>
+          {item.cells.map((row, r) => (
+            <tr key={r}>
+              {row.map((text, c) => (
+                <td key={c} style={styles.cell(r)}>
+                  {text || ' '}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </foreignObject>
+  );
 }
 
 /** Paints the items in order; memoized on the (immutable) items array and context. */
