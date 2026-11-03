@@ -881,6 +881,11 @@ export function CalendarBoard() {
                               <span className="field-hint">Tài liệu không còn khả dụng</span>
                             )
                           )}
+                          {i.notebook && (
+                            <Link href={`/workspace/notes/${i.notebook.id}`}>
+                              Mở vở “{i.notebook.title}”
+                            </Link>
+                          )}
                         </li>
                       ))}
                     </ul>

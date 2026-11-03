@@ -31,6 +31,7 @@ import { useReturnFocus } from '../../lib/use-return-focus';
 import { ReaderCitation, type CitationStatus } from './reader-citation';
 import { StudyCardMaker } from '../study/study-card-maker';
 import { ReviewMarkButton, useReviewMark } from './notebook-parts';
+import { AddToNotebookButton } from '../notes/add-to-notebook';
 
 type Draft = {
   page: number;
@@ -550,6 +551,7 @@ export function ReaderHighlights({
                   busy={review.marking === item.id}
                   onClick={() => void review.mark(item)}
                 />
+                <AddToNotebookButton annotationIds={[item.id]} disabled={locked} />
               </div>
               <StudyCardMaker versionId={versionId} highlightId={item.id} disabled={locked} />
               {deleting?.id === item.id && (

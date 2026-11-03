@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { AccountWorkspace } from '../../../components/account/account-workspace';
 import { ChangePasswordForm } from '../../../components/auth/change-password-form';
 import { ReaderPreferencesForm } from '../../../components/account/reader-preferences';
+import { NotebookUsage } from '../../../components/account/notebook-usage';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Cài đặt — HUCEScholar' };
 export default function SettingsPage() {
@@ -12,6 +13,7 @@ export default function SettingsPage() {
       </p>
       <ChangePasswordForm />
       <ReaderPreferencesForm />
+      <NotebookUsage />
     </AccountWorkspace>
   );
 }

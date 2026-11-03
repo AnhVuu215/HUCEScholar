@@ -10,6 +10,7 @@ import { OpsModule } from './ops/ops.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReadingListsModule } from './reading-lists/reading-lists.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { NotebooksModule } from './notebooks/notebooks.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { CalendarModule } from './calendar/calendar.module';
     NotificationsModule,
     ReadingListsModule,
     CalendarModule,
+    NotebooksModule,
   ],
   controllers: [HealthController],
 })

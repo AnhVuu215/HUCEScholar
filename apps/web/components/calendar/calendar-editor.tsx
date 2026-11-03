@@ -33,6 +33,7 @@ import {
 } from '../../lib/calendar';
 import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
 import { MaterialPicker } from './material-picker';
+import { listNotebooks, type Notebook } from '../../lib/notes';
 
 /** Asked before leaving the page, or before another item replaces an edited form. */
 export const CALENDAR_DRAFT_PROMPT = 'Bạn có mục lịch chưa lưu. Rời trang và bỏ thay đổi?';
@@ -158,6 +159,16 @@ export function CalendarEditor({
   const link = chosen ?? original;
   // A withheld link keeps its ids server-side; the form can only keep it or drop it.
   const [keepLink, setKeepLink] = useState(original !== null);
+  // CANVAS-01: a session may open one of the owner's notebooks.
+  const [notebookId, setNotebookId] = useState<string>(item?.notebook?.id ?? '');
+  const [notebooks, setNotebooks] = useState<Notebook[] | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    listNotebooks({}, controller.signal)
+      .then((result) => setNotebooks(result.items))
+      .catch(() => !controller.signal.aborted && setNotebooks([]));
+    return () => controller.abort();
+  }, []);
   const [pageNumber, setPageNumber] = useState(
     original && original !== 'unavailable' ? String(original.pageNumber) : '',
   );
@@ -171,7 +182,8 @@ export function CalendarEditor({
     JSON.stringify(form) !== JSON.stringify(unchanged) ||
     chosen !== null ||
     keepLink !== (original !== null) ||
-    pageNumber !== (original && original !== 'unavailable' ? String(original.pageNumber) : '');
+    pageNumber !== (original && original !== 'unavailable' ? String(original.pageNumber) : '') ||
+    notebookId !== (item?.notebook?.id ?? '');
   useNotesLeaveGuard(dirty, busy, CALENDAR_DRAFT_PROMPT);
   const reportDirty = useEffectEvent((value: boolean) => dirtyChanged?.(value));
   useEffect(() => reportDirty(dirty), [dirty]);
@@ -268,6 +280,7 @@ export function CalendarEditor({
       color: form.color,
       versionId,
       pageNumber: page,
+      notebookId: notebookId || null,
       repeat,
       remindMinutes: remindable && form.remind ? Number(form.remind) : null,
       remindMore:
@@ -779,6 +792,30 @@ export function CalendarEditor({
             Gắn tài liệu
           </button>
         ))}
+      <div className="form-field">
+        <label htmlFor="calendar-notebook">Vở ghi</label>
+        <select
+          id="calendar-notebook"
+          value={notebookId}
+          disabled={!notebooks}
+          onChange={(e) => setNotebookId(e.target.value)}
+        >
+          <option value="">Không gắn vở</option>
+          {item?.notebook && !notebooks?.some((n) => n.id === item.notebook!.id) && (
+            <option value={item.notebook.id}>{item.notebook.title}</option>
+          )}
+          {(notebooks ?? []).map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.title}
+            </option>
+          ))}
+        </select>
+        {notebookId && (
+          <Link className="field-hint" href={`/workspace/notes/${notebookId}`}>
+            Mở vở ghi
+          </Link>
+        )}
+      </div>
       {error && (
         <p role="alert" className="form-error">
           {error}

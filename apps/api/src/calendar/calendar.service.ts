@@ -124,6 +124,7 @@ function normalize(body: CalendarFieldsDto) {
     color: body.color,
     version_id: body.versionId === null ? null : academicId(body.versionId),
     page_number: body.pageNumber,
+    notebook_id: body.notebookId ? academicId(body.notebookId) : null,
     repeat_freq: repeat?.freq ?? null,
     repeat_days: repeat && repeat.freq === 'WEEKLY' ? repeat.days : null,
     repeat_until: repeat?.until ?? null,
@@ -146,6 +147,7 @@ const sameFields = (row: calendar_items, fields: Fields) =>
   row.color === fields.color &&
   row.version_id === fields.version_id &&
   row.page_number === fields.page_number &&
+  row.notebook_id === fields.notebook_id &&
   row.remind_minutes === fields.remind_minutes &&
   row.remind_more.join() === fields.remind_more.join() &&
   row.remind_email === fields.remind_email &&
@@ -191,8 +193,20 @@ export class CalendarService {
       tx,
       rows.flatMap((r) => (r.version_id ? [r.version_id] : [])),
     );
+    const linked = rows.flatMap((r) => (r.notebook_id ? [r.notebook_id] : []));
+    // A notebook in the trash is not offered; the link comes back if it is restored.
+    const notebooks = new Map(
+      (linked.length
+        ? await tx.notebooks.findMany({
+            where: { id: { in: [...new Set(linked)] }, deleted_at: null },
+            select: { id: true, user_id: true, title: true },
+          })
+        : []
+      ).map((n) => [n.id, n]),
+    );
     return rows.map((r) => {
       const source = r.version_id ? sources.get(r.version_id) : undefined;
+      const notebook = r.notebook_id ? notebooks.get(r.notebook_id) : undefined;
       return {
         id: String(r.id),
         kind: r.kind as 'EVENT' | 'TASK',
@@ -208,6 +222,10 @@ export class CalendarService {
             ? { versionId: String(r.version_id), pageNumber: r.page_number, title: source.title }
             : null,
         materialUnavailable: r.version_id !== null && !source,
+        notebook:
+          notebook && notebook.user_id === r.user_id
+            ? { id: String(notebook.id), title: notebook.title }
+            : null,
         repeat:
           r.repeat_freq !== null && r.repeat_until
             ? {
@@ -233,6 +251,20 @@ export class CalendarService {
   }
   private lock(tx: Prisma.TransactionClient, user_id: bigint) {
     return tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:calendar:${user_id}`}, 0))`;
+  }
+  /** CANVAS-01: a new or changed notebook link must be one of the owner's notebooks. */
+  private async checkNotebook(
+    tx: Prisma.TransactionClient,
+    user_id: bigint,
+    fields: Fields,
+    previous: bigint | null = null,
+  ) {
+    if (fields.notebook_id === null || fields.notebook_id === previous) return;
+    const notebook = await tx.notebooks.findFirst({
+      where: { id: fields.notebook_id, user_id, deleted_at: null },
+      select: { id: true },
+    });
+    if (!notebook) throw new NotFoundException('Không tìm thấy vở ghi.');
   }
   /** A new or changed link must point at a version the owner can read, within its pages. */
   private async checkSource(tx: Prisma.TransactionClient, fields: Fields) {
@@ -625,6 +657,7 @@ export class CalendarService {
         return { item: (await this.serialize(tx, [existing]))[0] };
       }
       await this.checkSource(tx, fields);
+      await this.checkNotebook(tx, user_id, fields);
       const row = await tx.calendar_items.create({
         data: { ...fields, user_id, request_id: body.requestId },
       });
@@ -652,6 +685,7 @@ export class CalendarService {
       // An unchanged link is kept even if the material became unreadable; a new one is checked.
       if (row.version_id !== fields.version_id || row.page_number !== fields.page_number)
         await this.checkSource(tx, fields);
+      await this.checkNotebook(tx, row.user_id, fields, row.notebook_id);
       if (!sameTiming(row, fields)) {
         await tx.calendar_item_skips.deleteMany({ where: { item_id: row.id } });
         await tx.calendar_item_done.deleteMany({ where: { item_id: row.id } });
@@ -769,6 +803,7 @@ export class CalendarService {
       // The series' own link is kept even if it became unreadable; a new one is checked.
       if (row.version_id !== fields.version_id || row.page_number !== fields.page_number)
         await this.checkSource(tx, fields);
+      await this.checkNotebook(tx, row.user_id, fields, row.notebook_id);
       await this.addSkip(tx, row, at);
       const created = await tx.calendar_items.create({
         data: { ...fields, user_id: row.user_id, request_id: body.requestId },
@@ -831,6 +866,7 @@ export class CalendarService {
         throw invalid('Từ buổi đầu tiên thì sửa cả chuỗi.');
       if (row.version_id !== fields.version_id || row.page_number !== fields.page_number)
         await this.checkSource(tx, fields);
+      await this.checkNotebook(tx, row.user_id, fields, row.notebook_id);
       await this.endBefore(tx, row, at);
       const created = await tx.calendar_items.create({
         data: { ...fields, user_id: row.user_id, request_id: body.requestId },
