@@ -30,9 +30,10 @@ for (const [device, width, height] of [
     const menu = page.getByRole('button', { name: 'Menu', exact: true });
     const sidebar = page.getByRole('complementary');
     const sidebarBounds = await sidebar.boundingBox();
-    expect(sidebarBounds!.width).toBeCloseTo(width <= 900 ? width : 244, 0);
+    // Every width: the sidebar is the top bar, as wide as the window.
+    expect(sidebarBounds!.width).toBeCloseTo(width, 0);
     expect(await sidebar.evaluate((element) => getComputedStyle(element).boxShadow)).toBe('none');
-    if (width <= 900) {
+    {
       await expect(menu).toHaveAttribute('aria-expanded', 'false');
       await expect(navigation).toBeHidden();
       await menu.focus();
@@ -59,9 +60,6 @@ for (const [device, width, height] of [
       // Wait for the destination workspace before reopening its menu for the same-route check.
       await expect(page.getByRole('heading', { name: 'Kho học liệu', exact: true })).toBeVisible();
       await menu.click();
-    } else {
-      await expect(menu).toBeHidden();
-      await expect(navigation).toBeVisible();
     }
     await navigation.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Kho học liệu', exact: true })).toBeVisible();
@@ -71,7 +69,7 @@ for (const [device, width, height] of [
         '1px',
       );
     }
-    if (width <= 900) await expect(menu).toHaveAttribute('aria-expanded', 'false');
+    await expect(menu).toHaveAttribute('aria-expanded', 'false');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

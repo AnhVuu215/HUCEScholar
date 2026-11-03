@@ -1,4 +1,5 @@
 import { expect, test } from './helpers/test';
+import { navLink } from './helpers/navigation';
 import { randomBytes } from 'node:crypto';
 import { captureCatalog } from './catalog-capture';
 
@@ -78,7 +79,7 @@ test('admin creates a program under a searched faculty and preserves a stale dra
   await page.getByLabel('Email', { exact: true }).fill('e2e-catalog-admin@example.test');
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-  await page.getByRole('link', { name: 'Danh mục đào tạo', exact: true }).click();
+  await (await navLink(page, 'Danh mục đào tạo')).click();
   await page.getByRole('button', { name: 'Thêm khoa', exact: true }).click();
   await page.getByLabel('Mã khoa', { exact: true }).fill(code);
   await page.getByLabel('Tên khoa', { exact: true }).fill('Khoa của ngành kiểm thử');
@@ -132,7 +133,7 @@ test('admin creates, finds, edits and stops a faculty', async ({ page }) => {
   await page.getByLabel('Email', { exact: true }).fill('e2e-catalog-admin@example.test');
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-  await page.getByRole('link', { name: 'Danh mục đào tạo', exact: true }).click();
+  await (await navLink(page, 'Danh mục đào tạo')).click();
   await page.getByRole('button', { name: 'Thêm khoa', exact: true }).click();
   await page.getByLabel('Mã khoa', { exact: true }).fill(code.toLowerCase());
   await page.getByLabel('Tên khoa', { exact: true }).fill('Khoa kiểm thử trình duyệt');

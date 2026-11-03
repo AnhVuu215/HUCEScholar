@@ -94,8 +94,9 @@ export function ContinuousPages({
           }
           return next;
         }),
-      // Draw a screen ahead and behind; release beyond that.
-      { root, rootMargin: '100% 0px' },
+      // Draw two screens ahead and behind (a full-width page on a wide window is taller than
+      // one screen); release beyond that.
+      { root, rootMargin: '200% 0px' },
     );
     for (const slot of slotsRef.current.values()) observer.observe(slot);
     return () => observer.disconnect();

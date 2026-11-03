@@ -44,6 +44,8 @@ QA-02 [chạy lại cả bộ e2e](../implementation/2026-10-31-e2e-rerun.md) sa
 
 Chủ dự án đề xuất CANVAS-01 **Vở ghi tự do**: một chỗ ghi chép giống app take note trên iPad. Có trang mới với nhiều kiểu giấy (gồm vở ô li), bút, bút dạ, tẩy, gõ chữ chọn font, kéo ảnh từ Google, trang trí, và thẻ trích dẫn mở lại đúng tài liệu/trang. [Thiết kế](../superpowers/specs/2026-11-02-freeform-notebook.md) đã viết và [đã triển khai ngày 03/11](../implementation/2026-11-03-freeform-notebook.md) trong một PR. CANVAS-02 [đo PERF-01 cho vở và thêm cache canvas theo ô](../implementation/2026-11-03-notebook-perf.md): mở trang 2.000 nét từ 9,1 s xuống 2,9 s, vẽ nét p95 từ 83–100 ms xuống 17–33 ms (CPU chậm 4×, `next dev`). PR này cũng chạy thử kéo ảnh thật từ Google trên Chrome, và cho trang vở dùng toàn cửa sổ với menu ☰. Còn lại: kiểm chứng trên thiết bị cảm ứng (đang hoãn). Trình duyệt kiểm chứng chỉ là Chrome, theo quyết định của chủ dự án ngày 03/11.
 
+UX-03 [thanh ☰ cho mọi trang và lịch to hơn](../implementation/2026-11-03-workspace-topbar.md): sidebar thu thành thanh mảnh trên cùng, menu xổ xuống khi bấm, nội dung rộng hết màn hình; lịch thẳng cột, mỗi giờ cao hơn; form tạo vở nằm giữa màn hình.
+
 ## Bổ sung yêu cầu V2 ngày 17/10
 
 Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.

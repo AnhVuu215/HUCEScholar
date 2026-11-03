@@ -132,7 +132,7 @@ export function RoleWorkspace({
   }
 
   return (
-    <div className="app-shell min-h-screen">
+    <div className="app-shell app-shell--topbar min-h-screen">
       <a href="#khong-gian" className="skip-link">
         Bỏ qua điều hướng
       </a>
