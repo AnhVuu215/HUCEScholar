@@ -171,4 +171,68 @@ describe('CANVAS-01 page content', () => {
     expect(quoteHeight({ ...view, quote: 'x'.repeat(100_000) }, 682)).toBe(640);
     expect(quoteHeight({ available: false }, 682)).toBe(120);
   });
+
+  describe('CANVAS-03 tables', () => {
+    const table = (over: Record<string, unknown> = {}) => ({
+      id: 'b1',
+      type: 'table',
+      x: 40,
+      y: 80,
+      w: 480.123,
+      cols: [0.2, 0.2, 0.4],
+      cells: [
+        ['Đại lượng', 'Ký hiệu', 'Đơn vị'],
+        ['Điện áp', 'U', 'vôn\u0000 (V)'],
+      ],
+      header: true,
+      font: 'be-vietnam-pro',
+      size: 14,
+      color: '#172B45',
+      border: '#9FB3CA',
+      extra: 'dropped',
+      ...over,
+    });
+
+    it('keeps plain cells, renormalises column widths and indexes the cell text', () => {
+      const page = cleanPage({ v: 1, items: [table()] });
+      expect(page.content.items[0]).toEqual({
+        id: 'b1',
+        type: 'table',
+        x: 40,
+        y: 80,
+        w: 480.12,
+        cols: [0.25, 0.25, 0.5],
+        cells: [
+          ['Đại lượng', 'Ký hiệu', 'Đơn vị'],
+          ['Điện áp', 'U', 'vôn (V)'],
+        ],
+        header: true,
+        font: 'be-vietnam-pro',
+        size: 14,
+        color: '#172b45',
+        border: '#9fb3ca',
+      });
+      expect(page.searchText).toContain('Đại lượng Ký hiệu Đơn vị');
+      expect(page.searchText).toContain('Điện áp U vôn (V)');
+    });
+
+    it.each([
+      ['no columns', table({ cols: [] })],
+      ['too many columns', table({ cols: Array(13).fill(0.1), cells: [Array(13).fill('')] })],
+      ['too many rows', table({ cols: [1], cells: Array.from({ length: 61 }, () => ['']) })],
+      ['a short row', table({ cells: [['a', 'b']] })],
+      ['a cell that is not text', table({ cells: [['a', 'b', { html: '<b>' }]] })],
+      ['a tiny column', table({ cols: [0.01, 0.5, 0.5] })],
+      ['a bad border', table({ border: 'red' })],
+      ['an unknown font', table({ font: 'Comic Sans' })],
+      ['a huge font', table({ size: 300 })],
+    ])('rejects %s', (_label, item) => {
+      expect(reason(() => cleanPage({ v: 1, items: [item] })).code).toBe('NOTEBOOK_PAGE_INVALID');
+    });
+
+    it('caps the text of a whole table', () => {
+      const long = table({ cols: [0.5, 0.5], cells: [['a'.repeat(15_000), 'b'.repeat(6_000)]] });
+      expect(reason(() => cleanPage({ v: 1, items: [long] })).message).toMatch(/Bảng quá dài/);
+    });
+  });
 });

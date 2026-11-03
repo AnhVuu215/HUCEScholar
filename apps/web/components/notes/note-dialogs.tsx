@@ -267,6 +267,104 @@ export function NotebookForm({
 
 // ---- Stickers ---------------------------------------------------------------------------------
 
+// ---- Tables (CANVAS-03) ------------------------------------------------------------------------
+
+/** Rows × columns, picked on a grid like a word processor or typed in. */
+export function TablePicker({
+  onPick,
+  onClose,
+}: {
+  onPick: (rows: number, cols: number) => void;
+  onClose: () => void;
+}) {
+  const [hover, setHover] = useState({ r: 3, c: 3 });
+  const [rows, setRows] = useState('3'),
+    [cols, setCols] = useState('3');
+  const GRID_R = 8,
+    GRID_C = 10;
+  const clamp = (v: string, max: number) => Math.min(max, Math.max(1, Math.round(Number(v)) || 1));
+  return (
+    <NoteModal title="Chèn bảng" onClose={onClose}>
+      <p className="note-form-hint">
+        Rê chuột trên lưới rồi bấm, hoặc nhập số hàng và cột (tối đa 60 × 12).
+      </p>
+      <div
+        className="note-table-grid"
+        role="grid"
+        aria-label="Chọn kích thước bảng"
+        onMouseLeave={() => setHover({ r: Number(rows) || 1, c: Number(cols) || 1 })}
+      >
+        {Array.from({ length: GRID_R }, (_, r) => (
+          <div key={r} role="row" className="note-table-grid-row">
+            {Array.from({ length: GRID_C }, (_, c) => (
+              <button
+                key={c}
+                type="button"
+                role="gridcell"
+                aria-label={`${r + 1} hàng × ${c + 1} cột`}
+                data-on={(r < hover.r && c < hover.c) || undefined}
+                onMouseEnter={() => {
+                  setHover({ r: r + 1, c: c + 1 });
+                  setRows(String(r + 1));
+                  setCols(String(c + 1));
+                }}
+                onFocus={() => {
+                  setHover({ r: r + 1, c: c + 1 });
+                  setRows(String(r + 1));
+                  setCols(String(c + 1));
+                }}
+                onClick={() => onPick(r + 1, c + 1)}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      <form
+        className="note-form note-table-size"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onPick(clamp(rows, 60), clamp(cols, 12));
+        }}
+      >
+        <label className="note-form-field">
+          <span>Số hàng</span>
+          <input
+            type="number"
+            min={1}
+            max={60}
+            value={rows}
+            onChange={(e) => {
+              setRows(e.target.value);
+              setHover((h) => ({ ...h, r: Number(e.target.value) || 1 }));
+            }}
+          />
+        </label>
+        <label className="note-form-field">
+          <span>Số cột</span>
+          <input
+            type="number"
+            min={1}
+            max={12}
+            value={cols}
+            onChange={(e) => {
+              setCols(e.target.value);
+              setHover((h) => ({ ...h, c: Number(e.target.value) || 1 }));
+            }}
+          />
+        </label>
+        <div className="note-form-actions">
+          <Button variant="quiet" onClick={onClose}>
+            Hủy
+          </Button>
+          <Button type="submit" variant="primary">
+            Chèn bảng {clamp(rows, 60)} × {clamp(cols, 12)}
+          </Button>
+        </div>
+      </form>
+    </NoteModal>
+  );
+}
+
 export function StickerPicker({
   onPick,
   onClose,
@@ -579,6 +677,9 @@ export const SHORTCUTS: [string, string][] = [
   ['V', 'Chọn'],
   ['L', 'Chọn tự do (lasso)'],
   ['I', 'Chèn ảnh từ máy'],
+  ['R', 'Hiện / ẩn thước kẻ (bút đặt sát mép thước sẽ kẻ thẳng theo mép)'],
+  ['Kéo núm tròn của thước (Shift: bước 15°)', 'Xoay thước'],
+  ['Nhấp đúp vào bảng', 'Sửa bảng; Tab / Shift + Tab chuyển ô, Tab ở ô cuối thêm hàng'],
   ['Giữ Space + kéo', 'Kéo trang'],
   ['Ctrl + lăn chuột', 'Phóng to / thu nhỏ'],
   ['+ / − / 0', 'Phóng to / thu nhỏ / vừa trang'],
