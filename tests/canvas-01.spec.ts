@@ -66,6 +66,7 @@ test('a notebook keeps ink, Vietnamese text and images, pages reorder, conflicts
   const title = `Vở Giải tích ${randomUUID().slice(0, 8)}`;
 
   await page.goto('/workspace/notes');
+  // The shelf keeps the usual sidebar; only an open notebook folds it into the ☰ menu.
   await expect(page.getByRole('link', { name: 'Vở ghi', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '+ Vở mới' }).click();
   await page.getByLabel('Tên vở').fill(title);
@@ -235,4 +236,141 @@ test('a note from the Sổ tay becomes a quote card that opens the reader at its
   await expect(
     page.locator('.course-notebooks').getByRole('link', { name: notebookTitle }),
   ).toHaveAttribute('href', `/workspace/notes/${(await created.json()).item.id}`);
+});
+
+test('a page with many strokes paints them as cached tiles, keeps the selection vector and prints vectors', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.goto('/login');
+  await readerLogin(page, 'student', 'canvas2');
+  const headers = await readerHeaders(page);
+  const created = await page.request.post('/api/v1/notebooks', {
+    headers,
+    data: {
+      title: `Vở nhiều nét ${randomUUID().slice(0, 6)}`,
+      cover: 'navy',
+      courseId: null,
+      defaultSize: 'A4_PORTRAIT',
+      defaultPaper: 'GRID',
+      defaultColor: 'white',
+      requestId: randomUUID(),
+    },
+  });
+  const detail = await created.json();
+  const notebookId = detail.item.id as string,
+    pageId = detail.pages[0].id as string;
+  // 400 short strokes in rows (20 per row), a highlighter every fifth.
+  const items = Array.from({ length: 400 }, (_, i) => {
+    const x0 = 60 + (i % 20) * 34,
+      y0 = 80 + Math.floor(i / 20) * 40;
+    const points: number[] = [];
+    for (let k = 0; k < 12; k++) points.push(x0 + k * 2, y0 + (k % 2) * 8, 0.5);
+    const marker = i % 5 === 4;
+    return {
+      id: `n${i}`,
+      type: 'stroke',
+      tool: marker ? 'highlighter' : 'ballpoint',
+      color: marker ? '#fde047' : '#1d4ed8',
+      width: marker ? 12 : 2,
+      points,
+    };
+  });
+  const saved = await page.request.put(`/api/v1/notebooks/${notebookId}/pages/${pageId}/content`, {
+    headers: {
+      ...headers,
+      'Content-Type': 'application/vnd.hucescholar.page+json',
+      'If-Match': `"${detail.pages[0].revision}"`,
+    },
+    data: JSON.stringify({ v: 1, items }),
+  });
+  expect(saved.status()).toBe(200);
+
+  await page.goto(`/workspace/notes/${notebookId}?page=${pageId}`);
+  const surface = page.locator('svg.note-surface');
+
+  // An open notebook uses the whole window; the navigation drops from the ☰ menu.
+  const nav = page.getByRole('navigation', { name: 'Điều hướng không gian' });
+  const menu = page.getByRole('button', { name: 'Menu', exact: true });
+  await expect(surface).toBeVisible();
+  await expect(nav).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1, name: 'Vở ghi' })).toBeHidden();
+  const editorBox = (await page.locator('.notebook-editor').boundingBox())!;
+  expect(editorBox.width).toBeGreaterThan(page.viewportSize()!.width - 60);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(
+    true,
+  );
+  await menu.click();
+  await expect(nav.getByRole('link', { name: 'Kho học liệu' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(nav).toBeHidden();
+  await expect(menu).toBeFocused();
+  await menu.click();
+  await expect(nav).toBeVisible();
+  // A press beside the menu (the header's right end, clear of the dropped list) closes it.
+  const header = (await page.locator('.workspace-header').boundingBox())!;
+  await page.mouse.click(header.x + header.width - 260, header.y + header.height / 2);
+  await expect(nav).toBeHidden();
+
+  const runs = surface.locator('[data-note-raster]');
+  // Ink in one multiply layer for the highlighter and one for the pens, both painted.
+  await expect(runs).toHaveCount(2);
+  await expect(surface.locator('[data-note-raster][data-ready]')).toHaveCount(2, {
+    timeout: 20_000,
+  });
+  await expect(surface.locator('[data-note-raster] image').first()).toBeVisible();
+  expect(await surface.locator('[data-note-item]').count()).toBe(0);
+  // The thumbnail is a bitmap too.
+  await expect(page.locator('.note-thumb-svg [data-note-raster] image').first()).toBeAttached({
+    timeout: 20_000,
+  });
+
+  // A marquee over the first row: those strokes are drawn as vectors while selected.
+  await page.locator('.note-tool[data-tool="select"]').click();
+  const box = (await surface.boundingBox())!;
+  const toScreen = async (x: number, y: number) =>
+    surface.evaluate(
+      (node, p) => {
+        const g = node.querySelector('g[transform]')!;
+        const m = (g as SVGGraphicsElement).getScreenCTM()!;
+        const pt = new DOMPoint(p.x, p.y).matrixTransform(m);
+        return { x: pt.x, y: pt.y };
+      },
+      { x, y },
+    );
+  const from = await toScreen(40, 66),
+    to = await toScreen(740, 104);
+  expect(from.x).toBeGreaterThan(box.x);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2);
+  await page.mouse.move(to.x, to.y);
+  await page.mouse.up();
+  await expect(page.getByRole('toolbar', { name: 'Đã chọn 20 đối tượng' })).toBeVisible();
+  await expect(surface.locator('[data-note-item]')).toHaveCount(20);
+
+  // Deleting them repaints the tiles without them; undo brings them back.
+  await page
+    .getByRole('toolbar', { name: 'Đã chọn 20 đối tượng' })
+    .getByRole('button', { name: 'Xóa', exact: true })
+    .click();
+  await expect(page.locator('.note-save')).toHaveText('Đã lưu', { timeout: 15_000 });
+  const count = async () =>
+    (await (await page.request.get(`/api/v1/notebooks/${notebookId}/pages/${pageId}`)).json()).page
+      .content.items.length;
+  expect(await count()).toBe(380);
+  await expect(surface.locator('[data-note-raster][data-ready]')).toHaveCount(2, {
+    timeout: 20_000,
+  });
+  await page.getByRole('button', { name: 'Hoàn tác', exact: true }).click();
+  await expect(page.locator('.note-save')).toHaveText('Đã lưu', { timeout: 15_000 });
+  expect(await count()).toBe(400);
+
+  // Print and PDF stay vector: one path per stroke.
+  await page.goto(`/workspace/notes/${notebookId}/print`);
+  await expect(page.getByRole('status').filter({ hasText: '1 trang sẵn sàng' })).toBeVisible({
+    timeout: 20_000,
+  });
+  expect(await page.locator('.note-print-page path').count()).toBeGreaterThanOrEqual(400);
+  expect(await page.locator('.note-print-page image').count()).toBe(0);
 });

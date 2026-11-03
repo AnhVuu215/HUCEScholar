@@ -1,7 +1,7 @@
 'use client';
 
 import { getStroke } from 'perfect-freehand';
-import { memo, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
 import {
   fontFamily,
   type Block,
@@ -15,6 +15,7 @@ import {
 } from '../../lib/note-model';
 import { assetUrl, type AssetInfo, type QuoteView } from '../../lib/notes';
 import { stickerById } from './note-stickers';
+import { RASTER_MIN_RUN, RASTER_MIN_STROKES, RasterRun, type RasterView } from './note-raster';
 
 /** What a renderer needs besides the items: quote texts, image states and local previews. */
 export type RenderContext = {
@@ -30,23 +31,34 @@ export type RenderContext = {
   onMeasure?: (id: string, height: number) => void;
   /** Items not drawn (a text box being edited is shown by its editor instead). */
   hidden?: ReadonlySet<string>;
+  /** Paint runs of strokes into cached canvas tiles (editor and thumbnails, not print). */
+  raster?: RasterView;
+  /** Strokes kept as SVG even inside a raster run (the selection, while it is edited). */
+  vector?: ReadonlySet<string>;
 };
 
 // ---- Strokes ----------------------------------------------------------------------------------
 
-const strokeCache = new WeakMap<StrokeItem, string>();
-function svgPath(outline: number[][]) {
-  if (outline.length < 2) return '';
-  const avg = (a: number, b: number) => ((a + b) / 2).toFixed(2);
-  let d = `M${outline[0][0].toFixed(2)},${outline[0][1].toFixed(2)} Q`;
-  for (let i = 0; i < outline.length; i++) {
-    const [x0, y0] = outline[i];
-    const [x1, y1] = outline[(i + 1) % outline.length];
-    d += `${x0.toFixed(2)},${y0.toFixed(2)} ${avg(x0, x1)},${avg(y0, y1)} `;
+const outlineCache = new WeakMap<StrokeItem, number[][]>();
+const pathCache = new WeakMap<StrokeItem, string>();
+/** Two decimals without `toFixed`, which dominated path building on pages with many strokes. */
+const r2 = (v: number) => Math.round(v * 100) / 100;
+export function svgPath(outline: number[][]) {
+  const n = outline.length;
+  if (n < 2) return '';
+  const parts: string[] = [`M${r2(outline[0][0])},${r2(outline[0][1])} Q`];
+  for (let i = 0; i < n; i++) {
+    const a = outline[i],
+      b = outline[(i + 1) % n];
+    parts.push(`${r2(a[0])},${r2(a[1])} ${r2((a[0] + b[0]) / 2)},${r2((a[1] + b[1]) / 2)}`);
   }
-  return d + 'Z';
+  return parts.join(' ') + 'Z';
 }
-export function strokeOutline(item: Pick<StrokeItem, 'tool' | 'width' | 'points'>, last = true) {
+/** The filled outline of a stroke (perfect-freehand), as polygon points. */
+export function strokeOutlinePoints(
+  item: Pick<StrokeItem, 'tool' | 'width' | 'points'>,
+  last = true,
+): number[][] {
   const input: number[][] = [];
   let pressured = false;
   for (let i = 0; i + 2 < item.points.length; i += 3) {
@@ -89,13 +101,25 @@ export function strokeOutline(item: Pick<StrokeItem, 'tool' | 'width' | 'points'
               streamline: 0.45,
               simulatePressure: false,
             };
-  return svgPath(getStroke(input, { ...options, last }));
+  return getStroke(input, { ...options, last });
+}
+export function strokeOutline(item: Pick<StrokeItem, 'tool' | 'width' | 'points'>, last = true) {
+  return svgPath(strokeOutlinePoints(item, last));
+}
+/** Outline points of a saved stroke, computed once per (immutable) item. */
+export function cachedOutlinePoints(item: StrokeItem) {
+  let points = outlineCache.get(item);
+  if (!points) {
+    points = strokeOutlinePoints(item);
+    outlineCache.set(item, points);
+  }
+  return points;
 }
 function cachedOutline(item: StrokeItem) {
-  let d = strokeCache.get(item);
+  let d = pathCache.get(item);
   if (d === undefined) {
-    d = strokeOutline(item);
-    strokeCache.set(item, d);
+    d = svgPath(cachedOutlinePoints(item));
+    pathCache.set(item, d);
   }
   return d;
 }
@@ -497,15 +521,73 @@ export const NoteItems = memo(function NoteItems({
   items: PageItem[];
   ctx: RenderContext;
 }) {
+  const raster = ctx.raster;
+  // Highlighter is broad and soft: half the density is enough and costs a quarter of the pixels.
+  const markerView = useMemo(
+    () =>
+      raster ? { ...raster, scale: Math.max(0.25, Math.round(raster.scale * 50) / 100) } : null,
+    [raster],
+  );
+  if (
+    !raster ||
+    !markerView ||
+    items.filter((i) => i.type === 'stroke').length < RASTER_MIN_STROKES
+  )
+    return (
+      <g>
+        {items.map((item) =>
+          ctx.hidden?.has(item.id) ? null : <ItemGroup key={item.id} item={item} ctx={ctx} />,
+        )}
+      </g>
+    );
+  // Consecutive strokes form runs; anything else (or a selected stroke) ends a run.
+  const out: ReactNode[] = [];
+  let run: StrokeItem[] = [];
+  const flush = () => {
+    if (run.length >= RASTER_MIN_RUN) {
+      // Highlighter goes in its own multiply layer under the ink, as it blends with what is below.
+      const marker = run.filter((i) => i.tool === 'highlighter'),
+        ink = run.filter((i) => i.tool !== 'highlighter');
+      if (marker.length)
+        out.push(
+          <RasterRun
+            key={`marker-${run[0].id}`}
+            strokes={marker}
+            view={markerView}
+            renderStroke={renderStroke}
+            blend
+          />,
+        );
+      if (ink.length)
+        out.push(
+          <RasterRun
+            key={`ink-${run[0].id}`}
+            strokes={ink}
+            view={raster}
+            renderStroke={renderStroke}
+          />,
+        );
+    } else for (const item of run) out.push(<ItemGroup key={item.id} item={item} ctx={ctx} />);
+    run = [];
+  };
+  for (const item of items) {
+    if (ctx.hidden?.has(item.id)) continue;
+    if (item.type === 'stroke' && !ctx.vector?.has(item.id)) {
+      run.push(item);
+      continue;
+    }
+    flush();
+    out.push(<ItemGroup key={item.id} item={item} ctx={ctx} />);
+  }
+  flush();
+  return <g>{out}</g>;
+});
+const renderStroke = (item: StrokeItem) => <StrokeShape item={item} d={cachedOutline(item)} />;
+/** One item; an edit re-renders only the items whose objects changed. */
+const ItemGroup = memo(function ItemGroup({ item, ctx }: { item: PageItem; ctx: RenderContext }) {
   return (
-    <g>
-      {items.map((item) =>
-        ctx.hidden?.has(item.id) ? null : (
-          <g key={item.id} data-note-item={item.id} data-note-type={item.type}>
-            <ItemNode item={item} ctx={ctx} />
-          </g>
-        ),
-      )}
+    <g data-note-item={item.id} data-note-type={item.type}>
+      <ItemNode item={item} ctx={ctx} />
     </g>
   );
 });
