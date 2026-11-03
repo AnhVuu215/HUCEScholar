@@ -198,7 +198,26 @@ export type QuoteItem = {
   w: number;
   h: number;
 };
-export type PageItem = StrokeItem | TextItem | ImageItem | ShapeItem | StickerItem | QuoteItem;
+/** CANVAS-03: a table of plain-text cells; its height follows the text, like a text box. */
+export type TableItem = {
+  id: string;
+  type: 'table';
+  x: number;
+  y: number;
+  w: number;
+  /** Column widths as fractions of `w`, summing to 1. */
+  cols: number[];
+  /** Cell text, row by row; every row has `cols.length` cells. */
+  cells: string[][];
+  /** The first row is a header (bold, tinted). */
+  header: boolean;
+  font: FontId;
+  size: number;
+  color: string;
+  border: string;
+};
+export type PageItem =
+  StrokeItem | TextItem | ImageItem | ShapeItem | StickerItem | QuoteItem | TableItem;
 export type PageContent = { v: 1; items: PageItem[] };
 
 export type Point = { x: number; y: number };
@@ -236,6 +255,100 @@ export function estimateTextHeight(item: TextItem) {
     return sum + Math.max(1, Math.ceil(length / perLine));
   }, 0);
   return Math.max(item.size * 1.5, lines * item.size * 1.5) + 8;
+}
+/** Rough height of a table before the browser has measured it. */
+export function estimateTableHeight(item: TableItem) {
+  const line = item.size * 1.4;
+  return item.cells.reduce((sum, row) => {
+    const lines = Math.max(
+      ...row.map((cell, i) => {
+        const perLine = Math.max(3, Math.floor((item.w * item.cols[i]) / (item.size * 0.55)));
+        return cell
+          .split('\n')
+          .reduce((n, part) => n + Math.max(1, Math.ceil(part.length / perLine)), 0);
+      }),
+    );
+    return sum + lines * line + 12;
+  }, 1);
+}
+export const TABLE_LIMITS = { rows: 60, cols: 12, text: 20_000 } as const;
+export const TABLE_BORDERS = [
+  '#9fb3ca',
+  '#172b45',
+  '#1d4ed8',
+  '#2e7d32',
+  '#c62828',
+  '#6a1b9a',
+] as const;
+/** A new table of empty cells, equal columns. */
+export function emptyTable(
+  x: number,
+  y: number,
+  rows: number,
+  cols: number,
+  w: number,
+  defaults: Pick<TableItem, 'font' | 'size' | 'color'>,
+): TableItem {
+  const r = Math.min(TABLE_LIMITS.rows, Math.max(1, rows)),
+    c = Math.min(TABLE_LIMITS.cols, Math.max(1, cols));
+  return {
+    id: newId('b'),
+    type: 'table',
+    x: round(x),
+    y: round(y),
+    w: round(Math.max(60, w)),
+    cols: Array.from({ length: c }, () => round4(1 / c)),
+    cells: Array.from({ length: r }, () => Array.from({ length: c }, () => '')),
+    header: r > 1,
+    font: defaults.font,
+    size: defaults.size,
+    color: defaults.color,
+    border: TABLE_BORDERS[0],
+  };
+}
+const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+/** Column widths that still sum to 1 after one changes. */
+export function normalizeCols(cols: number[]) {
+  const clamped = cols.map((c) => Math.max(0.04, c));
+  const sum = clamped.reduce((a, b) => a + b, 0);
+  return clamped.map((c) => round4(c / sum));
+}
+export function tableInsertRow(item: TableItem, at: number): TableItem {
+  if (item.cells.length >= TABLE_LIMITS.rows) return item;
+  const cells = [...item.cells];
+  cells.splice(
+    at,
+    0,
+    item.cols.map(() => ''),
+  );
+  return { ...item, cells };
+}
+export function tableRemoveRow(item: TableItem, at: number): TableItem {
+  if (item.cells.length <= 1) return item;
+  return { ...item, cells: item.cells.filter((_, i) => i !== at) };
+}
+export function tableInsertCol(item: TableItem, at: number): TableItem {
+  if (item.cols.length >= TABLE_LIMITS.cols) return item;
+  const share = 1 / (item.cols.length + 1);
+  const cols = [...item.cols.map((c) => c * (1 - share))];
+  cols.splice(at, 0, share);
+  return {
+    ...item,
+    cols: normalizeCols(cols),
+    cells: item.cells.map((row) => {
+      const next = [...row];
+      next.splice(at, 0, '');
+      return next;
+    }),
+  };
+}
+export function tableRemoveCol(item: TableItem, at: number): TableItem {
+  if (item.cols.length <= 1) return item;
+  return {
+    ...item,
+    cols: normalizeCols(item.cols.filter((_, i) => i !== at)),
+    cells: item.cells.map((row) => row.filter((_, i) => i !== at)),
+  };
 }
 function rotatedBox(x: number, y: number, w: number, h: number, rot: number): Rect {
   if (!rot) return { x, y, w, h };
@@ -283,6 +396,8 @@ export function itemBounds(item: PageItem, textHeight?: number): Rect {
       return rotatedBox(item.x, item.y, item.w, item.h, item.rot);
     case 'quote':
       return { x: item.x, y: item.y, w: item.w, h: item.h };
+    case 'table':
+      return { x: item.x, y: item.y, w: item.w, h: textHeight ?? estimateTableHeight(item) };
   }
 }
 export function unionRect(rects: Rect[]): Rect | null {
@@ -402,6 +517,7 @@ export function hitItem(item: PageItem, p: Point, tolerance: number, textHeight?
       return insideRotated(p, item.x, item.y, item.w, item.h, item.rot);
     case 'text':
     case 'quote':
+    case 'table':
       return insideRect(p, itemBounds(item, textHeight));
   }
 }
@@ -499,6 +615,17 @@ export function scaleItem(item: PageItem, from: Rect, to: Rect): PageItem {
         w: Math.max(120, round(item.w * Math.abs(sx))),
         h: Math.max(40, round(item.h * Math.abs(sy))),
       };
+    case 'table': {
+      // Wider tables keep their text size; scaling both ways grows it like a text box.
+      const scale = Math.sqrt(Math.abs(sx * sy));
+      return {
+        ...item,
+        x: mx(item.x),
+        y: my(item.y),
+        w: Math.max(60, round(item.w * Math.abs(sx))),
+        size: Math.min(72, Math.max(8, round(item.size * scale))),
+      };
+    }
     default:
       return {
         ...item,
@@ -510,7 +637,8 @@ export function scaleItem(item: PageItem, from: Rect, to: Rect): PageItem {
   }
 }
 export function recolorItem(item: PageItem, color: string): PageItem {
-  if (item.type === 'stroke' || item.type === 'shape') return { ...item, color };
+  if (item.type === 'stroke' || item.type === 'shape' || item.type === 'table')
+    return { ...item, color };
   if (item.type === 'text')
     return {
       ...item,

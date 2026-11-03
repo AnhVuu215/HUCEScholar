@@ -121,6 +121,22 @@ export type PageItem =
       y: number;
       w: number;
       h: number;
+    }
+  | {
+      id: string;
+      type: 'table';
+      x: number;
+      y: number;
+      w: number;
+      /** Column widths as fractions of `w`, summing to 1. */
+      cols: number[];
+      /** Plain text per cell, row by row; every row has `cols.length` cells. */
+      cells: string[][];
+      header: boolean;
+      font: (typeof FONTS)[number];
+      size: number;
+      color: string;
+      border: string;
     };
 export type PageContent = { v: 1; items: PageItem[] };
 
@@ -302,7 +318,47 @@ function quote(item: Record<string, unknown>, id: string): PageItem {
   };
 }
 
-const builders = { stroke, text, image, shape, sticker, quote } as const;
+export const MAX_TABLE_ROWS = 60;
+export const MAX_TABLE_COLS = 12;
+const MAX_TABLE_TEXT = 20_000;
+/** CANVAS-03: a table of plain-text cells; its height follows the text, like a text box. */
+function table(item: Record<string, unknown>, id: string): PageItem {
+  const cols = item.cols,
+    cells = item.cells;
+  if (!Array.isArray(cols) || cols.length < 1 || cols.length > MAX_TABLE_COLS)
+    fail('Số cột của bảng không hợp lệ.');
+  if (!Array.isArray(cells) || cells.length < 1 || cells.length > MAX_TABLE_ROWS)
+    fail('Số hàng của bảng không hợp lệ.');
+  const widths = (cols as unknown[]).map((w) => num(w, 0.02, 1, 'Độ rộng cột'));
+  const sum = widths.reduce((a, b) => a + b, 0);
+  let total = 0;
+  const rows = (cells as unknown[]).map((row) => {
+    if (!Array.isArray(row) || row.length !== widths.length) fail('Hàng của bảng không hợp lệ.');
+    return (row as unknown[]).map((cell) => {
+      const t = cleanText(cell, MAX_TABLE_TEXT);
+      total += t.length;
+      return t;
+    });
+  });
+  if (total > MAX_TABLE_TEXT) fail('Bảng quá dài.');
+  return {
+    id,
+    type: 'table',
+    x: coord(item.x, 'Vị trí bảng'),
+    y: coord(item.y, 'Vị trí bảng'),
+    w: num(item.w, 60, 4000, 'Độ rộng bảng'),
+    // Fractions are renormalised, so rounding never leaves the columns short or long.
+    cols: widths.map((w) => Math.round((w / sum) * 10_000) / 10_000),
+    cells: rows,
+    header: item.header === true,
+    font: oneOf(item.font, FONTS, 'Font chữ'),
+    size: num(item.size, 8, 72, 'Cỡ chữ'),
+    color: color(item.color),
+    border: color(item.border, 'Màu viền'),
+  };
+}
+
+const builders = { stroke, text, image, shape, sticker, quote, table } as const;
 
 export interface CleanPage {
   content: PageContent;
@@ -337,6 +393,8 @@ export function cleanPage(raw: unknown): CleanPage {
       if (built.type === 'quote') annotations.add(built.annotationId);
       if (built.type === 'text')
         text.push(built.blocks.map((b) => b.runs.map((r) => r.t).join('')).join('\n'));
+      if (built.type === 'table')
+        text.push(built.cells.map((row) => row.filter(Boolean).join(' ')).join('\n'));
       return built;
     });
     return {

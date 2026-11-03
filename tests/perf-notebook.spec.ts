@@ -160,6 +160,21 @@ async function inkShown(page: Page, strokes: number) {
   );
 }
 
+/** One long stroke (a sentence of handwriting) with the pen; frame gaps while drawing it. */
+async function longStroke(page: Page, moves: number) {
+  await page.locator('.note-tool[data-tool="pen"]').click();
+  const box = (await page.locator('svg.note-surface').boundingBox())!;
+  const x = box.x + box.width * 0.15,
+    y = box.y + box.height * 0.6;
+  await startFrames(page);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let k = 1; k <= moves; k++)
+    await page.mouse.move(x + (k / moves) * box.width * 0.7, y + Math.sin(k / 4) * 14);
+  await page.mouse.up();
+  return stopFrames(page);
+}
+
 test('notebook page with thousands of strokes and images', async ({ page, browser }) => {
   test.setTimeout(600_000);
   await page.goto('/login');
@@ -329,6 +344,7 @@ test('notebook page with thousands of strokes and images', async ({ page, browse
     emptyOpens.push(Date.now() - t0);
   }
   report.openEmptyPage = summary(emptyOpens);
+  report.longStrokeEmptyPage = [await longStroke(page, 400), await longStroke(page, 400)];
   await page.request.delete(`/api/v1/notebooks/${emptyDetail.item.id}`, {
     headers: await readerHeaders(page),
     data: { revision: emptyDetail.item.revision },
@@ -368,6 +384,8 @@ test('notebook page with thousands of strokes and images', async ({ page, browse
     autosave.push(Date.now() - t0);
   }
   report.drawStroke = drawing;
+  report.longStrokeBusyPage = [await longStroke(page, 400)];
+  await expect(page.locator('.note-save')).toHaveText('Đã lưu', { timeout: 60_000 });
   report.autosaveAfterStroke = summary(autosave);
 
   // Ctrl + wheel zoom in and out, then a pan with the hand tool.

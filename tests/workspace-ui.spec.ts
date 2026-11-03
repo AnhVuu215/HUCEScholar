@@ -17,6 +17,8 @@ test('library controls align and keep readable targets', async ({ page }) => {
   await page.goto('/workspace/library');
   const search = page.getByLabel('Tìm học liệu', { exact: true });
   const submit = page.getByRole('button', { name: 'Tìm kiếm', exact: true });
+  // Measure once the results have loaded; the page shifts while it fills in.
+  await expect(page.getByRole('status').filter({ hasText: /học liệu · Trang/ })).toBeVisible();
   const inputBounds = await search.boundingBox();
   const buttonBounds = await submit.boundingBox();
   expect(inputBounds!.height).toBeGreaterThanOrEqual(44);

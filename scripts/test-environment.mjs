@@ -176,6 +176,7 @@ try {
     ['canvas1-admin', 'ADMIN'],
     ['canvas1-student', 'STUDENT'],
     ['canvas2-student', 'STUDENT'],
+    ['canvas3-student', 'STUDENT'],
     ['ux02-admin', 'ADMIN'],
     ['ux02-student', 'STUDENT'],
     ['course1-admin', 'ADMIN'],

@@ -1046,3 +1046,87 @@
   /* The bar (~52px) and the slim header (~56px) are all that sits above the page. */
   height: max(480px, calc(100dvh - 124px));
 }
+
+/* CANVAS-03: tables. */
+.note-table-frame {
+  width: max-content;
+}
+.note-table-frame table {
+  outline: 2px solid #0056a6;
+  outline-offset: 1px;
+}
+.note-table-cell {
+  display: block;
+  width: 100%;
+  min-height: 1.4em;
+  field-sizing: content;
+  resize: none;
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.note-table-cell:focus {
+  outline: 2px solid rgb(0 86 166 / 45%);
+  outline-offset: -2px;
+  background: rgb(0 86 166 / 5%);
+}
+.note-table-col-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  margin-left: -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.note-table-col-handle:hover {
+  background: linear-gradient(90deg, transparent 3px, #0056a6 3px, #0056a6 6px, transparent 6px);
+}
+.note-table-grid {
+  display: grid;
+  gap: 3px;
+  justify-content: start;
+  margin-block: 8px 16px;
+}
+.note-table-grid-row {
+  display: flex;
+  gap: 3px;
+}
+.note-table-grid button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  cursor: pointer;
+}
+.note-table-grid button[data-on] {
+  border-color: #0056a6;
+  background: #dbe9f8;
+}
+.note-table-size {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.note-table-size .note-form-field {
+  width: 120px;
+}
+.note-table-size .note-form-actions {
+  margin-left: auto;
+}
+.note-ruler text {
+  fill: #3b5f88;
+  font-family: 'Notes Be Vietnam Pro', sans-serif;
+  font-size: 11px;
+}
+.note-ruler .note-ruler-angle {
+  fill: #0056a6;
+  font-size: 13px;
+  font-weight: 700;
+}

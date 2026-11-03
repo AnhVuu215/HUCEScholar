@@ -46,6 +46,8 @@ Chủ dự án đề xuất CANVAS-01 **Vở ghi tự do**: một chỗ ghi ché
 
 UX-03 [thanh ☰ cho mọi trang và lịch to hơn](../implementation/2026-11-03-workspace-topbar.md): sidebar thu thành thanh mảnh trên cùng, menu xổ xuống khi bấm, nội dung rộng hết màn hình; lịch thẳng cột, mỗi giờ cao hơn; form tạo vở nằm giữa màn hình.
 
+CANVAS-03 [bảng, thước kẻ và nét vẽ mượt hơn trong Vở ghi](../implementation/2026-11-04-notebook-tables-ruler.md): chèn bảng từ lưới, sửa từng ô, kéo đổi độ rộng cột; thước xoay được với vạch mm, bút đặt sát mép thì kẻ thẳng; nét đang vẽ không còn đi qua React và có điểm dự đoán, khung hình p95 khi vẽ còn 17 ms (CPU chậm 4×).
+
 ## Bổ sung yêu cầu V2 ngày 17/10
 
 Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.

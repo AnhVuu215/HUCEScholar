@@ -7,6 +7,7 @@ import type { NotebookEntry } from '../../lib/notebook';
 import {
   contentBounds,
   dataUrlToBlob,
+  emptyTable,
   droppedImageSource,
   fitImage,
   newId,
@@ -58,6 +59,7 @@ import {
   QuotePicker,
   ShortcutsHelp,
   StickerPicker,
+  TablePicker,
 } from './note-dialogs';
 import { exportName, exportSvgToPng } from './note-export';
 import { NotePages, type ThumbData } from './note-pages';
@@ -65,6 +67,7 @@ import { NotePaper } from './note-paper';
 import { NoteDefs, NoteItems } from './note-render';
 import type { Sticker } from './note-stickers';
 import { NoteToolbar } from './note-toolbar';
+import type { Ruler } from './note-ruler';
 import { useNotePage } from './use-note-page';
 
 const SETTINGS_KEY = 'hucescholar.notes.tools';
@@ -101,6 +104,7 @@ let clipboard: { token: string; items: PageItem[] } | null = null;
 
 type Dialog =
   | { kind: 'stickers' }
+  | { kind: 'table' }
   | { kind: 'quotes' }
   | { kind: 'crop'; item: ImageItem }
   | { kind: 'help' }
@@ -126,6 +130,8 @@ export function NoteEditor({
   // Rendered only in the browser (after the session check), so remembered settings are readable.
   const [settings, setSettingsState] = useState<ToolSettings>(readSettings);
   const [selection, setSelection] = useState<string[]>([]);
+  // CANVAS-03: the straightedge is a view aid, kept per open editor and never saved.
+  const [ruler, setRuler] = useState<Ruler | null>(null);
   const [editing, setEditing] = useState<Parameters<typeof NoteCanvas>[0]['editing']>(null);
   const [view, setView] = useState<View>({ zoom: 1, x: 24, y: 24 });
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -450,6 +456,36 @@ export function NoteEditor({
   }
   const fileInput = useRef<HTMLInputElement>(null);
 
+  /** A choice in the "Chèn" or "Xuất" menu closes it, so it never covers what opens next. */
+  function closeMenu(event: React.MouseEvent<HTMLElement>) {
+    if ((event.target as Element).closest('button'))
+      event.currentTarget.closest('details')?.removeAttribute('open');
+  }
+  function toggleRuler() {
+    setRuler((current) => {
+      if (current) return null;
+      const at = center();
+      return { x: round(at.x), y: round(at.y + 80), angle: 0 };
+    });
+  }
+  /** CANVAS-03: a new table at the middle of the view, opened for typing at once. */
+  function insertTable(rows: number, cols: number) {
+    const at = center();
+    const width = box
+      ? Math.min(box.w - 112, Math.max(240, cols * 120))
+      : Math.max(240, cols * 120);
+    setDialog(null);
+    setTool('select');
+    setSelection([]);
+    setEditing({
+      item: emptyTable(at.x - width / 2, at.y, rows, cols, width, {
+        font: settings.textFont,
+        size: Math.min(24, settings.textSize - 2),
+        color: settings.textColor,
+      }),
+      isNew: true,
+    });
+  }
   function insertSticker(sticker: Sticker) {
     const at = center();
     addItems([
@@ -628,6 +664,7 @@ export function NoteEditor({
         if (tools[key] !== 'select' && tools[key] !== 'lasso') setSelection([]);
       }
       if (key === 'i') fileInput.current?.click();
+      if (key === 'r' && !event.altKey) toggleRuler();
     };
     const up = (event: KeyboardEvent) => {
       if (event.key === ' ') setSpaceHeld(false);
@@ -864,9 +901,12 @@ export function NoteEditor({
           </span>
           <details className="note-menu">
             <summary>Chèn</summary>
-            <div className="note-menu-panel">
+            <div className="note-menu-panel" onClick={closeMenu}>
               <button type="button" onClick={() => fileInput.current?.click()}>
                 Ảnh từ máy…
+              </button>
+              <button type="button" onClick={() => setDialog({ kind: 'table' })}>
+                Bảng…
               </button>
               <button type="button" onClick={() => setDialog({ kind: 'stickers' })}>
                 Trang trí (sticker, washi, nhãn, khung)…
@@ -887,9 +927,18 @@ export function NoteEditor({
           >
             Giấy
           </button>
+          <button
+            type="button"
+            className="note-text-button"
+            aria-pressed={!!ruler}
+            onClick={toggleRuler}
+            title="Thước kẻ (R): kéo thân thước để di chuyển, kéo núm tròn để xoay; bút đặt sát mép sẽ kẻ thẳng"
+          >
+            Thước
+          </button>
           <details className="note-menu">
             <summary>Xuất</summary>
-            <div className="note-menu-panel">
+            <div className="note-menu-panel" onClick={closeMenu}>
               <button type="button" onClick={() => void printView('all')}>
                 In / Lưu PDF cả vở
               </button>
@@ -1042,6 +1091,8 @@ export function NoteEditor({
               onDropData={(data, at) => void insertFromData(data, at)}
               onImageEdit={(item) => setDialog({ kind: 'crop', item })}
               spaceHeld={spaceHeld}
+              ruler={ruler}
+              setRuler={setRuler}
             />
           )}
         </div>
@@ -1079,6 +1130,9 @@ export function NoteEditor({
         </div>
       )}
 
+      {dialog?.kind === 'table' && (
+        <TablePicker onPick={insertTable} onClose={() => setDialog(null)} />
+      )}
       {dialog?.kind === 'stickers' && (
         <StickerPicker onPick={insertSticker} onClose={() => setDialog(null)} />
       )}
