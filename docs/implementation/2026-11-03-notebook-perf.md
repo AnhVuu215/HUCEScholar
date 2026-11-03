@@ -112,7 +112,8 @@ Chạy local với app dev (`pnpm dev`), ClamAV, file-worker và docx-converter 
   - Trang lưu đủ (nét + ảnh), revision tăng bình thường.
 - **Chưa kiểm chứng:**
   - Đường API tải hộ từ URL (`from-url`) với ảnh thật: lần kéo này không đi qua đường đó.
-  - Kéo từ khung xem trước ảnh lớn của Google, và kéo trên **Edge**.
+  - Kéo từ khung xem trước ảnh lớn của Google.
+  - Edge: **ngoài phạm vi**. Ngày 03/11/2026, chủ dự án chốt chỉ kiểm chứng trên Chrome.
   - Cử chỉ kéo giả lập bằng công cụ tự động không sinh sự kiện kéo thả HTML5 của Chrome, nên cần người kéo thật.
 - Sau khi chạy thử đã tắt app dev và các container ClamAV/worker.
 
