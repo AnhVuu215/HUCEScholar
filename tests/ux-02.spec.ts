@@ -1,4 +1,5 @@
 import { expect, test } from './helpers/test';
+import { navLink } from './helpers/navigation';
 import type { Dialog, Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { openReaderFixture, readerHeaders, readerLogin } from './helpers/reader-session';
@@ -14,10 +15,19 @@ function answerPrompts(page: Page, accept: boolean) {
   return { seen, stop: () => page.off('dialog', answer) };
 }
 
+/** A link of the ☰ menu; clicking it is a navigation the leave guard may stop. */
 function workspaceLink(page: Page, name: string) {
-  return page
-    .getByRole('navigation', { name: 'Điều hướng không gian' })
-    .getByRole('link', { name, exact: true });
+  return {
+    click: async () => {
+      await (await navLink(page, name)).click();
+      // Staying on the page (the prompt said no) leaves the menu open over the form.
+      const menu = page.getByRole('button', { name: 'Menu', exact: true });
+      if ((await menu.getAttribute('aria-expanded')) === 'true') {
+        await menu.focus();
+        await page.keyboard.press('Escape');
+      }
+    },
+  };
 }
 
 test('an unsaved review card asks before leaving the reader or the deck', async ({ page }) => {

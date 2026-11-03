@@ -10,7 +10,8 @@ const label = (d: Date) => `${labels[(d.getDay() + 6) % 7]}, ${short(d)}`;
 const plus = (d: Date, days: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
 const column = (page: Page, day: Date) =>
   page.locator(`.calendar-day-column[aria-label="${label(day)}"]`);
-const HOUR_PX = 48;
+// Matches HOUR_PX in calendar-board.tsx (64px per hour).
+const HOUR_PX = 64;
 
 test('weekly sessions repeat, one session changes alone, and drag and drop moves items', async ({
   page,

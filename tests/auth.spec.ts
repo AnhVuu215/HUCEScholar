@@ -38,7 +38,10 @@ for (const [role, label] of [
     await expect(
       page.getByRole('heading', { name: `Không gian ${label.toLowerCase()}` }),
     ).toBeVisible();
+    // The role's links are in the ☰ menu once the profile has loaded.
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await expect(page.locator('#workspace-navigation a').first()).toBeVisible();
+    await page.keyboard.press('Escape');
     await page.unroute(profilePath);
     await expect(page.locator('.workspace-account-name')).toHaveText(
       `${role} — tài khoản kiểm thử`,
