@@ -76,7 +76,7 @@ Theo cách làm của dự án, chọn phương án khuyến nghị và ghi lạ
 - **Thẻ trích dẫn khi mất quyền tài liệu:** thẻ vẫn nằm trên trang nhưng chỉ hiện "Tài liệu không còn khả dụng", ẩn đoạn chữ và tiêu đề. API trả nội dung thẻ theo quyền đọc hiện tại, giống quy tắc xuất ghi chú (EXPORT-01) và Lịch học. Không lưu bản sao đoạn chữ để vượt quyền.
 - **Không cache vở, ảnh hay link ký trong service worker**, theo AGENTS.md. Chưa có chế độ ngoại tuyến. Mất mạng thì báo "Chưa lưu được" và giữ nguyên phần đang vẽ trong bộ nhớ trang để thử lại.
 - **Chữ viết tay chưa tìm kiếm được** (không có OCR). Chỉ chữ gõ, tên vở và đoạn trích dẫn được tìm, có tìm không dấu như Sổ tay.
-- **Bút cảm ứng:** dùng Pointer Events, có lực ấn khi thiết bị báo. Kiểm chứng trên iPad/Safari và màn hình cảm ứng đang **hoãn** theo hướng web-first. Phạm vi kiểm chứng của đợt này là chuột, touchpad và bút Wacom trên Chrome/Edge. Phần chặn chạm lòng bàn tay chỉ là cơ chế cơ bản (khi đang dùng bút thì bỏ qua chạm tay), chưa tuyên bố hỗ trợ thiết bị.
+- **Bút cảm ứng:** dùng Pointer Events, có lực ấn khi thiết bị báo. Kiểm chứng trên iPad/Safari và màn hình cảm ứng đang **hoãn** theo hướng web-first. Phạm vi kiểm chứng của đợt này là chuột, touchpad và bút Wacom trên Chrome. Ngày 03/11/2026, chủ dự án chốt bỏ Edge. Phần chặn chạm lòng bàn tay chỉ là cơ chế cơ bản (khi đang dùng bút thì bỏ qua chạm tay), chưa tuyên bố hỗ trợ thiết bị.
 
 ## Ảnh kéo từ Google: cách làm an toàn
 
@@ -222,7 +222,7 @@ Theo cách làm đã chốt, mọi phần web ở trên làm trong **một PR**,
   - hai tab sửa cùng trang hiện cảnh báo xung đột;
   - xuất PDF có đủ số trang;
   - giao diện không tràn ở 320 px.
-- **Ngoài tự động:** chạy pilot local với ảnh thật kéo từ Google trên Chrome và Edge. Ghi rõ đây là bằng chứng local, chưa phải thiết bị cảm ứng.
+- **Ngoài tự động:** chạy pilot local với ảnh thật kéo từ Google trên Chrome. Edge đã bỏ theo quyết định ngày 03/11/2026. Ghi rõ đây là bằng chứng local, chưa phải thiết bị cảm ứng.
 
 ## Câu hỏi để chủ dự án chốt (đã có mặc định)
 

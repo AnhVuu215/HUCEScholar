@@ -74,4 +74,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0, Chrome do Playwright điều khiển
   - Ca "khóa người duyệt" khóa tài khoản `other`; trigger của DB thu hồi phiên, nên các ca CANVAS chạy sau nhận 401. Nay ca đó đăng nhập lại `other` sau khi mở khóa, giống ca khóa tài khoản trước đó.
   - Test schema nay đếm 39 bảng, 77 khóa ngoại, 133 `CHECK`, 21 index riêng phần. Phần tăng khớp đúng migration vở ghi: 3 bảng, 5 khóa ngoại, 21 `CHECK`, 5 index riêng phần.
 - Cả bộ e2e (một worker, chia ba lượt theo file): 72 + 74 + 56 = **202 đạt, 0 hỏng**; 8 ca opt-in bỏ qua. `workspace-ui.spec.ts` nay đếm thêm một link "Vở ghi" trên sidebar cho mỗi vai trò.
-- Ảnh kéo thật từ Google: đã chạy thử trên Chrome ở [CANVAS-02](2026-11-03-notebook-perf.md). Edge và đường tải hộ từ URL với ảnh thật thì chưa.
+- Ảnh kéo thật từ Google: đã chạy thử trên Chrome ở [CANVAS-02](2026-11-03-notebook-perf.md). Đường tải hộ từ URL với ảnh thật thì chưa chạy thử. Edge ngoài phạm vi: chủ dự án chốt chỉ kiểm chứng trên Chrome.
