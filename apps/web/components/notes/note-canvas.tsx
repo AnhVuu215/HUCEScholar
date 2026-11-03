@@ -735,9 +735,33 @@ export function NoteCanvas({
   }
 
   const hidden = useMemo(() => (editing ? new Set([editing.item.id]) : undefined), [editing]);
+  // PERF-01: strokes are painted into cached tiles at the screen's density. The scale follows
+  // the zoom once it settles, so a pinch or Ctrl+wheel does not repaint every step.
+  const targetScale = Math.round(view.zoom * (globalThis.devicePixelRatio || 1) * 100) / 100;
+  const [rasterScale, setRasterScale] = useState(targetScale);
+  useEffect(() => {
+    if (targetScale === rasterScale) return;
+    const timer = setTimeout(() => setRasterScale(targetScale), 180);
+    return () => clearTimeout(timer);
+  }, [targetScale, rasterScale]);
+  // The visible part of the page plus a margin, snapped so small pans keep the same object.
+  const margin = 256 / view.zoom;
+  const areaX = Math.floor((-view.x / view.zoom - margin) / 64) * 64,
+    areaY = Math.floor((-view.y / view.zoom - margin) / 64) * 64,
+    areaW = Math.ceil((size.w / view.zoom + 2 * margin) / 64 + 1) * 64,
+    areaH = Math.ceil((size.h / view.zoom + 2 * margin) / 64 + 1) * 64;
+  // Mid-zoom the tiles keep their scale and area; they repaint once the zoom settles.
+  const zooming = targetScale !== rasterScale;
+  const settledArea = useRef<Rect>({ x: areaX, y: areaY, w: areaW, h: areaH });
+  if (!zooming) settledArea.current = { x: areaX, y: areaY, w: areaW, h: areaH };
+  const area = settledArea.current;
+  const raster = useMemo(
+    () => ({ scale: rasterScale, area: { x: area.x, y: area.y, w: area.w, h: area.h } }),
+    [rasterScale, area.x, area.y, area.w, area.h],
+  );
   const renderCtx = useMemo<RenderContext>(
-    () => ({ ...ctx, onMeasure, hidden, links: tool === 'select' }),
-    [ctx, onMeasure, hidden, tool],
+    () => ({ ...ctx, onMeasure, hidden, links: tool === 'select', raster, vector: selected }),
+    [ctx, onMeasure, hidden, tool, raster, selected],
   );
   // The paper of an infinite page covers the visible area.
   const visible: Rect = box

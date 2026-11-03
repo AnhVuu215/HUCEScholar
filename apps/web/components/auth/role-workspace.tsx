@@ -44,6 +44,17 @@ export function RoleWorkspace({
   const [logoutError, setLogoutError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
+  const sidebar = useRef<HTMLElement>(null);
+  // Where the menu drops over the page (the notebook), a press outside it closes it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !sidebar.current?.contains(event.target))
+        setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, [menuOpen]);
   const updateProfile = useCallback((user: Profile) => {
     setState((current) =>
       current.kind === 'ready' && current.user.id === user.id ? { ...current, user } : current,
@@ -126,6 +137,7 @@ export function RoleWorkspace({
         Bỏ qua điều hướng
       </a>
       <aside
+        ref={sidebar}
         className="workspace-sidebar"
         data-menu-open={menuOpen}
         onKeyDown={(event) => {

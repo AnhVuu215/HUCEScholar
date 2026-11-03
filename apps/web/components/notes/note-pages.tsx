@@ -25,8 +25,18 @@ const Thumb = memo(function Thumb({
   // An infinite page previews its top-left area at portrait proportions.
   const view = box ?? { w: 794, h: 1123 };
   const ctx = useMemo<RenderContext>(
-    () => ({ quotes: data?.quotes ?? {}, assets: data?.assets ?? {}, localImages, thumb: true }),
-    [data, localImages],
+    () => ({
+      quotes: data?.quotes ?? {},
+      assets: data?.assets ?? {},
+      localImages,
+      thumb: true,
+      // A busy page is one small cached bitmap here, not thousands of paths.
+      raster: {
+        scale: Math.round(0.2 * (globalThis.devicePixelRatio || 1) * 100) / 100,
+        area: { x: 0, y: 0, w: view.w, h: view.h },
+      },
+    }),
+    [data, localImages, view.w, view.h],
   );
   return (
     <svg viewBox={`0 0 ${view.w} ${view.h}`} className="note-thumb-svg" aria-hidden="true">
