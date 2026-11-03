@@ -127,7 +127,7 @@
 }
 
 /* ---- Editor --------------------------------------------------------------------------------- */
-.note-editor {
+.notebook-editor {
   --note-chrome: #ffffff;
   display: flex;
   flex-direction: column;
@@ -137,7 +137,7 @@
   background: var(--note-chrome);
   overflow: hidden;
 }
-.note-editor[data-fullscreen] {
+.notebook-editor[data-fullscreen] {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -935,7 +935,7 @@
 }
 
 @media (max-width: 760px) {
-  .note-editor {
+  .notebook-editor {
     height: max(520px, calc(100dvh - 140px));
   }
   .note-pages {
@@ -1023,4 +1023,82 @@
   .note-print-page:last-child {
     break-after: auto;
   }
+}
+
+/* An open notebook takes the whole window: the sidebar becomes a slim bar whose ☰ button drops
+   the navigation over the page, and the page heading and footer step aside. */
+.app-shell:has(.notebook-editor) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-shell:has(.notebook-editor) > .workspace-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: auto;
+  overflow: visible;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+}
+.app-shell:has(.notebook-editor) .workspace-sidebar-heading {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.app-shell:has(.notebook-editor) .workspace-menu-toggle {
+  display: inline-flex;
+  order: -1;
+  min-height: 40px;
+  padding: 6px 10px;
+}
+.app-shell:has(.notebook-editor) .brand-mark {
+  width: 30px;
+  height: 32px;
+  font-size: 1.2rem;
+}
+.app-shell:has(.notebook-editor) .sidebar-description,
+.app-shell:has(.notebook-editor) .sidebar-note {
+  display: none;
+}
+.app-shell:has(.notebook-editor) .workspace-sidebar nav {
+  display: none;
+}
+.app-shell:has(.notebook-editor) .workspace-sidebar[data-menu-open='true'] nav {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  width: min(300px, 100vw);
+  max-height: calc(100dvh - 52px);
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--nav-active);
+  background: var(--navy);
+  box-shadow: 0 16px 32px rgb(0 20 50 / 30%);
+}
+.app-shell:has(.notebook-editor) .workspace-sidebar .workspace-nav-group {
+  grid-template-columns: 1fr;
+}
+.app-shell:has(.notebook-editor) .workspace-sidebar .workspace-nav-group + .workspace-nav-group {
+  margin-top: 12px;
+}
+.account-workspace:has(.notebook-editor) {
+  max-width: none;
+  padding: 0 12px 8px;
+}
+.account-workspace:has(.notebook-editor) > .account-heading,
+.account-workspace:has(.notebook-editor) > .workspace-footer {
+  display: none;
+}
+.account-workspace:has(.notebook-editor) > .workspace-header {
+  min-height: 44px;
+  margin-bottom: 8px;
+  padding-block: 4px;
+}
+.account-workspace .notebook-editor:not([data-fullscreen]) {
+  max-width: none;
+  /* The bar (~52px) and the slim header (~56px) are all that sits above the page. */
+  height: max(480px, calc(100dvh - 124px));
 }

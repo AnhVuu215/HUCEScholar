@@ -217,15 +217,23 @@ export function NoteEditor({
     }
   }, [summary, fit]);
 
-  // The open page's thumbnail follows the edits.
+  // The open page's thumbnail follows the edits once they pause, not at every stroke.
+  const [settled, setSettled] = useState(ready);
+  useEffect(() => {
+    if (ready === settled) return;
+    const timer = setTimeout(() => setSettled(ready), 1500);
+    return () => clearTimeout(timer);
+  }, [ready, settled]);
+  // Another page just opened: show it at once.
+  const thumbOf = ready && settled?.summary.id === ready.summary.id ? settled : ready;
   const thumbs = useMemo(() => {
-    if (!ready) return cache;
-    return new Map(cache).set(ready.summary.id, {
-      items: ready.items,
-      quotes: ready.quotes,
-      assets: ready.assets,
+    if (!thumbOf) return cache;
+    return new Map(cache).set(thumbOf.summary.id, {
+      items: thumbOf.items,
+      quotes: thumbOf.quotes,
+      assets: thumbOf.assets,
     });
-  }, [cache, ready]);
+  }, [cache, thumbOf]);
   const loadThumb = useCallback(
     (id: string) => {
       if (id === currentId) return;
@@ -782,7 +790,7 @@ export function NoteEditor({
   };
 
   return (
-    <div className="note-editor" data-fullscreen={fullscreen || undefined}>
+    <div className="notebook-editor" data-fullscreen={fullscreen || undefined}>
       <header className="note-editor-header">
         <Link href="/workspace/notes" className="note-back">
           ← Kệ vở
