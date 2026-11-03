@@ -56,6 +56,8 @@ export type CalendarItem = {
   /** Present only while the owner can still read the linked version. */
   material: { versionId: string; pageNumber: number; title: string } | null;
   materialUnavailable: boolean;
+  /** CANVAS-01: one of the owner's notebooks to open from this item (not one in the trash). */
+  notebook: { id: string; title: string } | null;
   repeat: CalendarRepeat | null;
   /** In-app notice (and email when asked) before the start or due time. */
   reminder: CalendarReminder | null;
@@ -74,6 +76,7 @@ export type CalendarFields = {
   color: CalendarColor;
   versionId: string | null;
   pageNumber: number | null;
+  notebookId?: string | null;
   repeat?: CalendarRepeatInput | null;
   remindMinutes?: number | null;
   remindMore?: number[];
@@ -114,6 +117,10 @@ function valid(v: unknown): v is CalendarItem {
         Number.isInteger(v.material.pageNumber) &&
         typeof v.material.title === 'string')) &&
     typeof v.materialUnavailable === 'boolean' &&
+    (v.notebook === null ||
+      (isRecord(v.notebook) &&
+        isNumericId(v.notebook.id) &&
+        typeof v.notebook.title === 'string')) &&
     repeat(v.repeat) &&
     (v.reminder === null ||
       (isRecord(v.reminder) &&
@@ -427,6 +434,7 @@ export function itemFields(item: CalendarItem): { fields: CalendarFields; keepSo
       color: item.color,
       versionId: item.material?.versionId ?? null,
       pageNumber: item.material?.pageNumber ?? null,
+      notebookId: item.notebook?.id ?? null,
       repeat: null,
       remindMinutes: item.reminder?.minutes ?? null,
       remindMore: item.reminder?.more ?? [],
