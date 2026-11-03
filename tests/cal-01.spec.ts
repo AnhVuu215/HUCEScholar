@@ -1,4 +1,5 @@
 import { expect, test } from './helpers/test';
+import { closeNavigation, navLink } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
 import { openReaderFixture } from './helpers/reader-session';
 
@@ -20,10 +21,8 @@ test('reading is scheduled from the reader and the calendar manages sessions and
   await page.getByRole('link', { name: 'Xem lịch học', exact: true }).click();
 
   await expect(page).toHaveURL('/workspace/calendar');
-  await expect(page.getByRole('link', { name: 'Lịch học', exact: true })).toHaveAttribute(
-    'aria-current',
-    'page',
-  );
+  await expect(await navLink(page, 'Lịch học')).toHaveAttribute('aria-current', 'page');
+  await closeNavigation(page);
   // The reading session is tomorrow, so the agenda (today + 30 days) always contains it.
   await page.getByRole('button', { name: 'Lịch biểu', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Lịch biểu', exact: true })).toHaveAttribute(

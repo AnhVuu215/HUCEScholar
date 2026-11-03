@@ -564,7 +564,7 @@
 }
 .calendar-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 16px;
   align-items: start;
 }
@@ -664,6 +664,7 @@
 }
 /* Week: day header, all-day strip and a scrollable hour grid share one column template. */
 .calendar-week {
+  --calendar-hour: 64px;
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: var(--control-radius);
@@ -673,25 +674,34 @@
 .calendar-hours {
   display: grid;
   /* Seven 64px days fit beside the task panel on a 1280px screen; narrower screens scroll. */
-  grid-template-columns: 52px repeat(7, minmax(64px, 1fr));
-  min-width: 500px;
+  grid-template-columns: 56px repeat(7, minmax(72px, 1fr));
+  min-width: 560px;
+}
+/* The hour grid scrolls; the rows above keep the same gutter so the day columns line up. */
+.calendar-week-head,
+.calendar-week-strip {
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+}
+.calendar-hours {
+  scrollbar-gutter: stable;
 }
 .calendar-week-head > div {
   display: grid;
   justify-items: center;
-  padding: 6px 0;
+  padding: 8px 0;
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 .calendar-week-head strong {
   color: var(--ink);
-  font-size: 1.125rem;
+  font-size: 1.25rem;
 }
 .calendar-week-head .is-today strong {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
@@ -700,36 +710,41 @@
   border-block: 1px solid var(--line);
 }
 .calendar-week-strip > span {
-  padding: 6px 4px;
+  padding: 8px 4px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 .calendar-week-strip > div {
   min-width: 0;
-  min-height: 32px;
+  min-height: 40px;
   padding: 2px;
   border-left: 1px solid var(--line);
 }
 .calendar-hours {
-  max-height: 560px;
+  /* As tall as the window allows under the toolbar, but never cramped. */
+  max-height: max(560px, calc(100dvh - 300px));
   overflow-y: auto;
 }
 .calendar-hour-labels {
   display: grid;
-  grid-auto-rows: 48px;
+  grid-auto-rows: var(--calendar-hour);
 }
 .calendar-hour-labels span {
   padding-right: 6px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   text-align: right;
   transform: translateY(-0.6em);
 }
 .calendar-day-column {
   position: relative;
-  height: calc(24 * 48px);
+  height: calc(24 * var(--calendar-hour));
   border-left: 1px solid var(--line);
-  background: repeating-linear-gradient(to bottom, transparent 0 47px, var(--line) 47px 48px);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(var(--calendar-hour) - 1px),
+    var(--line) calc(var(--calendar-hour) - 1px) var(--calendar-hour)
+  );
   cursor: copy;
 }
 .calendar-session {
@@ -746,7 +761,7 @@
   background: var(--cal-bg);
   color: var(--cal-ink);
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   text-align: left;
   cursor: pointer;
 }
@@ -801,7 +816,8 @@
   display: grid;
   align-content: start;
   min-width: 0;
-  min-height: 112px;
+  /* Six week rows share the window height under the toolbar. */
+  min-height: max(112px, calc((100dvh - 330px) / 6));
   padding: 2px;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -1151,4 +1167,85 @@
   margin: 4px 0 0;
   padding-left: 18px;
   overflow-wrap: anywhere;
+}
+
+/* Every workspace page: the sidebar is a slim bar on top whose ☰ button drops the navigation
+   over the page, so the content can use the full width of the window. */
+.app-shell.app-shell--topbar {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-shell--topbar > .workspace-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: auto;
+  overflow: visible;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+}
+.app-shell--topbar .workspace-sidebar-heading {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.app-shell--topbar .workspace-menu-toggle {
+  display: inline-flex;
+  order: -1;
+  min-height: 40px;
+  padding: 6px 10px;
+}
+.app-shell--topbar .brand-mark {
+  width: 30px;
+  height: 32px;
+  font-size: 1.2rem;
+}
+.app-shell--topbar .sidebar-description,
+.app-shell--topbar .sidebar-note,
+.app-shell--topbar .workspace-sidebar[data-menu-open] nav {
+  display: none;
+}
+.app-shell--topbar .workspace-sidebar[data-menu-open='true'] nav {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  width: min(300px, 100vw);
+  max-height: calc(100dvh - 52px);
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--nav-active);
+  background: var(--navy);
+  box-shadow: 0 16px 32px rgb(0 20 50 / 30%);
+}
+.app-shell--topbar .workspace-sidebar .workspace-nav-group {
+  grid-template-columns: 1fr;
+}
+.app-shell--topbar .workspace-sidebar .workspace-nav-group + .workspace-nav-group {
+  margin-top: 12px;
+}
+.app-shell--topbar .workspace-sidebar[data-menu-open] nav a {
+  margin-top: 0;
+  border: 0;
+}
+.app-shell--topbar > .workspace {
+  max-width: none;
+  padding: 20px clamp(16px, 3vw, 48px) 24px;
+}
+/* Less chrome above the content: a slimmer header and page title. */
+.app-shell--topbar > .workspace > .workspace-header {
+  min-height: 56px;
+  margin-bottom: 16px;
+  padding-block: 6px;
+}
+.app-shell--topbar > .workspace > .account-heading {
+  margin-bottom: 20px;
+}
+.app-shell--topbar > .workspace > .account-heading h1 {
+  font-size: clamp(1.6rem, 2.2vw, 2rem);
+}
+.app-shell--topbar > .workspace > .account-heading .intro {
+  margin-top: 4px;
 }

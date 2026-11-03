@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './helpers/test';
+import { navLink } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
 import { openReaderFixture, readerHeaders } from './helpers/reader-session';
 
@@ -35,7 +36,7 @@ test('the notebook finds notes across documents, filters by course and opens the
     (await (await page.request.get(`/api/v1/library/versions/${versionId}`)).json()).item;
   const [one, two] = [await material(first.versionId), await material(second.versionId)];
   await page.goto('/workspace/library');
-  await page.getByRole('link', { name: 'Sổ tay', exact: true }).first().click();
+  await (await navLink(page, 'Sổ tay')).click();
   await expect(page).toHaveURL(/\/workspace\/notebook$/);
   await search(page, token);
   // Newest document first, each under its own heading; the search text stays out of the URL.

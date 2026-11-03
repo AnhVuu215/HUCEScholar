@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './helpers/test';
+import { closeNavigation, navLink, workspaceNavigation } from './helpers/navigation';
 import { mkdirSync } from 'node:fs';
 
 async function login(page: Page, role: 'admin' | 'lecturer' | 'student' = 'student') {
@@ -48,11 +49,15 @@ for (const [role, count] of [
   }) => {
     await login(page, role);
     const navigation = page.getByRole('navigation', { name: 'Điều hướng không gian' });
+    // The links sit in the ☰ menu of the top bar.
+    await expect(navigation).toBeHidden();
+    await workspaceNavigation(page);
     await expect(navigation.getByRole('link')).toHaveCount(count);
     await expect(navigation.getByRole('link', { name: 'Cài ứng dụng' })).toHaveCount(0);
     await expect(navigation.getByRole('link', { name: 'Tài khoản của tôi' })).toHaveCount(0);
     const account = page.getByRole('button', { name: 'Menu tài khoản', exact: true });
     await expect(account).toHaveAttribute('aria-expanded', 'false');
+    await closeNavigation(page);
     await account.click();
     const profile = page.getByRole('link', { name: 'Tài khoản của tôi', exact: true });
     await expect(profile).toHaveAttribute('href', '/workspace/profile');
@@ -61,11 +66,10 @@ for (const [role, count] of [
     await page.keyboard.press('Escape');
     await expect(account).toBeFocused();
     await expect(profile).toBeHidden();
-    await navigation.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
+    await (await navLink(page, 'Kho học liệu')).click();
     await expect(page.getByRole('heading', { name: 'Kho học liệu', exact: true })).toBeVisible();
-    await expect(
-      navigation.getByRole('link', { name: 'Kho học liệu', exact: true }),
-    ).toHaveAttribute('aria-current', 'page');
+    await expect(await navLink(page, 'Kho học liệu')).toHaveAttribute('aria-current', 'page');
+    await closeNavigation(page);
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Kho học liệu', exact: true })).toBeVisible();
   });

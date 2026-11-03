@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './helpers/test';
+import { navLink } from './helpers/navigation';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
@@ -29,7 +30,7 @@ async function login(page: Page, role: 'lecturer' | 'student', accountPrefix = '
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await expect(page).toHaveURL(`/workspace/${role}`);
-  await page.getByRole('link', { name: 'Học liệu của tôi', exact: true }).click();
+  await (await navLink(page, 'Học liệu của tôi')).click();
   await expect(page.getByRole('heading', { name: 'Học liệu của tôi', exact: true })).toBeVisible();
 }
 async function seed(page: Page, role: 'lecturer' | 'student', accountPrefix = 'e2e-drafts') {
@@ -133,7 +134,7 @@ async function adminReviewLogin(page: Page, code: string, accountPrefix = 'e2e-d
   await page.getByLabel('Email', { exact: true }).fill(`${accountPrefix}-admin@example.test`);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-  await page.getByRole('link', { name: 'Kiểm duyệt học liệu', exact: true }).click();
+  await (await navLink(page, 'Kiểm duyệt học liệu')).click();
   await page.getByLabel('Tìm yêu cầu', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await page
@@ -220,7 +221,7 @@ test('student searches the library and reads, selects text, changes pages, zooms
   ).toBe(201);
   await logoutForTest(page);
   await login(page, 'student', 'e2e-reader');
-  await page.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
+  await (await navLink(page, 'Kho học liệu')).click();
   await page.getByLabel('Tìm học liệu', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await expect(
@@ -472,7 +473,7 @@ test('lecturer self-publication needs no rights declaration or admin decision an
     sourceReference: '',
     rightsBasis: '',
   });
-  await page.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
+  await (await navLink(page, 'Kho học liệu')).click();
   await page.getByLabel('Tìm học liệu', { exact: false }).fill(code);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await page.getByRole('link', { name: `Đọc PDF tự công bố ${code}`, exact: true }).click();
@@ -511,7 +512,7 @@ test('personal library saves after response loss, shows recent page and removes 
   await page.getByRole('button', { name: 'Tải trạng thái lưu', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Bỏ lưu tài liệu', exact: true })).toBeEnabled();
   await capturePersonal(page, 'reader-');
-  await page.getByRole('link', { name: 'Thư viện của tôi', exact: true }).click();
+  await (await navLink(page, 'Thư viện của tôi')).click();
   const row = page.getByRole('article', { name: material.item.title, exact: true });
   await expect(row).toBeVisible();
   await page.getByRole('button', { name: 'Đọc gần đây', exact: true }).click();
@@ -521,7 +522,7 @@ test('personal library saves after response loss, shows recent page and removes 
   await expect(
     page.getByRole('status').filter({ hasText: 'Đã hiển thị trang 2 / 2' }),
   ).toBeVisible();
-  await page.getByRole('link', { name: 'Thư viện của tôi', exact: true }).click();
+  await (await navLink(page, 'Thư viện của tôi')).click();
   await expect(row).toBeVisible();
   await capturePersonal(page, '');
   const savedList = await (await page.request.get('/api/v1/personal-library/saved')).json();
@@ -655,7 +656,7 @@ test('lifecycle admin transfers published material and recovers a stale hide bef
         })
       ).status(),
     ).toBe(201);
-  await page.getByRole('link', { name: 'Quản lý học liệu', exact: true }).click();
+  await (await navLink(page, 'Quản lý học liệu')).click();
   await page.getByLabel('Tìm tài liệu quản lý', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await page
@@ -1026,9 +1027,9 @@ test('reader history guard handles fragments, multi-entry traversal and an in-fl
   const readerUrl = path.replace('/api/v1', '/workspace');
   await page.getByRole('link', { name: 'Về kho học liệu', exact: true }).click();
   await expect(page).toHaveURL('/workspace/library');
-  await page.getByRole('link', { name: 'Thư viện của tôi', exact: true }).click();
+  await (await navLink(page, 'Thư viện của tôi')).click();
   await expect(page).toHaveURL('/workspace/personal-library');
-  await page.getByRole('link', { name: 'Kho học liệu', exact: true }).click();
+  await (await navLink(page, 'Kho học liệu')).click();
   await page.locator(`a[href="${readerUrl}"]`).click();
   await expect(page.getByLabel('Nội dung ghi chú', { exact: true })).toBeVisible();
   // Reload must retain the indices of earlier Next entries, without persisting the draft.

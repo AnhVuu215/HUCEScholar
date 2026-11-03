@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './helpers/test';
+import { navLink } from './helpers/navigation';
 import { randomBytes } from 'node:crypto';
 
 const password = process.env.E2E_PASSWORD;
@@ -19,7 +20,7 @@ test('admin provisions, edits, locks and unlocks a real account', async ({ page,
   test.setTimeout(90_000);
   const email = `browser-${randomBytes(6).toString('hex')}@example.test`;
   await login(page);
-  await page.getByRole('link', { name: 'Quản lý tài khoản', exact: true }).first().click();
+  await (await navLink(page, 'Quản lý tài khoản')).click();
   await expect(page.getByRole('heading', { name: 'Quản lý tài khoản', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Cấp tài khoản', exact: true }).click();
   await page.getByLabel('Họ và tên', { exact: true }).fill('Sinh viên thử nghiệm');
