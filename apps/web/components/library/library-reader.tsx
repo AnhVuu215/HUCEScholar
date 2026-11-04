@@ -35,11 +35,20 @@ import {
   useAnnotationPanel,
 } from './reader-annotation-panel';
 
-export function LibraryReader({ id, initialPage }: { id: string; initialPage?: number | null }) {
+export function LibraryReader({
+  id,
+  initialPage,
+  initialFind = '',
+}: {
+  id: string;
+  initialPage?: number | null;
+  /** SEARCH-04: text from a library result, searched as soon as the PDF opens. */
+  initialFind?: string;
+}) {
   const { user } = useWorkspaceProfile();
   return (
     <ReaderAnnotationProvider key={`${user.id}:${id}`}>
-      <LibraryReaderContent id={id} initialPage={initialPage} />
+      <LibraryReaderContent id={id} initialPage={initialPage} initialFind={initialFind} />
     </ReaderAnnotationProvider>
   );
 }
@@ -56,7 +65,15 @@ function storedLayout(): Layout {
     return 'scroll';
   }
 }
-function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: number | null }) {
+function LibraryReaderContent({
+  id,
+  initialPage,
+  initialFind,
+}: {
+  id: string;
+  initialPage?: number | null;
+  initialFind: string;
+}) {
   const { user } = useWorkspaceProfile();
   const panel = useAnnotationPanel();
   const initializePanel = panel.initializeOpen;
@@ -66,7 +83,9 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
   const zoomTouched = useRef(false),
     zoomInitialized = useRef(false);
   const [focusMode, setFocusMode] = useState(false);
-  const [tool, setTool] = useState<'find' | 'outline' | 'pages' | null>(null);
+  const [tool, setTool] = useState<'find' | 'outline' | 'pages' | null>(
+    initialFind ? 'find' : null,
+  );
   const [layout, setLayout] = useState<Layout>(storedLayout);
   const [showPins, setShowPins] = useState(true);
   const slots = useRef(new Map<number, HTMLDivElement>());
@@ -602,6 +621,8 @@ function LibraryReaderContent({ id, initialPage }: { id: string; initialPage?: n
                             pdf={pdf}
                             versionId={id}
                             hasText={item.hasTextLayer}
+                            initialQuery={initialFind}
+                            initialPage={initialPage ?? undefined}
                             surface={
                               !error && rendered === renderKey && surface?.key === renderKey
                                 ? surface

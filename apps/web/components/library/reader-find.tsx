@@ -15,6 +15,8 @@ export function ReaderFind({
   pdf,
   versionId,
   hasText,
+  initialQuery = '',
+  initialPage,
   surface,
   onNavigate,
   onClose,
@@ -22,14 +24,20 @@ export function ReaderFind({
   pdf: PDFDocumentProxy;
   versionId: string;
   hasText: boolean;
+  /** Searched on opening; the match on `initialPage`, where the reader already is, is selected. */
+  initialQuery?: string;
+  initialPage?: number;
   surface: HighlightSurface | null;
   onNavigate: (page: number) => boolean;
   onClose: () => void;
 }) {
-  const [query, setQuery] = useState('');
-  const [run, setRun] = useState<{ query: string } | null>(null);
+  const opening = hasText && !!initialQuery;
+  const [query, setQuery] = useState(initialQuery);
+  const [run, setRun] = useState<{ query: string; page?: number } | null>(
+    opening ? { query: initialQuery, page: initialPage } : null,
+  );
   const [result, setResult] = useState<PdfFindResult | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(opening);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(-1);
   const input = useRef<HTMLInputElement>(null);
@@ -49,7 +57,9 @@ export function ReaderFind({
       () => libraryVersion(versionId, controller.signal),
     )
       .then((value) => {
-        if (!controller.signal.aborted) setResult(value);
+        if (controller.signal.aborted) return;
+        setResult(value);
+        if (run.page) setSelected(value.matches.findIndex((m) => m.pageNumber === run.page));
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {

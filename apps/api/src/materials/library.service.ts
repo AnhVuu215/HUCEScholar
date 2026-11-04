@@ -20,10 +20,11 @@ import {
 import { LibraryListDto } from './library.dto';
 import { DOCX_MIME } from '../files/receive-docx';
 import { MaterialsService } from './materials.service';
-import { foldedPhrase, foldedTerms } from './search-fold';
+import { foldedPhrase, foldedTerms, matchSnippet } from './search-fold';
 
 const selection = {
   id: true,
+  file_id: true,
   document_id: true,
   version_no: true,
   title: true,
@@ -68,7 +69,12 @@ export const available = (): Prisma.document_versionsWhereInput => ({
   OR: [{ rights_valid_until: null }, { rights_valid_until: { gt: new Date() } }],
 });
 type CurrentVersion = { versionId: string; versionNo: number; title: string };
-function serialize(v: LibraryRow, currentVersion: CurrentVersion | null = null) {
+type ContentMatch = { page: number; pages: number; before: string; match: string; after: string };
+function serialize(
+  v: LibraryRow,
+  currentVersion: CurrentVersion | null = null,
+  contentMatch: ContentMatch | null = null,
+) {
   return {
     documentId: String(v.document_id),
     versionId: String(v.id),
@@ -103,6 +109,8 @@ function serialize(v: LibraryRow, currentVersion: CurrentVersion | null = null) 
       code: c.code,
       name: c.name,
     })),
+    /** SEARCH-04: where the search words are, when only the PDF's text matched. */
+    contentMatch,
     /** On an earlier version: the document's current version, only while it is readable too. */
     currentVersion,
   };
@@ -154,7 +162,8 @@ export class LibraryService {
   async list(query: LibraryListDto) {
     return this.db.$transaction(
       async (tx) => {
-        const ranked = await this.searchRanked(tx, query);
+        const search = await this.searchRanked(tx, query);
+        const ranked = search?.ids ?? null;
         const where = this.listWhere(query, ranked);
         const skip = (query.page - 1) * query.limit;
         if (!ranked) {
@@ -184,10 +193,11 @@ export class LibraryService {
           select: selection,
         });
         const byId = new Map(rows.map((row) => [row.id, row]));
+        const matches = await this.contentMatches(tx, rows, search!.content, query.search!);
         return {
           items: pageIds.flatMap((id) => {
             const row = byId.get(id);
-            return row ? [serialize(row)] : [];
+            return row ? [serialize(row, null, matches.get(id) ?? null)] : [];
           }),
           total: ids.length,
           page: query.page,
@@ -201,7 +211,8 @@ export class LibraryService {
    * Accent-insensitive title/author match ("giao trinh" finds "Giáo trình") against text folded
    * on write (version_search), limited to current approved versions; every word must appear, in
    * any order. Ids come back best match first: the exact phrase in the title, then more words in
-   * the title, then the exact phrase anywhere (title + authors), then newest. Null without search.
+   * the title, then the exact phrase anywhere (title + authors), then newest. SEARCH-04: versions
+   * found only in their PDF's text follow, with every word on one page. Null without search.
    */
   private async searchRanked(tx: Prisma.TransactionClient, query: LibraryListDto) {
     const terms = query.search ? foldedTerms(query.search) : [];
@@ -217,7 +228,58 @@ export class LibraryService {
         (SELECT count(*) FROM unnest(${terms}::text[]) t WHERE s.folded_title LIKE t) DESC,
         s.folded LIKE ${phrase} DESC,
         v.updated_at DESC, v.id DESC`;
-    return rows.map((row) => row.id);
+    const ids = rows.map((row) => row.id);
+    const titled = new Set(ids);
+    // Separate LIKEs, not LIKE ALL: only these can use the trigram index on page text.
+    const words = Prisma.join(
+      terms.map((term) => Prisma.sql`p.folded LIKE ${term}`),
+      ' AND ',
+    );
+    const pages = await tx.$queryRaw<{ id: bigint; page: number; pages: number }[]>`
+      SELECT v.id,
+        COALESCE(min(p.page_number) FILTER (WHERE p.folded LIKE ${phrase}), min(p.page_number)) AS page,
+        count(*)::int AS pages
+      FROM hucescholar.document_versions v
+      JOIN hucescholar.documents d ON d.current_version_id = v.id
+      JOIN hucescholar.file_pages p ON p.file_id = v.file_id
+      WHERE v.review_status = 'APPROVED' AND ${words}
+      GROUP BY v.id, v.updated_at
+      ORDER BY bool_or(p.folded LIKE ${phrase}) DESC, count(*) DESC, v.updated_at DESC, v.id DESC`;
+    const content = new Map(
+      pages.filter((row) => !titled.has(row.id)).map((row) => [row.id, row] as const),
+    );
+    return { ids: [...ids, ...content.keys()], content };
+  }
+  /** Reads the matched page of the results on this page only; access was settled by `where`. */
+  private async contentMatches(
+    tx: Prisma.TransactionClient,
+    rows: LibraryRow[],
+    content: Map<bigint, { page: number; pages: number }>,
+    search: string,
+  ) {
+    const wanted = rows.flatMap((row) => {
+      const hit = content.get(row.id);
+      return hit && row.file_id ? [{ row, hit, file_id: row.file_id }] : [];
+    });
+    const texts = wanted.length
+      ? await tx.file_pages.findMany({
+          where: {
+            OR: wanted.map(({ file_id, hit }) => ({ file_id, page_number: hit.page })),
+          },
+          select: { file_id: true, page_number: true, content: true },
+        })
+      : [];
+    const text = new Map(texts.map((t) => [`${t.file_id}:${t.page_number}`, t.content]));
+    return new Map<bigint, ContentMatch>(
+      wanted.map(({ row, hit, file_id }) => [
+        row.id,
+        {
+          page: hit.page,
+          pages: hit.pages,
+          ...matchSnippet(text.get(`${file_id}:${hit.page}`) ?? '', search),
+        },
+      ]),
+    );
   }
   private listWhere(
     query: LibraryListDto,

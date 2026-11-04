@@ -31,4 +31,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` sau `pnpm test:set
 
 ## Chưa làm
 
-- Tìm trong nội dung PDF, khớp nguyên từ thay vì chuỗi con, gợi ý môn.
+- Khớp nguyên từ thay vì chuỗi con, gợi ý môn. Tìm trong nội dung PDF đã làm ở [SEARCH-04](2026-11-04-pdf-content-search.md).

@@ -168,6 +168,8 @@ try {
     ['study2-student', 'STUDENT'],
     ['study3-admin', 'ADMIN'],
     ['study3-student', 'STUDENT'],
+    ['search4-admin', 'ADMIN'],
+    ['search4-student', 'STUDENT'],
     ['cal1-admin', 'ADMIN'],
     ['cal1-student', 'STUDENT'],
     ['cal2-student', 'STUDENT'],
