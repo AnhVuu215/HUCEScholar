@@ -4,10 +4,11 @@ import { PrismaClient } from '../generated/prisma/client';
 import { parseAuthEnvironment } from '../auth/auth.config';
 import { fileConfiguration } from '../files/files.config';
 import { PrivateStore } from '../files/private-store';
+import { thumbKey } from '../notebooks/notebook-assets.service';
 
 /**
- * Read-only check: lists PDFs and Word sources the database points at but the private store no
- * longer has. Prints ids and the document title, never object keys, paths or file contents, and
+ * Read-only check: lists PDFs, Word sources and notebook images the database points at but the
+ * private store no longer has. Prints ids and the document title, never object keys, paths or file contents, and
  * changes nothing; the owner uploads a new version or an admin hides the document.
  */
 async function doctor(): Promise<void> {
@@ -46,10 +47,25 @@ async function doctor(): Promise<void> {
       missing++;
       console.log(`Word source ${source.id} missing`);
     }
+    const images = await db.notebook_assets.findMany({
+      select: { id: true, object_key: true },
+      orderBy: { id: 'asc' },
+    });
+    for (const image of images) {
+      for (const [label, key] of [
+        ['image', image.object_key],
+        ['thumbnail', thumbKey(image.object_key)],
+      ] as const) {
+        if (await store.imageExists(key)) continue;
+        missing++;
+        console.log(`Notebook ${label} of asset ${image.id} missing`);
+      }
+    }
+    const total = files.length + sources.length + images.length * 2;
     console.log(
       missing
-        ? `${missing} stored object(s) missing out of ${files.length + sources.length}.`
-        : `All ${files.length + sources.length} stored objects are present.`,
+        ? `${missing} stored object(s) missing out of ${total}.`
+        : `All ${total} stored objects are present.`,
     );
     if (missing) process.exitCode = 2;
   } finally {

@@ -139,6 +139,7 @@ export class SourceUploadService {
       return await this.materials.get(actor, id);
     } catch (error) {
       if (error instanceof HttpException) throw error;
+      Logger.warn(`Word upload failed: ${(error as Error)?.name ?? 'unknown'}.`, 'Files');
       throw new ServiceUnavailableException({
         code: 'UPLOAD_UNCERTAIN',
         message: 'Chưa xác nhận được tải lên. Tải lại bản nháp trước khi thử lại.',

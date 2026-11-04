@@ -102,8 +102,8 @@ Mốc15/10/2026 đã có manifest/icon PNG192/512/maskable/Apple180, `/install` 
 - Manifest, icon riêng và chế độ standalone; hướng dẫn cài theo khả năng trình duyệt. HTTPS khi triển khai. Service worker chỉ precache tài nguyên công khai của app shell/offline fallback; không cache API auth, metadata cá nhân, PDF, ghi chú hoặc URL có token.
 - Không thêm push notification, OCR, đọc PDF offline hoặc app native chỉ vì PWA hỗ trợ một số khả năng này.
 - Laptop: bảng quản trị đầy đủ và reader có vùng phụ. Tablet: hỗ trợ cảm ứng, xoay ngang/dọc, thu gọn sidebar. Điện thoại: một cột, điều khiển chạm, ghi chú theo ngữ cảnh trang. Responsive không phải thu nhỏ desktop.
-- Mục tiêu kiểm chứng: Chrome/Edge desktop, Safari macOS; Chrome Android trên phone/tablet; Safari iPhone/iPad và PWA đã thêm vào màn hình chính trên thiết bị hỗ trợ. Version hỗ trợ phải ghi rõ khi thử nghiệm pilot.
-- Playwright desktop/mobile/WebKit là kiểm tra tự động, không thay thế thử PDF và cảm ứng trên Android/iPhone/iPad thật.
+- Mục tiêu kiểm chứng: Chrome desktop dùng chuột. Safari và thiết bị cảm ứng đã bỏ khỏi phạm vi từ 04/11/2026. Version hỗ trợ phải ghi rõ khi thử nghiệm pilot.
+- Playwright mô phỏng kích thước màn hình là kiểm tra bố cục tự động, không phải bằng chứng hỗ trợ thiết bị di động.
 
 ## 8. Điều kiện trước khi xây toàn bộ ứng dụng
 

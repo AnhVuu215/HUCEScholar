@@ -1,0 +1,14 @@
+# OPS-02 rehearsal. `tls internal` is Caddy's own CA: a real domain drops that line.
+https://localhost {
+	tls internal
+
+	# /api goes straight to Nest so the rate limiter sees the client address, not a shared Next one.
+	# Caddy replaces any client-sent X-Forwarded-For because no upstream proxy is trusted here.
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+
+	handle {
+		reverse_proxy host.docker.internal:3000
+	}
+}
