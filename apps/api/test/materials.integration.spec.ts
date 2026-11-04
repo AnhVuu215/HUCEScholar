@@ -14,6 +14,8 @@ import { PrivateStore } from '../src/files/private-store';
 import { FILE_CONFIG, type FileConfiguration } from '../src/files/files.config';
 import { ScanQueue } from '../src/files/scan-queue';
 import { ScanProcessor } from '../src/files/scan-processor';
+import { PdfTextIndexer } from '../src/files/pdf-text-indexer';
+import * as pdfText from '../src/files/pdf-text';
 import { clamScan, FileCheckError, PdfScanner } from '../src/files/pdf-scanner';
 import { UnrecoverableError } from 'bullmq';
 import { createReadStream } from 'node:fs';
@@ -3930,6 +3932,152 @@ describe('private material drafts', () => {
       .set('X-CSRF-Token', csrf)
       .send(body);
   }
+  describe('SEARCH-04', () => {
+    const fileOf = async (versionId: string) =>
+      (await db.query('SELECT file_id FROM hucescholar.document_versions WHERE id=$1', [versionId]))
+        .rows[0].file_id as string;
+    async function indexPages(versionId: string, pages: string[]) {
+      const file = await fileOf(versionId);
+      await db.query(
+        'INSERT INTO hucescholar.file_text(file_id,pages,indexed_at) VALUES($1,$2,now())',
+        [file, pages.length],
+      );
+      for (const [index, content] of pages.entries())
+        await db.query(
+          'INSERT INTO hucescholar.file_pages(file_id,page_number,content,folded) VALUES($1,$2,$3,$4)',
+          [file, index + 1, content, foldVietnamese(content)],
+        );
+    }
+    const find = (search: string, who = 'student', extra: object = {}) =>
+      agents[who].get('/api/v1/library').query({ search, ...extra });
+    const versions = (res: { body: { items: { versionId: string }[] } }) =>
+      res.body.items.map((item) => item.versionId);
+    const setVisibility = (versionId: string, visibility: string) =>
+      db.query(
+        'UPDATE hucescholar.documents SET visibility=$2 WHERE id=(SELECT document_id FROM hucescholar.document_versions WHERE id=$1)',
+        [versionId, visibility],
+      );
+
+    it('finds words on one page of a readable PDF, with its page and a snippet', async () => {
+      const token = `zq${randomUUID().slice(0, 8)}`;
+      const inText = await readingFixture();
+      const inTitle = await readingFixture();
+      await indexPages(inText.versionId, [
+        'Mở đầu',
+        `Bê tông cốt thép ${token} chịu nén tốt`,
+        `Nhắc lại cốt thép rồi ${token}`,
+      ]);
+
+      // Unaccented query, the exact phrase wins the page, and both pages are counted.
+      const found = await find(`cot thep ${token}`);
+      expect(found.status).toBe(200);
+      expect(versions(found)).toEqual([inText.versionId]);
+      expect(found.body.items[0].contentMatch).toEqual({
+        page: 2,
+        pages: 2,
+        before: 'Bê tông ',
+        match: `cốt thép ${token}`,
+        after: ' chịu nén tốt',
+      });
+      // Every word must be on the same page.
+      expect(versions(await find(`mo dau ${token}`))).toEqual([]);
+      // The search stays a literal match, and filters still apply.
+      expect(versions(await find(`${token}%`))).toEqual([]);
+      expect(
+        versions(await find(`cot thep ${token}`, 'student', { courseId: '999999999' })),
+      ).toEqual([]);
+
+      // A title match comes first and needs no snippet.
+      await db.query(
+        'UPDATE hucescholar.version_search SET folded=$2,folded_title=$2 WHERE version_id=$1',
+        [inTitle.versionId, token],
+      );
+      const ranked = await find(token);
+      expect(versions(ranked)).toEqual([inTitle.versionId, inText.versionId]);
+      expect(ranked.body.total).toBe(2);
+      expect(ranked.body.items[0].contentMatch).toBeNull();
+      const second = await find(token, 'student', { page: 2, limit: 1 });
+      expect(versions(second)).toEqual([inText.versionId]);
+      expect(second.body.items[0].contentMatch.page).toBe(2);
+
+      // Other readers can find a published document; a hidden one reveals nothing to anyone.
+      expect(versions(await find(`cot thep ${token}`, 'other'))).toEqual([inText.versionId]);
+      await setVisibility(inText.versionId, 'HIDDEN');
+      expect(versions(await find(`cot thep ${token}`))).toEqual([]);
+      expect(versions(await find(`cot thep ${token}`, 'admin'))).toEqual([]);
+      await setVisibility(inText.versionId, 'VISIBLE');
+    });
+    it('never surfaces the text of a draft, even to its owner', async () => {
+      const token = `zq${randomUUID().slice(0, 8)}`;
+      const draft = await safeDraft('student');
+      await indexPages(draft.versionId, [`Bản nháp riêng ${token}`]);
+      expect(versions(await find(token))).toEqual([]);
+      expect(versions(await find(token, 'admin'))).toEqual([]);
+    });
+    it('indexes approved PDFs once, skips drafts and copy-restricted files, and gives up on failures', async () => {
+      const indexer = app.get(PdfTextIndexer);
+      const row = async (versionId: string) =>
+        (
+          await db.query(
+            `SELECT t.pages,t.attempts,t.indexed_at,
+              (SELECT count(*)::int FROM hucescholar.file_pages p WHERE p.file_id=f.id) AS stored
+             FROM hucescholar.files f LEFT JOIN hucescholar.file_text t ON t.file_id=f.id WHERE f.id=$1`,
+            [await fileOf(versionId)],
+          )
+        ).rows[0];
+      const approved = await readingFixture();
+      const draft = await safeDraft('student');
+      // tr_protect_file freezes this flag once SAFE, so it is set as the scan would set it.
+      const locked = await create('student');
+      expect((await upload('student', locked.id, locked.revision)).status).toBe(201);
+      await db.query(
+        "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=1,has_text_layer=true,copy_restricted=true WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE document_id=$1)",
+        [locked.id],
+      );
+      expect((await publication('student', locked.id, 'submit', { revision: 2 })).status).toBe(201);
+      const request = (
+        await db.query(
+          "SELECT p.id,p.version_id FROM hucescholar.publication_requests p JOIN hucescholar.document_versions v ON v.id=p.version_id WHERE v.document_id=$1 AND p.status='PENDING'",
+          [locked.id],
+        )
+      ).rows[0];
+      expect((await review(request.id, decision())).status).toBe(201);
+      const restricted = { versionId: String(request.version_id) };
+      const extract = jest
+        .spyOn(pdfText, 'extractPdfText')
+        .mockResolvedValue({ text: 'Trang một\n\f\fBa đường\f', truncated: false });
+      try {
+        await indexer.sweep();
+        const stored = await db.query(
+          'SELECT page_number,content,folded FROM hucescholar.file_pages WHERE file_id=$1 ORDER BY page_number',
+          [await fileOf(approved.versionId)],
+        );
+        expect(stored.rows).toEqual([
+          { page_number: 1, content: 'Trang một', folded: 'trang mot' },
+          { page_number: 3, content: 'Ba đường', folded: 'ba duong' },
+        ]);
+        expect((await row(draft.versionId)).indexed_at).toBeNull();
+        expect((await row(draft.versionId)).stored).toBe(0);
+        expect((await row(restricted.versionId)).stored).toBe(0);
+
+        extract.mockClear();
+        await indexer.sweep();
+        expect(extract).not.toHaveBeenCalled();
+
+        const broken = await readingFixture();
+        extract.mockRejectedValue(new Error('unreadable'));
+        for (let round = 0; round < 4; round++) await indexer.sweep();
+        expect(await row(broken.versionId)).toMatchObject({
+          attempts: 3,
+          indexed_at: null,
+          stored: 0,
+        });
+        expect(extract).toHaveBeenCalledTimes(3);
+      } finally {
+        extract.mockRestore();
+      }
+    });
+  });
   it('says a PDF whose bytes are gone is missing (410), not a connection problem', async () => {
     const root = app.get<FileConfiguration>(FILE_CONFIG).root;
     const objectOf = async (versionId: string) =>

@@ -276,6 +276,7 @@ model files {
   check_round       Int @default(1) @db.SmallInt
   copy_restricted   Boolean             @default(false)
   document_versions document_versions[]
+  file_text         file_text?
   users             users               @relation(fields: [uploaded_by], references: [id], onUpdate: NoAction)
 
   @@index([sha256], map: "ix_file_hash")
@@ -515,6 +516,34 @@ model users {
 }
 
 /// Accent-insensitive title/author text for library search; maintained by tr_refresh_version_search.
+/// SEARCH-04. Derived from the stored PDF; never a source of truth.
+/// This table contains check constraints and requires additional setup for migrations.
+model file_text {
+  file_id    BigInt       @id
+  pages      Int          @default(0)
+  truncated  Boolean      @default(false)
+  attempts   Int          @default(0) @db.SmallInt
+  indexed_at DateTime?    @db.Timestamptz(6)
+  files      files        @relation(fields: [file_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  file_pages file_pages[]
+
+  @@schema("hucescholar")
+}
+
+/// SEARCH-04. Read only through the access rules of the version that uses the file.
+/// This table contains check constraints and requires additional setup for migrations.
+model file_pages {
+  file_id     BigInt
+  page_number Int
+  content     String
+  folded      String
+  file_text   file_text @relation(fields: [file_id], references: [file_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([file_id, page_number])
+  @@index([folded(ops: raw("public.gin_trgm_ops"))], map: "ix_file_page_folded", type: Gin)
+  @@schema("hucescholar")
+}
+
 model version_search {
   version_id        BigInt            @id
   folded            String

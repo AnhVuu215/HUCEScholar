@@ -59,6 +59,10 @@
 .library-list > li > div {
   min-width: 0;
 }
+.library-list .library-match {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
 .library-list h3 {
   margin: 4px 0 8px;
   font-size: 20px;
