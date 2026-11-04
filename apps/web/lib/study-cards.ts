@@ -11,6 +11,10 @@ export type StudyCard = {
   answer: string;
   revision: number;
   updatedAt: string;
+  /** STUDY-03: Leitner box, 0 until the first scheduled answer. */
+  reviewBox: number;
+  dueOn: string;
+  lastReviewedAt: string | null;
   title?: string;
 };
 export type StudyCardList = {
@@ -34,6 +38,9 @@ function valid(v: unknown): v is StudyCard {
     typeof v.answer === 'string' &&
     Number.isInteger(v.revision) &&
     typeof v.updatedAt === 'string' &&
+    Number.isInteger(v.reviewBox) &&
+    typeof v.dueOn === 'string' &&
+    (v.lastReviewedAt === null || typeof v.lastReviewedAt === 'string') &&
     (v.title === undefined || typeof v.title === 'string')
   );
 }
@@ -145,6 +152,69 @@ export async function studyCardFilters(signal: AbortSignal): Promise<StudyCardFi
     return body as unknown as StudyCardFilters;
   throw new Error('Invalid study card filters.');
 }
+/** STUDY-03: the last box a card can reach; the API owns the intervals. */
+export const MAX_REVIEW_BOX = 6;
+export type StudySchedule = {
+  today: string;
+  dueNow: number;
+  days: { date: string; count: number }[];
+};
+export const formatStudyDay = (day: string) =>
+  new Date(`${day}T00:00:00`).toLocaleDateString('vi-VN');
+export async function studySchedule(params: URLSearchParams, signal: AbortSignal) {
+  const body: unknown = await (
+    await apiRequest(`/study-cards/schedule?${params}`, { signal })
+  ).json();
+  if (
+    isRecord(body) &&
+    typeof body.today === 'string' &&
+    Number.isSafeInteger(body.dueNow) &&
+    Array.isArray(body.days) &&
+    body.days.every(
+      (d) => isRecord(d) && typeof d.date === 'string' && Number.isSafeInteger(d.count),
+    )
+  )
+    return body as unknown as StudySchedule;
+  throw new Error('Invalid study schedule.');
+}
+/** The cards due today or overdue, longest overdue first, capped by the API. */
+export async function dueCards(scope: StudyCardScope, signal: AbortSignal) {
+  const body: unknown = await (
+    await apiRequest(`/study-cards/due?${scopeParams(scope)}`, { signal })
+  ).json();
+  if (
+    isRecord(body) &&
+    Array.isArray(body.items) &&
+    body.items.every(valid) &&
+    Number.isSafeInteger(body.total)
+  )
+    return body as unknown as { items: StudyCard[]; total: number };
+  throw new Error('Invalid due cards.');
+}
+export async function reviewStudyCard(
+  card: StudyCard,
+  result: 'KNOWN' | 'AGAIN',
+  requestId: string,
+) {
+  return item(
+    await (
+      await send(`/study-cards/${encodeURIComponent(card.id)}/review`, 'POST', {
+        result,
+        requestId,
+      })
+    ).json(),
+  );
+}
+export async function resetStudySchedule(card: StudyCard) {
+  return item(
+    await (
+      await send(`/study-cards/${encodeURIComponent(card.id)}/reset-schedule`, 'POST', {})
+    ).json(),
+  );
+}
+/** A card another tab already answered; its date is settled, so the round just moves on. */
+export const alreadyReviewed = (error: unknown) =>
+  error instanceof ApiError && error.code === 'STUDY_CARD_NOT_DUE';
 /** Every readable card in the scope for one round, newest first, capped by the API. */
 export async function practiceCards(scope: StudyCardScope, signal: AbortSignal) {
   const body: unknown = await (

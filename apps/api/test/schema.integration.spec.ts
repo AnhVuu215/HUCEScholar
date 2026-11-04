@@ -24,7 +24,7 @@ describe('migrated PostgreSQL authentication lifecycle', () => {
     expect(constraints.rows).toEqual(
       expect.arrayContaining([
         { contype: 'f', n: 77 },
-        { contype: 'c', n: 133 },
+        { contype: 'c', n: 134 },
       ]),
     );
     const partial = await client.query(

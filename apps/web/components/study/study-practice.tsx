@@ -2,7 +2,10 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
+  alreadyReviewed,
+  dueCards,
   practiceCards,
+  reviewStudyCard,
   studyCardError,
   type StudyCard,
   type StudyCardScope,
@@ -21,10 +24,19 @@ function shuffled<T>(items: T[]) {
 }
 
 /**
- * STUDY-02: one card at a time, answer hidden until asked, then "Nhớ" or "Chưa nhớ". Results
- * live only in this round; the end offers another pass over the cards not yet remembered.
+ * STUDY-02: one card at a time, answer hidden until asked, then "Nhớ" or "Chưa nhớ"; the end
+ * offers another pass over the cards not yet remembered. STUDY-03: with `due`, the first pass
+ * saves each answer and sets the card's next date. Every other round changes nothing.
  */
-export function StudyPractice({ scope, close }: { scope: StudyCardScope; close: () => void }) {
+export function StudyPractice({
+  scope,
+  close,
+  due = false,
+}: {
+  scope: StudyCardScope;
+  close: () => void;
+  due?: boolean;
+}) {
   const [loaded, setLoaded] = useState<{ items: StudyCard[]; total: number } | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -33,12 +45,17 @@ export function StudyPractice({ scope, close }: { scope: StudyCardScope; close: 
   const [index, setIndex] = useState(0);
   const [shown, setShown] = useState(false);
   const [results, setResults] = useState<Map<string, Result>>(new Map());
+  const [recording, setRecording] = useState(due);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  // Kept across retries of one card, so a lost response cannot move the card twice.
+  const requests = useRef(new Map<string, string>());
   const question = useRef<HTMLHeadingElement>(null);
   const summary = useRef<HTMLHeadingElement>(null);
   const knownButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const controller = new AbortController();
-    practiceCards(scope, controller.signal)
+    (due ? dueCards : practiceCards)(scope, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
         setLoaded(result);
@@ -48,7 +65,7 @@ export function StudyPractice({ scope, close }: { scope: StudyCardScope; close: 
         if (!controller.signal.aborted) setError(studyCardError(failure));
       });
     return () => controller.abort();
-  }, [scope, attempt]);
+  }, [scope, attempt, due]);
   const done = loaded !== null && order.length > 0 && index >= order.length;
   useEffect(() => {
     (done ? summary : question).current?.focus();
@@ -63,11 +80,34 @@ export function StudyPractice({ scope, close }: { scope: StudyCardScope; close: 
     setIndex(0);
     setShown(false);
     setResults(new Map());
+    setRecording(false);
+    setSaveError('');
   }
-  function answer(result: Result) {
-    setResults((v) => new Map(v).set(order[index].id, result));
+  function next() {
+    setSaveError('');
     setShown(false);
     setIndex((v) => v + 1);
+  }
+  async function answer(result: Result) {
+    const current = order[index];
+    if (recording) {
+      const requestId = requests.current.get(current.id) ?? crypto.randomUUID();
+      requests.current.set(current.id, requestId);
+      setSaving(true);
+      setSaveError('');
+      try {
+        await reviewStudyCard(current, result === 'known' ? 'KNOWN' : 'AGAIN', requestId);
+      } catch (failure) {
+        if (!alreadyReviewed(failure)) {
+          setSaveError(studyCardError(failure));
+          return;
+        }
+      } finally {
+        setSaving(false);
+      }
+    }
+    setResults((v) => new Map(v).set(current.id, result));
+    next();
   }
   const known = order.filter((c) => results.get(c.id) === 'known');
   const again = order.filter((c) => results.get(c.id) === 'again');
@@ -96,7 +136,9 @@ export function StudyPractice({ scope, close }: { scope: StudyCardScope; close: 
   if (!loaded.items.length)
     return (
       <div className="users-list-message">
-        <p>Không có thẻ nào trong bộ lọc này.</p>
+        <p>
+          {due ? 'Không còn thẻ đến hạn trong bộ lọc này.' : 'Không có thẻ nào trong bộ lọc này.'}
+        </p>
         <button className="secondary-button" onClick={close}>
           Về danh sách thẻ
         </button>
@@ -106,7 +148,7 @@ export function StudyPractice({ scope, close }: { scope: StudyCardScope; close: 
   return (
     <section className="study-practice" aria-labelledby="study-practice-title">
       <div className="study-practice-head">
-        <h3 id="study-practice-title">Luyện thẻ</h3>
+        <h3 id="study-practice-title">{due ? 'Ôn thẻ đến hạn' : 'Luyện thẻ'}</h3>
         <label className="calendar-check">
           <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} />
           Xáo thứ tự khi bắt đầu lượt
@@ -117,10 +159,12 @@ export function StudyPractice({ scope, close }: { scope: StudyCardScope; close: 
       </div>
       {loaded.total > loaded.items.length && (
         <p className="field-hint">
-          Lượt này gồm {loaded.items.length} thẻ mới nhất trong {loaded.total} thẻ. Chọn môn hoặc
-          tài liệu để luyện phần còn lại.
+          {due
+            ? `Lượt này gồm ${loaded.items.length} thẻ đến hạn lâu nhất trong ${loaded.total} thẻ. Phần còn lại ở lượt sau.`
+            : `Lượt này gồm ${loaded.items.length} thẻ mới nhất trong ${loaded.total} thẻ. Chọn môn hoặc tài liệu để luyện phần còn lại.`}
         </p>
       )}
+      {due && !recording && <p className="field-hint">Lượt này chỉ để luyện, không đổi lịch ôn.</p>}
       {done ? (
         <div className="study-card">
           <h3 ref={summary} tabIndex={-1}>
@@ -130,6 +174,11 @@ export function StudyPractice({ scope, close }: { scope: StudyCardScope; close: 
             <p>{again.length} thẻ chưa nhớ. Ôn lại riêng các thẻ này?</p>
           ) : (
             <p>Bạn đã nhớ hết các thẻ trong lượt này.</p>
+          )}
+          {recording && (
+            <p className="field-hint">
+              Đã lưu lịch ôn: thẻ nhớ giãn thêm khoảng cách, thẻ chưa nhớ ôn lại vào ngày mai.
+            </p>
           )}
           <div className="note-actions">
             {again.length > 0 && (
@@ -171,14 +220,29 @@ export function StudyPractice({ scope, close }: { scope: StudyCardScope; close: 
                 <button
                   ref={knownButton}
                   className="primary-button"
-                  onClick={() => answer('known')}
+                  disabled={saving}
+                  onClick={() => void answer('known')}
                 >
                   Nhớ
                 </button>
-                <button className="secondary-button" onClick={() => answer('again')}>
+                <button
+                  className="secondary-button"
+                  disabled={saving}
+                  onClick={() => void answer('again')}
+                >
                   Chưa nhớ
                 </button>
               </div>
+              {saveError && (
+                <div>
+                  <p role="alert" className="form-error">
+                    {saveError}
+                  </p>
+                  <button type="button" className="text-button" onClick={next}>
+                    Bỏ qua thẻ này
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <button type="button" className="primary-button" onClick={() => setShown(true)}>
