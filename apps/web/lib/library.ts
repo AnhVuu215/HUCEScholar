@@ -23,6 +23,14 @@ export interface LibraryItem {
   courses: { id: string; code: string; name: string }[];
   /** Set only on an earlier version whose document's current version is readable. */
   currentVersion?: { versionId: string; versionNo: number; title: string } | null;
+  /** SEARCH-04: set when only the PDF's text matched the search. Plain text, never markup. */
+  contentMatch?: {
+    page: number;
+    pages: number;
+    before: string;
+    match: string;
+    after: string;
+  } | null;
 }
 export interface LibraryList {
   items: LibraryItem[];
@@ -54,6 +62,14 @@ export function isLibraryItem(value: unknown): value is LibraryItem {
     typeof r.hasTextLayer === 'boolean' &&
     typeof r.copyRestricted === 'boolean' &&
     typeof r.current === 'boolean' &&
+    (r.contentMatch == null ||
+      (typeof r.contentMatch === 'object' &&
+        ['page', 'pages'].every((k) =>
+          Number.isSafeInteger((r.contentMatch as Record<string, unknown>)[k]),
+        ) &&
+        ['before', 'match', 'after'].every(
+          (k) => typeof (r.contentMatch as Record<string, unknown>)[k] === 'string',
+        ))) &&
     (r.sourceFile == null ||
       (typeof r.sourceFile === 'object' &&
         'format' in r.sourceFile &&
