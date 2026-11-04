@@ -48,6 +48,10 @@ UX-03 [thanh ☰ cho mọi trang và lịch to hơn](../implementation/2026-11-0
 
 CANVAS-03 [bảng, thước kẻ và nét vẽ mượt hơn trong Vở ghi](../implementation/2026-11-04-notebook-tables-ruler.md): chèn bảng từ lưới, sửa từng ô, kéo đổi độ rộng cột; thước xoay được với vạch mm, bút đặt sát mép thì kẻ thẳng; nét đang vẽ không còn đi qua React và có điểm dự đoán, khung hình p95 khi vẽ còn 17 ms (CPU chậm 4×).
 
+## Cập nhật 04/11
+
+Chủ dự án bỏ hẳn Safari và thiết bị cảm ứng khỏi phạm vi, và đưa OPS-02 trở lại làm việc đang thực hiện. Cài PWA và phiên dùng thử với người thật không bị bỏ, vẫn chưa làm. OPS-02 có [diễn tập local S3, HTTPS và phục hồi](../implementation/2026-11-04-ops-02-rehearsal.md): Garage đứng thay S3, Caddy dùng CA nội bộ, luồng thật đạt 12/12, phục hồi sau khi xóa volume khớp đủ constraint, partial index, trigger và object. Diễn tập tìm ra lỗi upload ở chế độ S3 mà readiness không báo, đã sửa. Còn lại: thử trên S3, domain, chứng chỉ thật, gồm `If-None-Match` mà Garage bỏ qua. UX-04 [bo tròn menu ☰ và danh sách chọn](https://github.com/AnhVuu215/HUCEScholar/pull/72) đã vào `main` ngày 04/11.
+
 ## Bổ sung yêu cầu V2 ngày 17/10
 
 Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.
@@ -62,7 +66,7 @@ HUCEScholar nên giúp người học hoàn thành một vòng học tập: **t�
 
 Các ràng buộc giữ nguyên:
 
-- Ưu tiên web; tạm hoãn cài PWA và đợt kiểm chứng thiết bị thật theo yêu cầu hiện tại. Việc thử trình duyệt/cảm ứng thật vẫn là điều kiện cần trước khi quảng bá khả năng hỗ trợ các thiết bị đó.
+- Ưu tiên web trên Chrome dùng chuột. Safari và thiết bị cảm ứng đã bỏ khỏi phạm vi từ 04/11, nên không quảng bá hỗ trợ các môi trường đó. Cài PWA vẫn chưa làm.
 - Giảng viên tự công bố PDF sau khi quét đạt, không bắt buộc nguồn HUCE hoặc admin duyệt. Không thêm lại vòng cấp quyền phức tạp.
 - Sinh viên đóng góp tài liệu qua kiểm duyệt; quyền vẫn do API quyết định.
 - Ghi chú và vùng tô riêng theo người/phiên bản/trang; không tự chia sẻ, gửi sang AI hoặc chuyển sang PDF mới.
@@ -79,11 +83,11 @@ Cập nhật 26/10/2026 theo `main` `70fc393` (sau PR #42–#47). Cột giữa c
 | Học liệu giảng viên | Bản nháp, PDF/DOCX private, tự công bố, phiên bản, phân công; trạng thái quét tự cập nhật và lý do không đạt (UPLOAD-01/03); "Kiểm tra lại" khi trình quét gián đoạn | Cần thử với tập PDF thực tế được phép dùng                                                                |
 | Tài liệu sinh viên  | Gửi/rút, yêu cầu sửa, từ chối/duyệt, lịch sử; thông báo trong ứng dụng (NOTIFY-01)                                                        | Chưa thử với người thật                                                                                   |
 | Kho học liệu        | Tìm không dấu, nhiều từ (SEARCH-01/02); lọc môn/loại/nguồn; danh sách đọc theo môn (COURSE-01), đánh dấu đã đọc (COURSE-02)                                            | Đã xếp theo độ khớp tiêu đề (SEARCH-03); chưa tìm trong nội dung PDF                                       |
-| Reader              | Trang, zoom, xoay, text layer, lưu tiến độ; tìm chữ, mục lục, đọc tập trung (READ-01); báo phiên bản hiện hành (VERSION-01); báo đúng khi PDF mất; cuộn liền các trang và ảnh thu nhỏ (READ-05) | Chưa thử Safari/cảm ứng (đang hoãn)                                                                       |
+| Reader              | Trang, zoom, xoay, text layer, lưu tiến độ; tìm chữ, mục lục, đọc tập trung (READ-01); báo phiên bản hiện hành (VERSION-01); báo đúng khi PDF mất; cuộn liền các trang và ảnh thu nhỏ (READ-05) | Safari và cảm ứng đã bỏ khỏi phạm vi                                                                      |
 | Ghi chú và ôn tập   | Ghi chú trang, tô màu, trích dẫn; giấy nhớ ghim trên trang (READ-04); sổ ghi chú toàn phiên bản (LEARN-01); "Cần xem lại" (LEARN-02); thẻ ôn tập (STUDY-01) và luyện thẻ lọc theo môn (STUDY-02); xuất ghi chú (EXPORT-01); [sổ tay toàn kho lọc theo môn](../implementation/2026-10-26-library-notebook.md) (LEARN-03) | Sổ tay xuất được cả sổ theo bộ lọc (EXPORT-02), sửa/xóa tại chỗ (LEARN-03b), tìm không dấu (LEARN-03c); chưa có thuật toán nhắc lại |
 | Thư viện cá nhân    | Đã lưu, đọc gần đây; "Học tiếp" ở trang đầu (HOME-01); lịch học, lặp lại, kéo thả và nhắc lịch (CAL-01…03); "Cần xem lại" và buổi ôn trên lịch (CAL-04a); hạn danh sách đọc của môn tự theo dõi (CAL-04b)                                | Chưa có nhóm tự tạo; lịch hoàn thiện ở CAL-07, chỉ còn link đăng ký `.ics` chờ HTTPS ([thiết kế](../superpowers/specs/2026-10-22-study-calendar.md))        |
 | Báo cáo nội dung    | Báo cáo từ reader, trang xử lý cho admin, ẩn tài liệu trong luồng xử lý (REPORT-01)                                                       | —                                                                                                         |
-| Vận hành            | PrivateStore local/S3; worker ClamAV/Poppler/LibreOffice; `pnpm infra:files`; `doctor:files`; pilot tự động trên máy (QA-01)              | Chưa có bằng chứng S3/HTTPS, phục hồi dữ liệu; OPS-02 và phiên dùng thử với người thật đang hoãn          |
+| Vận hành            | PrivateStore local/S3; worker ClamAV/Poppler/LibreOffice; `pnpm infra:files`; `doctor:files`; pilot tự động trên máy (QA-01)              | Đã diễn tập local S3/HTTPS/phục hồi (OPS-02); chưa thử môi trường thật; chưa có phiên dùng thử với người thật |
 | Health/CI           | `/health` liveness và `/health/ready` cho DB/Redis/kho file/worker (OPS-01) và trình quét ClamAV; workflow chạy format/check/integration/Playwright             | Readiness chưa gắn vào healthcheck hay cảnh báo tự động (OPS-02)     |
 
 Bằng chứng gần nhất, theo mốc của từng bước trong [kế hoạch sửa sau rà soát](../superpowers/plans/2026-10-23-dev-audit-fixes.md): 123 unit, 219 integration đạt và 1 bỏ qua (bước 4); e2e 177 đạt, 8 bỏ qua (bước 5). Đây là **các lượt chạy local khác nhau**, không cộng lại thành một bộ test hoặc coi là bằng chứng production.
@@ -223,7 +227,7 @@ Lưu số đo tổng hợp và loại lỗi, không ghi nội dung note, mật k
 - [ ] Phục hồi cả metadata DB và object PDF sang môi trường tách biệt; đối chiếu thiếu/orphan file và ghi chú theo version.
 - [ ] Có readiness, cảnh báo hàng đợi/worker và log sạch dữ liệu nhạy cảm; không coi `/health`200 là toàn hệ thống khỏe.
 - [ ] Kiểm tra run CI trên đúng commit được chọn; workflow tồn tại chưa đủ để kết luận đã xanh trên GitHub.
-- [ ] Nếu tuyên bố hỗ trợ Safari/cảm ứng/thiết bị nào, đã thử thao tác chọn chữ/ghi chú trên môi trường đó; đợt này vẫn hoãn theo yêu cầu hiện tại.
+- [ ] Không tuyên bố hỗ trợ Safari hoặc thiết bị cảm ứng; hai phần này đã bỏ khỏi phạm vi từ 04/11.
 
 Không có lịch triển khai hay chi phí cloud được cam kết trong kế hoạch này. Chốt từng đợt sau khi biết tài liệu thử, người dùng và môi trường.
 

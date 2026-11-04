@@ -41,7 +41,13 @@ export class PrivateStore implements OnModuleDestroy {
   private readonly s3: S3Client | null;
   constructor(@Inject(FILE_CONFIG) private readonly config: FileConfiguration) {
     this.s3 =
-      config.driver === 's3' ? new S3Client({ region: config.region, maxAttempts: 2 }) : null;
+      config.driver === 's3'
+        ? new S3Client({
+            region: config.region,
+            maxAttempts: 2,
+            ...(config.endpoint ? { endpoint: config.endpoint, forcePathStyle: true } : {}),
+          })
+        : null;
   }
   private path(key: string, source = false) {
     if (!(source ? /^sources\/[a-f0-9-]{36}\.docx$/ : /^quarantine\/[a-f0-9-]{36}\.pdf$/).test(key))
@@ -180,21 +186,32 @@ export class PrivateStore implements OnModuleDestroy {
     }
     return object.Body;
   }
-  /** Readiness probe: the private bucket answers, or the local root exists and is writable. */
+  /**
+   * Readiness probe: the local root is writable (S3 mode stages uploads and scans there too), and
+   * the private bucket answers.
+   */
   async reachable(signal: AbortSignal) {
-    if (this.s3) {
+    await mkdir(this.config.root, { recursive: true });
+    await access(this.config.root, constants.W_OK);
+    if (this.s3)
       await this.s3.send(new HeadBucketCommand({ Bucket: this.config.bucket }), {
         abortSignal: signal,
       });
-      return;
-    }
-    await mkdir(this.config.root, { recursive: true });
-    await access(this.config.root, constants.W_OK);
   }
   /** Whether the object is still there; for the doctor:files check, not for serving. */
   async exists(key: string, isSource = false) {
     try {
       (await this.read(key, { start: 0, end: 0 }, isSource)).destroy();
+      return true;
+    } catch (error) {
+      if (error instanceof MissingObjectError) return false;
+      throw error;
+    }
+  }
+  /** Whether a notebook image is still there; for the doctor:files check, not for serving. */
+  async imageExists(key: string) {
+    try {
+      (await this.readImage(key)).destroy();
       return true;
     } catch (error) {
       if (error instanceof MissingObjectError) return false;
