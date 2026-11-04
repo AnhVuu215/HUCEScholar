@@ -20,6 +20,10 @@
     "infra:up": "docker compose --env-file infra/.env -f infra/compose.yaml up -d",
     "infra:files": "docker compose --env-file infra/.env -f infra/compose.yaml --profile files up -d --build clamav docx-converter file-worker",
     "infra:down": "docker compose --env-file infra/.env -f infra/compose.yaml down",
+    "rehearsal:env": "node scripts/rehearsal-env.mjs",
+    "rehearsal:init": "node scripts/rehearsal-init.mjs",
+    "rehearsal:check": "node --no-warnings scripts/rehearsal-check.mjs",
+    "rehearsal:recovery": "node --no-warnings scripts/rehearsal-recovery.mjs",
     "setup:local": "node scripts/setup-local.mjs",
     "test:setup": "node scripts/test-environment.mjs",
     "test:integration": "pnpm --filter @hucescholar/api test:integration"

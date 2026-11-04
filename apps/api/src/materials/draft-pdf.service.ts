@@ -101,6 +101,7 @@ export class DraftPdfService {
       return await this.materials.get(actor, id);
     } catch (error) {
       if (error instanceof HttpException) throw error;
+      Logger.warn(`PDF upload failed: ${(error as Error)?.name ?? 'unknown'}.`, 'Files');
       throw new ServiceUnavailableException({
         code: 'UPLOAD_UNCERTAIN',
         message: 'Upload gián đoạn. Mở lại bản nháp để kiểm tra trước khi thử lại.',

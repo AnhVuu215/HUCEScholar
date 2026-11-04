@@ -27,6 +27,16 @@ describe('bounded PDF checks', () => {
       }).driver,
     ).toBe('s3');
   });
+  it('accepts an S3-compatible endpoint only as a plain HTTP(S) URL', () => {
+    const s3 = { FILE_STORAGE: 's3', S3_BUCKET: 'private-test', AWS_REGION: 'us-east-1' };
+    expect(fileConfiguration(s3).endpoint).toBeUndefined();
+    expect(fileConfiguration({ ...s3, S3_ENDPOINT: '' }).endpoint).toBeUndefined();
+    expect(fileConfiguration({ ...s3, S3_ENDPOINT: 'http://garage:3900' }).endpoint).toBe(
+      'http://garage:3900',
+    );
+    for (const value of ['garage:3900', 'ftp://garage', 'http://key:secret@garage:3900'])
+      expect(() => fileConfiguration({ ...s3, S3_ENDPOINT: value })).toThrow('S3_ENDPOINT');
+  });
   it('rejects paths, invalid headers and weak revision matches', () => {
     expect(() => pdfHeaders('application/pdf', '..%2Fa.pdf', '"1"')).toThrow();
     expect(() => pdfHeaders('application/pdf', 'a.pdf', 'W/"1"')).toThrow();

@@ -86,7 +86,7 @@ pnpm dev
 
 ## Tạo quản trị viên đầu tiên
 
-Không có đăng ký công khai hoặc mật khẩu mặc định. Chỉ làm khi database chưa có ADMIN:
+Không có mật khẩu mặc định; tài khoản ADMIN không tự đăng ký được. Chỉ làm khi database chưa có ADMIN:
 
 ```powershell
 Copy-Item apps/api/.env.bootstrap.example apps/api/.env.bootstrap
@@ -97,7 +97,7 @@ pnpm --filter @hucescholar/api db:bootstrap-admin
 Remove-Item -LiteralPath apps/api/.env.bootstrap
 ```
 
-CLI tạo account ACTIVE/verified và audit trong transaction; gọi lại không ghi đè tài khoản/mật khẩu. Đây chỉ là bootstrap ADMIN đầu tiên. Sau khi đăng nhập Admin, mở `/workspace/admin/users` để cấp tài khoản giảng viên/sinh viên. Admin nhập mật khẩu khởi tạo 16–128 ký tự và xác nhận đã đối chiếu danh sách hợp lệ; chuyển thông tin qua kênh riêng. Người nhận phải đổi mật khẩu được cấp ở lần đăng nhập đầu; admin có thể cấp lại mật khẩu tạm tại cùng màn hình. Chưa có gửi email hoặc tự khôi phục mật khẩu. Tài khoản E2E ở database test không dùng để đăng nhập ứng dụng local.
+CLI tạo account ACTIVE/verified và audit trong transaction; gọi lại không ghi đè tài khoản/mật khẩu. Đây chỉ là bootstrap ADMIN đầu tiên. Sau khi đăng nhập Admin, mở `/workspace/admin/users` để cấp tài khoản giảng viên/sinh viên. Admin nhập mật khẩu khởi tạo 16–128 ký tự và xác nhận đã đối chiếu danh sách hợp lệ; chuyển thông tin qua kênh riêng. Người nhận phải đổi mật khẩu được cấp ở lần đăng nhập đầu; admin có thể cấp lại mật khẩu tạm tại cùng màn hình. Sinh viên và giảng viên cũng tự đăng ký bằng email được (AUTH-04), và tự khôi phục mật khẩu qua email (AUTH-03) khi đã cấu hình `MAIL_TRANSPORT`; mail mới thử bằng transport file, chưa thử SMTP thật. Tài khoản E2E ở database test không dùng để đăng nhập ứng dụng local.
 
 Danh sách hỗ trợ tìm tên/email, lọc vai trò/trạng thái và phân trang. Sửa tên/email, khóa/mở khóa sử dụng revision chống ghi đè. Xung đột cho tải thông tin mới để đối chiếu trong khi giữ nội dung đang nhập. Khóa hoặc đổi email thu hồi mọi phiên của tài khoản; mở khóa không phục hồi cookie cũ. Role của tài khoản được giữ nguyên; ADMIN chỉ đọc ở chức năng này. Không xóa tài khoản.
 
@@ -145,7 +145,7 @@ $env:PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = 'C:/Program Files/Google/Chrome/Appli
 pnpm test:e2e
 ```
 
-Browser kiểm tra reflow desktop/mobile/tablet bằng Chrome; chưa chứng minh Safari/iOS/Android hoặc cài PWA trên thiết bị thật.
+Browser kiểm tra reflow desktop/mobile/tablet bằng Chrome. Dự án chỉ kiểm chứng trên Chrome dùng chuột; Safari và thiết bị cảm ứng đã bỏ khỏi phạm vi từ 04/11/2026, nên không được xem là hỗ trợ. Chưa kiểm chứng cài PWA.
 
 ## Build và chạy bản build local
 
@@ -165,9 +165,10 @@ Admin mở **Quản lý học liệu** tại `/workspace/admin/materials` để 
 
 ## Lộ trình còn lại
 
-1. Hoàn thiện tài khoản: tự khôi phục mật khẩu (AUTH-03) cần SMTP. Tự đổi (AUTH-01) và buộc đổi mật khẩu được cấp (AUTH-02) đã có.
-2. Nguồn nội dung có quyền rõ ràng; môi trường pilot S3 private, HTTPS, backup/phục hồi.
-3. Cài PWA và kiểm thử thiết bị thật đang tạm hoãn theo yêu cầu người dùng. Xem [tiến độ17/10](docs/implementation/2026-10-17-web-reader-history.md).
+1. Thử mail bằng SMTP thật. Các luồng tài khoản (AUTH-01…04) đã có.
+2. Nguồn nội dung có quyền rõ ràng.
+3. OPS-02: [diễn tập local S3, HTTPS và phục hồi](docs/implementation/2026-11-04-ops-02-rehearsal.md) đã đạt; còn thử trên S3, domain và chứng chỉ thật.
+4. Cài PWA và phiên dùng thử với người thật vẫn chưa làm.
 
 Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
 
