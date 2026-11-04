@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type study_cards } from '../generated/prisma/client';
 import { academicId } from '../academic/academic.service';
@@ -6,14 +11,19 @@ import { Profile } from '../auth/auth.types';
 import { available, LibraryService } from './library.service';
 import {
   CreateStudyCardDto,
+  ReviewStudyCardDto,
   StudyCardListDto,
   StudyCardRevisionDto,
   StudyCardScopeDto,
+  StudyScheduleDto,
   UpdateStudyCardDto,
 } from './study-cards.dto';
+import { addDays, dayText, dayValue, localDay, nextReview } from './study-schedule';
 
 /** A practice round loads at most this many cards, newest first. */
 export const MAX_PRACTICE_CARDS = 200;
+/** The calendar's month grid spans six weeks; this leaves room without an unbounded scan. */
+const MAX_SCHEDULE_DAYS = 92;
 
 const stale = () =>
   new ConflictException({
@@ -30,6 +40,9 @@ const cardItem = (c: study_cards & { document_versions?: { title: string } }) =>
   answer: c.answer,
   revision: c.revision,
   updatedAt: c.updated_at.toISOString(),
+  reviewBox: c.review_box,
+  dueOn: dayText(c.due_on),
+  lastReviewedAt: c.last_reviewed_at?.toISOString() ?? null,
   ...(c.document_versions ? { title: c.document_versions.title } : {}),
 });
 
@@ -184,6 +197,102 @@ export class StudyCardsService {
       { isolationLevel: 'RepeatableRead' },
     );
     return { items: rows.map(cardItem), total };
+  }
+  /** STUDY-03: the readable cards due today or overdue, longest overdue first. */
+  async due(actor: Profile, query: StudyCardScopeDto) {
+    const { readable } = this.scope(actor, query);
+    const where: Prisma.study_cardsWhereInput = {
+      AND: [readable, { due_on: { lte: dayValue(localDay(new Date())) } }],
+    };
+    const [rows, total] = await this.db.$transaction(
+      [
+        this.db.study_cards.findMany({
+          where,
+          include: { document_versions: { select: { title: true } } },
+          orderBy: [{ due_on: 'asc' }, { id: 'asc' }],
+          take: MAX_PRACTICE_CARDS,
+        }),
+        this.db.study_cards.count({ where }),
+      ],
+      { isolationLevel: 'RepeatableRead' },
+    );
+    return { items: rows.map(cardItem), total };
+  }
+  /** STUDY-03: cards due now, and how many fall due on each later day in the range. */
+  async schedule(actor: Profile, query: StudyScheduleDto) {
+    const today = localDay(new Date());
+    const invalid = () => new BadRequestException('Khoảng ngày không hợp lệ.');
+    const from = query.from ?? today;
+    // The DTO checks the shape only: 2026-13-45 reaches here and must not throw a RangeError.
+    if (Number.isNaN(dayValue(from).getTime())) throw invalid();
+    const to = query.to ?? addDays(from, 30);
+    const days = (dayValue(to).getTime() - dayValue(from).getTime()) / 86_400_000;
+    if (!Number.isInteger(days) || days < 0 || days > MAX_SCHEDULE_DAYS) throw invalid();
+    const { readable } = this.scope(actor, query);
+    return this.db.$transaction(
+      async (tx) => {
+        const dueNow = await tx.study_cards.count({
+          where: { AND: [readable, { due_on: { lte: dayValue(today) } }] },
+        });
+        const later = await tx.study_cards.groupBy({
+          by: ['due_on'],
+          where: {
+            AND: [
+              readable,
+              { due_on: { gt: dayValue(today), gte: dayValue(from), lte: dayValue(to) } },
+            ],
+          },
+          orderBy: { due_on: 'asc' },
+          _count: { _all: true },
+        });
+        return {
+          today,
+          dueNow,
+          days: later.map((row) => ({ date: dayText(row.due_on), count: row._count._all })),
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  /** STUDY-03: the first answer of the day sets the next date; a retry changes nothing. */
+  async review(actor: Profile, rawId: string, body: ReviewStudyCardDto) {
+    return this.db.$transaction(async (tx) => {
+      const card = await this.owned(tx, actor, rawId);
+      if (card.last_review_request === body.requestId) return { item: cardItem(card) };
+      const today = localDay(new Date());
+      if (dayText(card.due_on) > today)
+        throw new ConflictException({
+          code: 'STUDY_CARD_NOT_DUE',
+          message: 'Thẻ này chưa đến hạn ôn.',
+        });
+      const next = nextReview(card.review_box, body.result, today);
+      const updated = await tx.study_cards.update({
+        where: { id: card.id },
+        data: {
+          review_box: next.box,
+          due_on: dayValue(next.dueOn),
+          last_reviewed_at: new Date(),
+          last_review_request: body.requestId,
+        },
+      });
+      return { item: cardItem(updated) };
+    });
+  }
+  /** STUDY-03: "Ôn lại từ đầu": the card is due today as if it had never been reviewed. */
+  async resetSchedule(actor: Profile, rawId: string) {
+    return this.db.$transaction(async (tx) => {
+      const card = await this.owned(tx, actor, rawId);
+      const updated = await tx.study_cards.update({
+        where: { id: card.id },
+        data: {
+          review_box: 0,
+          due_on: dayValue(localDay(new Date())),
+          last_reviewed_at: null,
+          last_review_request: null,
+        },
+      });
+      return { item: cardItem(updated) };
+    });
   }
   private async owned(tx: Prisma.TransactionClient, actor: Profile, rawId: string) {
     const user_id = academicId(actor.id);

@@ -15,9 +15,11 @@ import { AuthenticatedRequest } from '../auth/auth.types';
 import { SessionGuard } from '../auth/session.guard';
 import {
   CreateStudyCardDto,
+  ReviewStudyCardDto,
   StudyCardListDto,
   StudyCardRevisionDto,
   StudyCardScopeDto,
+  StudyScheduleDto,
   UpdateStudyCardDto,
 } from './study-cards.dto';
 import { StudyCardsService } from './study-cards.service';
@@ -44,6 +46,28 @@ export class StudyCardsController {
     @Query() query: StudyCardScopeDto,
   ) {
     return this.cards.practice(req.user, query);
+  }
+  @Get('study-cards/due') due(@Req() req: AuthenticatedRequest, @Query() query: StudyCardScopeDto) {
+    return this.cards.due(req.user, query);
+  }
+  @Get('study-cards/schedule') schedule(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: StudyScheduleDto,
+  ) {
+    return this.cards.schedule(req.user, query);
+  }
+  @Post('study-cards/:cardId/review') @HttpCode(200) review(
+    @Req() req: AuthenticatedRequest,
+    @Param('cardId') cardId: string,
+    @Body() body: ReviewStudyCardDto,
+  ) {
+    return this.cards.review(req.user, cardId, body);
+  }
+  @Post('study-cards/:cardId/reset-schedule') @HttpCode(200) resetSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Param('cardId') cardId: string,
+  ) {
+    return this.cards.resetSchedule(req.user, cardId);
   }
   @Patch('study-cards/:cardId') update(
     @Req() req: AuthenticatedRequest,
