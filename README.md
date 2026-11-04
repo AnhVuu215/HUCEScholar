@@ -44,6 +44,7 @@ Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng 
 - [Ghi chú riêng và tiến độ đọc](docs/implementation/2026-10-12-reader-notes-progress.md)
 - [Phiên bản, bàn giao và ẩn/khôi phục](docs/implementation/2026-10-12-material-lifecycle.md)
 - [Thư viện cá nhân](docs/implementation/2026-10-12-personal-library.md)
+- [Ôn thẻ theo lịch](docs/implementation/2026-11-04-study-schedule.md)
 - [Giảng viên upload và tự công bố](docs/implementation/2026-10-14-lecturer-self-publication.md)
 - [Tiến độ và phần còn lại ngày 14/10/2026](docs/implementation/2026-10-14-project-status.md)
 - [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)

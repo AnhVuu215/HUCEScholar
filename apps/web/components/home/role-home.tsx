@@ -6,6 +6,7 @@ import { libraryError } from '../../lib/library';
 import { draftList, materialError, type DraftList } from '../../lib/materials';
 import { reviewError, reviewList, type ReviewList } from '../../lib/moderation';
 import { personalList, type PersonalList } from '../../lib/personal-library';
+import { studyCardError, studySchedule, type StudySchedule } from '../../lib/study-cards';
 import {
   dueDay,
   followedReadingLists,
@@ -72,6 +73,22 @@ function SectionState<T>({
 }
 
 const loadRecent = (signal: AbortSignal) => personalList('recent', 1, signal);
+const loadSchedule = (signal: AbortSignal): Promise<StudySchedule> =>
+  studySchedule(new URLSearchParams(), signal);
+
+/** STUDY-03: a nudge, not a task list, so it stays out of the way unless cards are due. */
+function DueCards() {
+  const { data } = useSection(loadSchedule, studyCardError);
+  if (!data?.dueNow) return null;
+  return (
+    <section className="content-section home-section" aria-labelledby="home-due-cards">
+      <h2 id="home-due-cards">Thẻ cần ôn hôm nay</h2>
+      <p>
+        <Link href="/workspace/study?on=due">Ôn {data.dueNow} thẻ đến hạn</Link>
+      </p>
+    </section>
+  );
+}
 
 function ContinueReading() {
   const recent = useSection<PersonalList>(loadRecent, libraryError);
@@ -373,6 +390,7 @@ export function RoleHome({ role }: { role: Role }) {
   return (
     <div className="role-home">
       <ContinueReading />
+      <DueCards />
       <FollowedReadingLists />
       {role === 'ADMIN' ? (
         <>

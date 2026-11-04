@@ -55,7 +55,7 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` sau `pnpm test:set
 
 ## Chưa làm
 
-- Lưu kết quả và ôn theo lịch (spaced repetition), đưa thẻ đến hạn ôn lên Lịch học.
+- Lưu kết quả và ôn theo lịch, đưa thẻ đến hạn ôn lên Lịch học: đã làm ở [STUDY-03](2026-11-04-study-schedule.md).
 - Ghi bộ lọc vào URL; lọc theo đoạn chữ trong câu hỏi.
 - Phím tắt riêng cho "Hiện đáp án", "Nhớ", "Chưa nhớ" (hiện dùng Tab và Enter).
 - Xuất thẻ cùng ghi chú (EXPORT-01).
