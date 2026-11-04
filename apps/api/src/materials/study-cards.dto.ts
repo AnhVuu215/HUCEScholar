@@ -1,6 +1,7 @@
 import { trim, integer } from '../dto-transforms';
 import { Transform } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -30,6 +31,16 @@ export class StudyCardRevisionDto {
 export class StudyCardScopeDto {
   @IsOptional() @IsString() @Matches(/^[1-9]\d{0,18}$/) versionId?: string;
   @IsOptional() @IsString() @Matches(/^[1-9]\d{0,18}$/) courseId?: string;
+}
+/** STUDY-03: an answer in a scheduled review; requestId makes a retry harmless. */
+export class ReviewStudyCardDto {
+  @IsIn(['KNOWN', 'AGAIN']) result!: 'KNOWN' | 'AGAIN';
+  @IsUUID('4') requestId!: string;
+}
+/** STUDY-03: how many cards fall due each day between two dates, for the deck and the calendar. */
+export class StudyScheduleDto extends StudyCardScopeDto {
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) to?: string;
 }
 export class StudyCardListDto extends StudyCardScopeDto {
   @Transform(integer) @IsInt() @Min(1) @Max(100000) page = 1;

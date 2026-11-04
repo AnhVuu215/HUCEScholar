@@ -42,6 +42,7 @@ import {
   readingListError,
   type ReadingDeadline,
 } from '../../lib/reading-lists';
+import { studySchedule, type StudySchedule } from '../../lib/study-cards';
 import { CALENDAR_DRAFT_PROMPT, CalendarEditor, type CalendarDraft } from './calendar-editor';
 import { CalendarExport } from './calendar-export';
 import { CalendarImport } from './calendar-import';
@@ -197,6 +198,16 @@ function Deadline({
     </div>
   );
 }
+/** STUDY-03: today's chip also carries overdue cards and opens the review. */
+function StudyDue({ count, isToday }: { count: number; isToday: boolean }) {
+  return (
+    <div className="calendar-chip calendar-deadline">
+      <Link href={isToday ? '/workspace/study?on=due' : '/workspace/study'}>
+        {count} thẻ đến hạn ôn
+      </Link>
+    </div>
+  );
+}
 const deadlinesOn = (deadlines: ReadingDeadline[], day: Date) => {
   const key = dateKey(day);
   return deadlines.filter((d) => d.dueOn === key);
@@ -263,6 +274,7 @@ export function CalendarBoard() {
   const [range, setRange] = useState<CalendarRange | null>(null);
   const [tasks, setTasks] = useState<CalendarTasks | null>(null);
   const [deadlines, setDeadlines] = useState<ReadingDeadline[]>([]);
+  const [study, setStudy] = useState<StudySchedule | null>(null);
   const [deadlineError, setDeadlineError] = useState(false);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -320,6 +332,23 @@ export function CalendarBoard() {
       });
     return () => controller.abort();
   }, [from, to, attempt]);
+  // Like the due dates above: the calendar works without it.
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = new URLSearchParams({ from: dateKey(from), to: dateKey(to) });
+    studySchedule(params, controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setStudy(result);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setStudy(null);
+      });
+    return () => controller.abort();
+  }, [from, to, attempt]);
+  const studyOn = (day: Date) =>
+    sameDay(day, today)
+      ? (study?.dueNow ?? 0)
+      : (study?.days.find((d) => d.date === dateKey(day))?.count ?? 0);
   // Start the hour grid at 7:00, where most study days begin.
   useEffect(() => {
     if (view === 'week' && hours.current) hours.current.scrollTop = 7 * HOUR_PX;
@@ -677,6 +706,9 @@ export function CalendarBoard() {
                   className={dropClass(day).trim() || undefined}
                   {...dropZone(day, false)}
                 >
+                  {studyOn(day) > 0 && (
+                    <StudyDue count={studyOn(day)} isToday={sameDay(day, today)} />
+                  )}
                   {deadlinesOn(shownDeadlines, day).map((d) => (
                     <Deadline
                       key={`${d.listId}-${d.position}`}
@@ -772,7 +804,9 @@ export function CalendarBoard() {
             {days.map((day) => {
               const list = items.filter((i) => onDay(i, day));
               const due = deadlinesOn(shownDeadlines, day);
-              const hidden = list.length + due.length - MONTH_CHIPS;
+              const cards = studyOn(day);
+              const slots = MONTH_CHIPS - (cards > 0 ? 1 : 0);
+              const hidden = list.length + due.length - slots;
               const outside = day.getMonth() !== anchor.getMonth();
               return (
                 <div
@@ -791,14 +825,15 @@ export function CalendarBoard() {
                   >
                     {day.getDate()}
                   </button>
-                  {due.slice(0, MONTH_CHIPS).map((d) => (
+                  {cards > 0 && <StudyDue count={cards} isToday={sameDay(day, today)} />}
+                  {due.slice(0, slots).map((d) => (
                     <Deadline
                       key={`${d.listId}-${d.position}`}
                       deadline={d}
                       markRead={markDeadline}
                     />
                   ))}
-                  {list.slice(0, Math.max(MONTH_CHIPS - due.length, 0)).map((i) => chip(i))}
+                  {list.slice(0, Math.max(slots - due.length, 0)).map((i) => chip(i))}
                   {hidden > 0 && (
                     <button
                       type="button"
@@ -819,7 +854,9 @@ export function CalendarBoard() {
           <div className="calendar-agenda">
             {days.every(
               (day) =>
-                !items.some((i) => onDay(i, day)) && !deadlinesOn(shownDeadlines, day).length,
+                !items.some((i) => onDay(i, day)) &&
+                !deadlinesOn(shownDeadlines, day).length &&
+                !studyOn(day),
             ) ? (
               <p className="users-list-message">
                 Không có lịch trong {AGENDA_DAYS} ngày tính từ {formatLongDay(from)}.
@@ -828,7 +865,8 @@ export function CalendarBoard() {
               days.map((day) => {
                 const list = items.filter((i) => onDay(i, day));
                 const due = deadlinesOn(shownDeadlines, day);
-                if (!list.length && !due.length) return null;
+                const cards = studyOn(day);
+                if (!list.length && !due.length && !cards) return null;
                 return (
                   <section key={day.getTime()} aria-label={formatLongDay(day)}>
                     <h3 className={sameDay(day, today) ? 'is-today' : undefined}>
@@ -836,6 +874,17 @@ export function CalendarBoard() {
                       {sameDay(day, today) ? ' · Hôm nay' : ''}
                     </h3>
                     <ul>
+                      {cards > 0 && (
+                        <li className="calendar-deadline">
+                          <Link
+                            href={
+                              sameDay(day, today) ? '/workspace/study?on=due' : '/workspace/study'
+                            }
+                          >
+                            {cards} thẻ đến hạn ôn
+                          </Link>
+                        </li>
+                      )}
                       {due.map((d) => (
                         <li
                           key={`${d.listId}-${d.position}`}

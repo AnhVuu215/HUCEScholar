@@ -2513,6 +2513,140 @@ describe('private material drafts', () => {
       await follow(false).expect(200);
     });
   });
+  it('STUDY-03: a scheduled review moves a due card once, privately, and only while readable', async () => {
+    const item = await readingFixture();
+    const path = `/api/v1/library/versions/${item.versionId}`;
+    const card = async (question: string) => {
+      const highlight = (
+        await readingWrite('student', `${path}/highlights`, {
+          pageNumber: 1,
+          content: '',
+          color: '#FFF59D',
+          requestId: randomUUID(),
+          anchor: highlightAnchor(),
+        })
+      ).body.item;
+      const created = await readingWrite('student', `${path}/study-cards`, {
+        annotationId: highlight.id,
+        question,
+        answer: 'Đáp án',
+        requestId: randomUUID(),
+      });
+      expect(created.status).toBe(201);
+      return created.body.item as { id: string; reviewBox: number; dueOn: string };
+    };
+    const review = (
+      id: string,
+      result: string,
+      requestId: string = randomUUID(),
+      who = 'student',
+    ) => readingWrite(who, `/api/v1/study-cards/${id}/review`, { result, requestId });
+    const scope = `?versionId=${item.versionId}`;
+    const dueIds = async (who = 'student') =>
+      (await agents[who].get(`/api/v1/study-cards/due${scope}`)).body.items.map(
+        (c: { id: string }) => c.id,
+      );
+    const schedule = async (query = scope) =>
+      (await agents.student.get(`/api/v1/study-cards/schedule${query}`).expect(200)).body;
+    const dbDay = async (id: string) =>
+      (
+        await db.query(
+          `SELECT (due_on - ((now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date)) AS days, review_box
+           FROM hucescholar.study_cards WHERE id=$1`,
+          [id],
+        )
+      ).rows[0];
+
+    // A new card is due at once, in the owner's Vietnam day.
+    const one = await card('Thẻ lịch một');
+    const two = await card('Thẻ lịch hai');
+    expect(one.reviewBox).toBe(0);
+    expect(await dueIds()).toEqual([one.id, two.id]);
+    expect(await schedule()).toMatchObject({ dueNow: 2, days: [] });
+    expect(one.dueOn).toBe((await schedule()).today);
+
+    // Nobody else can see or answer it.
+    expect(await dueIds('other')).toEqual([]);
+    expect((await review(one.id, 'KNOWN', randomUUID(), 'other')).status).toBe(404);
+
+    // One answer moves it; a retry of the same request does not move it again.
+    const requestId = randomUUID();
+    const answered = await review(one.id, 'KNOWN', requestId);
+    expect(answered.status).toBe(200);
+    expect(answered.body.item).toMatchObject({
+      reviewBox: 1,
+      lastReviewedAt: expect.any(String),
+    });
+    expect(await dbDay(one.id)).toEqual({ days: 1, review_box: 1 });
+    expect((await review(one.id, 'KNOWN', requestId)).status).toBe(200);
+    expect(await dbDay(one.id)).toEqual({ days: 1, review_box: 1 });
+
+    // Not due yet: a new answer is refused and the card stays where it is.
+    const early = await review(one.id, 'KNOWN');
+    expect(early.status).toBe(409);
+    expect(early.body.code).toBe('STUDY_CARD_NOT_DUE');
+    expect(await dueIds()).toEqual([two.id]);
+
+    // Later dates are counted per day, and the ordering puts the longest overdue first.
+    const tomorrow = (await agents.student.get(`/api/v1/study-cards${scope}`)).body.items.find(
+      (c: { id: string }) => c.id === one.id,
+    ).dueOn;
+    expect((await schedule()).days).toEqual([{ date: tomorrow, count: 1 }]);
+    await db.query(
+      `UPDATE hucescholar.study_cards SET due_on=due_on - 5, review_box=4 WHERE id=$1`,
+      [one.id],
+    );
+    expect(await dueIds()).toEqual([one.id, two.id]);
+    expect((await schedule()).dueNow).toBe(2);
+
+    // Overdue cards go up from their box; forgetting sends a high box back to the first.
+    expect((await review(one.id, 'KNOWN')).status).toBe(200);
+    expect(await dbDay(one.id)).toEqual({ days: 30, review_box: 5 });
+    await db.query('UPDATE hucescholar.study_cards SET due_on=due_on - 30 WHERE id=$1', [one.id]);
+    expect((await review(one.id, 'AGAIN')).status).toBe(200);
+    expect(await dbDay(one.id)).toEqual({ days: 1, review_box: 1 });
+
+    // Editing the text leaves the schedule alone, and a review leaves the revision alone.
+    const edited = await readingWrite(
+      'student',
+      `/api/v1/study-cards/${one.id}`,
+      { question: 'Thẻ lịch một (sửa)', answer: 'Đáp án', revision: 1 },
+      'patch',
+    );
+    expect(edited.status).toBe(200);
+    expect(edited.body.item.reviewBox).toBe(1);
+
+    // Starting over makes it due today again.
+    const reset = await readingWrite('student', `/api/v1/study-cards/${one.id}/reset-schedule`, {});
+    expect(reset.status).toBe(200);
+    expect(reset.body.item).toMatchObject({ reviewBox: 0, lastReviewedAt: null });
+    expect(await dueIds()).toEqual(expect.arrayContaining([one.id, two.id]));
+
+    // Bad input and no session.
+    expect((await review(two.id, 'MAYBE')).status).toBe(400);
+    await agents.student
+      .get('/api/v1/study-cards/schedule?from=2026-01-01&to=2027-01-01')
+      .expect(400);
+    await agents.student
+      .get('/api/v1/study-cards/schedule?from=2026-02-02&to=2026-02-01')
+      .expect(400);
+    await agents.student.get('/api/v1/study-cards/schedule?from=2026-13-45').expect(400);
+    await request(app.getHttpServer()).get('/api/v1/study-cards/due').expect(401);
+
+    // A hidden document's cards leave the review, and cannot be answered, but keep their date.
+    await db.query(
+      "UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=(SELECT document_id FROM hucescholar.document_versions WHERE id=$1)",
+      [item.versionId],
+    );
+    expect(await dueIds()).toEqual([]);
+    expect((await schedule()).dueNow).toBe(0);
+    expect((await review(two.id, 'KNOWN')).status).toBe(404);
+    expect((await dbDay(two.id)).review_box).toBe(0);
+    await db.query(
+      "UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=(SELECT document_id FROM hucescholar.document_versions WHERE id=$1)",
+      [item.versionId],
+    );
+  });
   it('STUDY-02: practice and the card list filter by course or document, from readable cards only', async () => {
     const first = await readingFixture();
     const draft = await safeDraft('student', 3);

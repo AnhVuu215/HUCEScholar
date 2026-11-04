@@ -3,28 +3,43 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   deleteStudyCard,
+  formatStudyDay,
+  MAX_REVIEW_BOX,
+  resetStudySchedule,
   scopeParams,
   studyCardError,
   studyCardFilters,
   studyCards,
+  studySchedule,
   updateStudyCard,
   type StudyCard,
   type StudyCardFilters,
   type StudyCardList,
   type StudyCardScope,
+  type StudySchedule,
 } from '../../lib/study-cards';
 import { SelectField } from '../ui/select-field';
 import { StudyPractice } from './study-practice';
 import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
 
+function nextReviewLabel(card: StudyCard, today: string) {
+  const box = card.reviewBox ? ` · Hộp ${card.reviewBox}/${MAX_REVIEW_BOX}` : ' · Thẻ mới';
+  if (today && card.dueOn <= today) return `Đến hạn ôn${box}`;
+  return `Ôn lại ngày ${formatStudyDay(card.dueOn)}${box}`;
+}
+
 function Card({
   card,
+  today,
   replaced,
   removed,
+  rescheduled,
 }: {
   card: StudyCard;
+  today: string;
   replaced: (card: StudyCard) => void;
   removed: () => void;
+  rescheduled: () => void;
 }) {
   const [shown, setShown] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -44,6 +59,17 @@ function Card({
     } catch (failure) {
       setError(studyCardError(failure));
     } finally {
+      setBusy(false);
+    }
+  }
+  async function restart() {
+    setBusy(true);
+    setError('');
+    try {
+      await resetStudySchedule(card);
+      rescheduled();
+    } catch (failure) {
+      setError(studyCardError(failure));
       setBusy(false);
     }
   }
@@ -133,10 +159,21 @@ function Card({
             </Link>
             {card.highlightId ? '' : ' · Đoạn tô gốc đã xóa'}
           </p>
+          <p className="field-hint">{nextReviewLabel(card, today)}</p>
           <div className="note-actions">
             <button type="button" className="text-button" onClick={() => setEditing(true)}>
               Sửa thẻ
             </button>
+            {card.reviewBox > 0 && (
+              <button
+                type="button"
+                className="text-button"
+                disabled={busy}
+                onClick={() => void restart()}
+              >
+                Ôn lại từ đầu
+              </button>
+            )}
             <button type="button" className="text-button" onClick={() => setDeleting(true)}>
               Xóa thẻ
             </button>
@@ -169,14 +206,15 @@ function Card({
   );
 }
 
-export function StudyDeck() {
+export function StudyDeck({ startDue = false }: { startDue?: boolean }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<StudyCardList | null>(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [scope, setScope] = useState<StudyCardScope>({ versionId: '', courseId: '' });
   const [filters, setFilters] = useState<StudyCardFilters | null>(null);
-  const [practicing, setPracticing] = useState(false);
+  const [practicing, setPracticing] = useState<'free' | 'due' | null>(startDue ? 'due' : null);
+  const [schedule, setSchedule] = useState<StudySchedule | null>(null);
   // The menus only narrow the list; if they fail to load, the whole deck still shows.
   useEffect(() => {
     const controller = new AbortController();
@@ -187,6 +225,18 @@ export function StudyDeck() {
       .catch(() => undefined);
     return () => controller.abort();
   }, [attempt]);
+  // Without the schedule the deck still lists cards and offers free practice.
+  useEffect(() => {
+    const controller = new AbortController();
+    studySchedule(scopeParams(scope), controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setSchedule(result);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setSchedule(null);
+      });
+    return () => controller.abort();
+  }, [scope, attempt]);
   useEffect(() => {
     const controller = new AbortController();
     const params = scopeParams(scope);
@@ -212,12 +262,14 @@ export function StudyDeck() {
     setScope((v) => ({ ...v, ...next }));
   }
   const filtered = Boolean(scope.versionId || scope.courseId);
+  const upcoming = schedule?.days[0];
+  const dueNow = schedule?.dueNow ?? 0;
   return (
     <section className="users-directory study-deck" aria-labelledby="study-title">
       <h2 id="study-title">Thẻ ôn tập của tôi</h2>
       <p className="field-hint">
-        Tạo thẻ từ đoạn tô trong trang đọc: tự viết câu hỏi và đáp án, rồi lật để tự kiểm tra. Chỉ
-        bạn xem được.
+        Tạo thẻ từ đoạn tô trong trang đọc: tự viết câu hỏi và đáp án, rồi lật để tự kiểm tra. Thẻ
+        nhớ được sẽ giãn dần sau 1, 3, 7, 14, 30 và 60 ngày. Chỉ bạn xem được.
       </p>
       {filters && (filters.documents.length > 1 || filters.courses.length > 0) && (
         <div className="study-filters">
@@ -225,7 +277,7 @@ export function StudyDeck() {
             id="study-course"
             label="Môn học"
             value={scope.courseId}
-            disabled={practicing}
+            disabled={practicing !== null}
             options={[
               { value: '', label: 'Mọi môn' },
               ...filters.courses.map((c) => ({ value: c.id, label: `${c.code} · ${c.name}` })),
@@ -236,7 +288,7 @@ export function StudyDeck() {
             id="study-document"
             label="Tài liệu"
             value={scope.versionId}
-            disabled={practicing}
+            disabled={practicing !== null}
             options={[
               { value: '', label: 'Mọi tài liệu' },
               ...filters.documents.map((d) => ({
@@ -251,8 +303,9 @@ export function StudyDeck() {
       {practicing ? (
         <StudyPractice
           scope={scope}
+          due={practicing === 'due'}
           close={() => {
-            setPracticing(false);
+            setPracticing(null);
             reload();
           }}
         />
@@ -277,10 +330,26 @@ export function StudyDeck() {
           )}
           {data.total > 0 && (
             <div className="note-actions">
-              <button className="primary-button" onClick={() => setPracticing(true)}>
+              {dueNow > 0 && (
+                <button className="primary-button" onClick={() => setPracticing('due')}>
+                  Ôn {dueNow} thẻ đến hạn
+                </button>
+              )}
+              <button
+                className={dueNow > 0 ? 'secondary-button' : 'primary-button'}
+                onClick={() => setPracticing('free')}
+              >
                 Luyện {data.total} thẻ{filtered ? ' đang lọc' : ''}
               </button>
             </div>
+          )}
+          {data.total > 0 && schedule && dueNow === 0 && (
+            <p className="field-hint">
+              Hôm nay không có thẻ đến hạn.
+              {upcoming
+                ? ` Lần ôn tiếp theo: ${formatStudyDay(upcoming.date)} (${upcoming.count} thẻ).`
+                : ''}
+            </p>
           )}
           {data.items.length === 0 ? (
             <p className="users-list-message">
@@ -294,6 +363,8 @@ export function StudyDeck() {
                 <Card
                   key={card.id}
                   card={card}
+                  today={schedule?.today ?? ''}
+                  rescheduled={reload}
                   replaced={(next) =>
                     setData((v) =>
                       v
