@@ -18,6 +18,7 @@ import {
   WORKER_HEARTBEAT_KEY,
 } from './ops/readiness.service';
 import { PdfScanner } from './files/pdf-scanner';
+import { PdfTextIndexer } from './files/pdf-text-indexer';
 import { CalendarReminders, CalendarRemindersModule } from './calendar/calendar-reminders';
 import {
   NotebookImagesModule,
@@ -116,6 +117,22 @@ async function bootstrap() {
   };
   void sweep();
   const sweepTimer = setInterval(() => void sweep(), 3_600_000);
+  // SEARCH-04: new approved PDFs reach library search within about a minute.
+  const texts = app.get(PdfTextIndexer);
+  let indexing = false;
+  const indexTexts = async () => {
+    if (indexing) return;
+    indexing = true;
+    try {
+      await texts.sweep();
+    } catch {
+      Logger.warn('PDF text indexing interrupted; will retry.', 'FileWorker');
+    } finally {
+      indexing = false;
+    }
+  };
+  void indexTexts();
+  const textTimer = setInterval(() => void indexTexts(), 60_000);
   // Heartbeat and scanner state for API readiness. Both expire if this process dies without cleanup.
   const heartbeat = new Redis(queueConnection(config.redisUrl));
   heartbeat.on('error', () => undefined);
@@ -138,6 +155,7 @@ async function bootstrap() {
     clearInterval(interval);
     clearInterval(remindTimer);
     clearInterval(sweepTimer);
+    clearInterval(textTimer);
     clearInterval(beating);
     await heartbeat
       .del(WORKER_HEARTBEAT_KEY, SCANNER_STATUS_KEY)

@@ -2,11 +2,30 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { libraryError, libraryList, libraryCourses, type LibraryList } from '../../lib/library';
+import {
+  libraryError,
+  libraryList,
+  libraryCourses,
+  type LibraryItem,
+  type LibraryList,
+} from '../../lib/library';
 import { materialTypes } from '../../lib/materials';
 import { Button } from '../ui/button';
 import { SelectField } from '../ui/select-field';
 import { libraryQueryString, parseLibraryQuery, type LibraryQuery } from '../../lib/library-query';
+
+/**
+ * Opens a content match on its page with the reader's find already run. It passes the text as
+ * printed, not the query: reader find respects accents, so "be tong" would not find "Bê tông".
+ */
+function readerLink(item: LibraryItem) {
+  const path = `/workspace/library/versions/${item.versionId}`;
+  const hit = item.contentMatch;
+  if (!hit) return path;
+  const params = new URLSearchParams({ page: String(hit.page) });
+  if (hit.match) params.set('find', hit.match);
+  return `${path}?${params}`;
+}
 export function LibraryCatalog() {
   const params = useSearchParams();
   const raw = params.toString();
@@ -255,7 +274,9 @@ function CatalogSession({
         <>
           <p role="status">
             {data.total} học liệu · Trang {data.page}
-            {query.search.trim() ? ' · Khớp tiêu đề xếp trước' : ' · Mới cập nhật trước'}
+            {query.search.trim()
+              ? ' · Khớp tiêu đề xếp trước, rồi đến nội dung PDF'
+              : ' · Mới cập nhật trước'}
           </p>
           {data.items.length === 0 ? (
             <p>Chưa có học liệu phù hợp. Thử bỏ bớt bộ lọc hoặc tìm theo tiêu đề khác.</p>
@@ -279,13 +300,27 @@ function CatalogSession({
                       {item.pageCount} trang ·{' '}
                       {item.downloadAllowed ? 'Được tải bản gốc' : 'Chỉ đọc trong hệ thống'}
                     </p>
+                    {item.contentMatch && (
+                      <p className="library-match">
+                        <strong>
+                          Trang {item.contentMatch.page}
+                          {item.contentMatch.pages > 1
+                            ? ` (và ${item.contentMatch.pages - 1} trang khác)`
+                            : ''}
+                          :
+                        </strong>{' '}
+                        {item.contentMatch.before}
+                        <mark>{item.contentMatch.match}</mark>
+                        {item.contentMatch.after}
+                      </p>
+                    )}
                   </div>
                   <Link
                     className="primary-button"
-                    href={`/workspace/library/versions/${item.versionId}`}
+                    href={readerLink(item)}
                     aria-label={`Đọc ${item.title}`}
                   >
-                    Đọc tài liệu
+                    {item.contentMatch ? `Mở trang ${item.contentMatch.page}` : 'Đọc tài liệu'}
                   </Link>
                 </li>
               ))}

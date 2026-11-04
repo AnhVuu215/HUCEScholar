@@ -13,18 +13,18 @@ describe('migrated PostgreSQL authentication lifecycle', () => {
     await client?.end();
   });
 
-  it('preserves 39 tables, constraints, partial indexes and snapshot triggers', async () => {
+  it('preserves 41 tables, constraints, partial indexes and snapshot triggers', async () => {
     const tables = await client.query(
       "SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='hucescholar' AND table_type='BASE TABLE'",
     );
-    expect(tables.rows[0].n).toBe(39);
+    expect(tables.rows[0].n).toBe(41);
     const constraints = await client.query(
       "SELECT contype, count(*)::int n FROM pg_constraint WHERE connamespace='hucescholar'::regnamespace GROUP BY contype",
     );
     expect(constraints.rows).toEqual(
       expect.arrayContaining([
-        { contype: 'f', n: 77 },
-        { contype: 'c', n: 134 },
+        { contype: 'f', n: 79 },
+        { contype: 'c', n: 136 },
       ]),
     );
     const partial = await client.query(
