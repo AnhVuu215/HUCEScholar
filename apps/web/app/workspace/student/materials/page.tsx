@@ -13,11 +13,10 @@ export default async function StudentMaterialsPage({
     <RoleWorkspace
       role="STUDENT"
       title="Học liệu của tôi"
-      description="Chuẩn bị tài liệu bổ sung của bạn theo môn học."
+      description="Tải PDF hoặc Word lên theo môn học và gửi quản trị viên duyệt."
       activeSection="materials"
     >
       <MaterialManagement
-        role="STUDENT"
         initialDraft={
           typeof draft === 'string' && /^[1-9]\d{0,18}$/.test(draft) ? draft : undefined
         }

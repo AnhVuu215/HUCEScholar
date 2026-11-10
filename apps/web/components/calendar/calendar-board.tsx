@@ -175,7 +175,7 @@ function ReadCheck({
     />
   );
 }
-/** CAL-04b: a lecturer's due date on a followed course's reading list. */
+/** CAL-04b: an admin-set due date on a followed course's reading list. */
 function Deadline({
   deadline,
   markRead,

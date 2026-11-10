@@ -81,7 +81,6 @@ export function UserForm({
             }
           : {
               ...values,
-              role: form.get('role'),
               password: form.get('password'),
               eligibilityConfirmed: form.get('eligible') === 'on',
             },
@@ -100,7 +99,7 @@ export function UserForm({
       <p className="field-hint">
         {user
           ? `Vai trò ${roleLabels[user.role].toLowerCase()} được giữ nguyên. Đổi email sẽ đăng xuất tài khoản trên mọi thiết bị.`
-          : 'Chỉ cấp cho người dùng đã được đối chiếu. Tài khoản có thể đăng nhập ngay sau khi tạo.'}
+          : 'Cấp tài khoản sinh viên cho người dùng đã được đối chiếu. Tài khoản có thể đăng nhập ngay sau khi tạo.'}
       </p>
       <form onSubmit={(event) => void submit(event)} aria-busy={pending}>
         <fieldset disabled={pending} className="user-fields">
@@ -133,13 +132,6 @@ export function UserForm({
           </div>
           {!user && (
             <>
-              <div className="form-field">
-                <label htmlFor="user-role">Vai trò tài khoản</label>
-                <select id="user-role" name="role" defaultValue="STUDENT">
-                  <option value="STUDENT">Sinh viên</option>
-                  <option value="LECTURER">Giảng viên</option>
-                </select>
-              </div>
               <div className="form-field">
                 <label htmlFor="user-password">Mật khẩu khởi tạo</label>
                 <input

@@ -30,7 +30,7 @@ describe('self-service account with real sessions and PostgreSQL', () => {
     await db.connect();
     redis = new Redis(redisUrl.href);
     hash = await argon2.hash(password, passwordOptions);
-    for (const role of ['ADMIN', 'LECTURER', 'STUDENT']) {
+    for (const role of ['ADMIN', 'STUDENT']) {
       const result = await db.query(
         "INSERT INTO hucescholar.users(email,display_name,password_hash,role,status,verified_at) VALUES($1,$2,$3,$4,'ACTIVE',now()) RETURNING id",
         [`self-${role.toLowerCase()}@example.test`, `${role} test`, hash, role],
@@ -122,7 +122,7 @@ describe('self-service account with real sessions and PostgreSQL', () => {
     }
     throw new Error('Request did not reach the controlled user lock.');
   }
-  it.each(['ADMIN', 'LECTURER', 'STUDENT'])(
+  it.each(['ADMIN', 'STUDENT'])(
     '%s changes only its display name with revision and safe audit',
     async (role) => {
       const agent = await login(role);
@@ -228,7 +228,7 @@ describe('self-service account with real sessions and PostgreSQL', () => {
       await blocker.end();
     }
   });
-  it.each(['ADMIN', 'LECTURER', 'STUDENT'])(
+  it.each(['ADMIN', 'STUDENT'])(
     '%s rotates its session, revokes other browsers and keeps the absolute expiry',
     async (role) => {
       const first = await login(role);

@@ -10,11 +10,6 @@ export class WorkspaceController {
   admin(@Req() request: AuthenticatedRequest) {
     return { user: request.user };
   }
-  @Get('lecturer')
-  @Roles('LECTURER')
-  lecturer(@Req() request: AuthenticatedRequest) {
-    return { user: request.user };
-  }
   @Get('student')
   @Roles('STUDENT')
   student(@Req() request: AuthenticatedRequest) {

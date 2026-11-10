@@ -115,8 +115,9 @@ export async function publishedReadingLists(courseId: string, signal: AbortSigna
     };
   throw new Error('Invalid reading lists.');
 }
-export async function myReadingList(courseId: string, signal: AbortSignal) {
-  const body: unknown = await (await apiRequest(`${path(courseId)}/mine`, { signal })).json();
+/** ROLE-01: the course's one list, as an admin edits it. */
+export async function managedReadingList(courseId: string, signal: AbortSignal) {
+  const body: unknown = await (await apiRequest(`${path(courseId)}/manage`, { signal })).json();
   if (isRecord(body) && (body.item === null || validList(body.item))) return body.item;
   throw new Error('Invalid reading list.');
 }
@@ -126,7 +127,7 @@ export async function saveReadingList(
 ) {
   const token = await csrfToken();
   const body: unknown = await (
-    await apiRequest(`${path(courseId)}/mine`, {
+    await apiRequest(`${path(courseId)}/manage`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
       body: JSON.stringify(data),
@@ -265,7 +266,6 @@ export function readingListError(error: unknown) {
       DUPLICATE_ITEM: 'Mỗi phiên bản chỉ xuất hiện một lần trong danh sách.',
       ITEM_UNAVAILABLE:
         'Có tài liệu không thuộc môn này hoặc không còn đọc được. Bỏ mục đó rồi lưu lại.',
-      ASSIGNMENT_REQUIRED: 'Bạn không còn được phân công môn này.',
     };
     if (error.code && codes[error.code]) return codes[error.code];
     if (error.status === 404) return 'Không tìm thấy môn học hoặc môn đã ngừng hoạt động.';

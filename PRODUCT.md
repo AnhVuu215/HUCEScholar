@@ -6,6 +6,8 @@
 
 web
 
+Quyết định 10/11/2026 (ROLE-01): hệ thống chỉ còn hai vai trò, quản trị viên và sinh viên. Sinh viên tải tài liệu PDF/DOCX lên, quản trị viên duyệt trước khi công bố và soạn danh sách đọc theo môn. Bỏ tự công bố, phân công môn và bàn giao; các ghi chú mốc cũ bên dưới nhắc tới giảng viên là lịch sử. Xem docs/implementation/2026-11-10-remove-lecturer-role.md.
+
 Ưu tiên hiện tại17/10/2026: hoàn thiện và kiểm chứng luồng web. Theo yêu cầu người dùng, tạm hoãn cài PWA và thử nghiệm cài trên thiết bị; nền tảng PWA hiện có được giữ nguyên.
 
 ## Stack
@@ -50,7 +52,7 @@ SEARCH-04 local: kho tìm không dấu trong chữ từng trang của PDF đã d
 
 ## Users
 
-Sinh viên HUCE cần tìm và dùng học liệu trong quá trình học, đặc biệt khi ôn thi. Giảng viên upload PDF/DOCX và tự công bố bản đọc SAFE cho môn được phân công; không bắt buộc tài liệu HUCE hoặc khai báo căn cứ quyền. Quản trị viên quản lý tài khoản, danh mục, phân công, kiểm duyệt tài liệu sinh viên và bàn giao.
+Sinh viên HUCE cần tìm và dùng học liệu trong quá trình học, đặc biệt khi ôn thi. Sinh viên cũng là người đóng góp: tải PDF/DOCX lên kèm nguồn và căn cứ quyền rồi gửi duyệt. Quản trị viên quản lý tài khoản và danh mục, kiểm duyệt mọi tài liệu trước khi công bố, ẩn/khôi phục tài liệu và soạn danh sách đọc cho từng môn.
 
 ## Product Purpose
 
@@ -58,16 +60,16 @@ Tập trung trải nghiệm tìm học liệu, đọc tài liệu điện tử v
 
 ## Capabilities and Constraints
 
-- Ba role ADMIN, LECTURER, STUDENT. Quyết định 22/10/2026 (AUTH-04): sinh viên và giảng viên tự đăng ký bằng email, chọn role sau khi mở liên kết xác nhận, không cần admin duyệt. Tài khoản ADMIN chỉ do admin cấp. Admin vẫn cấp được mọi role. Chưa có SSO.
-- Quyết định mới14/10/2026: giảng viên tự công bố PDF sau khi quét SAFE, không cần admin duyệt. Nguồn tham khảo tùy chọn, không có ô căn cứ quyền bắt buộc. Tài liệu sinh viên vẫn qua kiểm duyệt; admin không biên soạn thay giáo trình.
-- Tài liệu sinh viên bổ sung tách biệt với giáo trình giảng viên. Chưa hạn chế đọc theo lớp đăng ký.
+- Hai role ADMIN và STUDENT (ROLE-01, 10/11/2026). Sinh viên tự đăng ký bằng email (AUTH-04), không chọn role; admin cấp được tài khoản sinh viên. Tài khoản ADMIN chỉ do admin cấp qua script bootstrap. Chưa có SSO.
+- Mọi tài liệu qua kiểm duyệt của admin; không còn tự công bố. Nguồn và căn cứ quyền bắt buộc. Admin không biên soạn thay người đóng góp.
+- Tài liệu gắn với bất kỳ môn đang hoạt động nào; không còn phân công môn. Chưa hạn chế đọc theo lớp đăng ký.
 - Đọc/tải phụ thuộc quyền nguồn, file an toàn, phiên bản được duyệt và tài liệu không bị ẩn.
-- APPROVED là trạng thái nội bộ của bản đã duyệt hoặc tự công bố; publicationMethod phân biệt ADMIN_REVIEW và LECTURER_SELF. Giao diện không mô tả tự công bố là admin đã duyệt. Giữ PDF25MiB, môn/phân công, ownership và ghi chú theo phiên bản.
+- APPROVED là trạng thái của bản đã duyệt. publicationMethod LECTURER_SELF chỉ còn ở các phiên bản giảng viên tự công bố trước ROLE-01; giao diện không mô tả chúng là admin đã duyệt. Giữ PDF25MiB, môn, ownership và ghi chú theo phiên bản.
 - Ghi chú riêng gắn người, phiên bản, trang. Bản PDF mới không tự chuyển ghi chú cũ. Chưa xuất PDF kèm ghi chú hoặc offline.
 - Reader đã có guard Back/Forward trong lịch sử ứng dụng: chọn ở lại giữ bản soạn, đang lưu chặn rời trang; không lưu nội dung vào history hoặc bộ nhớ browser lâu dài. Phạm vi và giới hạn ở docs/implementation/2026-10-17-web-reader-history.md.
-- Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây cho cả ba vai trò. Đã lưu mở bản hiện hành; đọc gần đây giữ đúng phiên bản/trang. Bỏ lưu giữ ghi chú và tiến độ. Mục mất quyền chỉ hiện nhãn chung, không lộ metadata.
+- Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây cho mọi vai trò. Đã lưu mở bản hiện hành; đọc gần đây giữ đúng phiên bản/trang. Bỏ lưu giữ ghi chú và tiến độ. Mục mất quyền chỉ hiện nhãn chung, không lộ metadata.
 - Thư viện mini là metadata và nguồn được phép; API trường và quyền lưu toàn văn chưa xác nhận.
-- Bàn giao chỉ giáo trình giảng viên; người nhận hoạt động và được phân công mọi môn liên quan. Bản đang gửi bị rút về nháp, lịch sử/tác giả/ghi chú được giữ.
+- Danh sách đọc: mỗi môn một danh sách do admin soạn, chỉ hiện với người đọc khi đã công bố. Bàn giao đã bỏ ở ROLE-01; lịch sử bàn giao cũ chỉ để đọc.
 
 ## Brand Commitments
 

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { formatDue, type ReadingItem } from '../../lib/reading-lists';
 import { materialTypes } from '../../lib/materials';
 
-/** Items grouped by their section label, in the lecturer's order. */
+/** Items grouped by their section label, in the order the admin set. */
 export function groupBySection(items: ReadingItem[]) {
   const groups: { section: string; items: ReadingItem[] }[] = [];
   for (const item of items) {
@@ -53,7 +53,7 @@ export function ReadingListItems({
                         <Link href={`/workspace/library/versions/${item.material.newerVersionId}`}>
                           Xem bản mới
                         </Link>
-                        . Giảng viên chọn phiên bản {item.material.versionNo}.
+                        . Danh sách chọn phiên bản {item.material.versionNo}.
                       </p>
                     )}
                     {onRead && (

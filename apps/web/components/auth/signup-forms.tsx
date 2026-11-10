@@ -85,18 +85,13 @@ export function SignupRequestForm() {
   );
 }
 
-const roles = [
-  ['STUDENT', 'Sinh viên', 'Đọc, ghi chú và gửi tài liệu bổ sung để kiểm duyệt.'],
-  ['LECTURER', 'Giảng viên', 'Đăng và quản lý học liệu cho môn mình dạy.'],
-] as const;
-
 /**
  * AUTH-04 step 2, opened from the mailed link. The token is read from the URL fragment only
- * when submitting; whoever holds the mailbox chooses the name, role and password.
+ * when submitting; whoever holds the mailbox chooses the name and password. Every self-registered
+ * account is a student (ROLE-01).
  */
 export function SignupCompleteForm() {
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'STUDENT' | 'LECTURER' | ''>('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [pending, setPending] = useState(false);
@@ -114,13 +109,12 @@ export function SignupCompleteForm() {
     if (!/^[A-Za-z0-9_-]{43}$/.test(token))
       return fail('Liên kết không đầy đủ. Mở lại liên kết trong thư hoặc đăng ký lại.');
     if (!name.trim()) return fail('Nhập tên hiển thị.');
-    if (!role) return fail('Chọn vai trò của bạn.');
     if (Array.from(password).length < 16 || password.length > 128)
       return fail('Mật khẩu cần ít nhất 16 ký tự Unicode, tối đa 128 đơn vị UTF-16.');
     if (password !== confirmation) return fail('Mật khẩu xác nhận không khớp.');
     setPending(true);
     try {
-      await post('/auth/signup/complete', { token, displayName: name.trim(), role, password });
+      await post('/auth/signup/complete', { token, displayName: name.trim(), password });
       window.history.replaceState(window.history.state, '', window.location.pathname);
       setPassword('');
       setConfirmation('');
@@ -164,25 +158,10 @@ export function SignupCompleteForm() {
           onChange={(e) => setName(e.target.value)}
         />
       </div>
-      <fieldset className="signup-roles">
-        <legend>Vai trò</legend>
-        {roles.map(([value, label, hint]) => (
-          <label key={value}>
-            <input
-              type="radio"
-              name="signup-role"
-              value={value}
-              checked={role === value}
-              onChange={() => setRole(value)}
-            />
-            <span>
-              <strong>{label}</strong>
-              <span className="field-hint">{hint}</span>
-            </span>
-          </label>
-        ))}
-        <p className="field-hint">Tài khoản quản trị chỉ do quản trị viên cấp.</p>
-      </fieldset>
+      <p className="field-hint">
+        Tài khoản tự đăng ký là tài khoản sinh viên: đọc, ghi chú và gửi tài liệu để quản trị viên
+        duyệt. Tài khoản quản trị chỉ do quản trị viên cấp.
+      </p>
       <p className="field-hint">
         Mật khẩu cần ít nhất 16 ký tự Unicode, tối đa 128 đơn vị UTF-16. Khoảng trắng được giữ
         nguyên.

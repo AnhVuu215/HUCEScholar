@@ -25,13 +25,13 @@ describe('DOCX source snapshot SQL guards', () => {
   async function fixture() {
     const user = (
       await db.query(
-        "INSERT INTO hucescholar.users(email,display_name,password_hash,role,status,verified_at) VALUES($1,'Source fixture','hash','LECTURER','ACTIVE',now()) RETURNING id",
+        "INSERT INTO hucescholar.users(email,display_name,password_hash,role,status,verified_at) VALUES($1,'Source fixture','hash','STUDENT','ACTIVE',now()) RETURNING id",
         [`source-${randomUUID()}@example.test`],
       )
     ).rows[0].id;
     const doc = (
       await db.query(
-        "INSERT INTO hucescholar.documents(kind,created_by,manager_id) VALUES('LECTURER_MATERIAL',$1,$1) RETURNING id",
+        'INSERT INTO hucescholar.documents(created_by,manager_id) VALUES($1,$1) RETURNING id',
         [user],
       )
     ).rows[0].id;

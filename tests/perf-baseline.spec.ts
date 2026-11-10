@@ -76,7 +76,7 @@ function longPdf(count: number): Buffer {
 }
 
 let courseId = '';
-let lecturerId = '';
+let authorId = '';
 let route = '';
 
 test.beforeAll(async ({ browser }) => {
@@ -97,10 +97,10 @@ test.beforeAll(async ({ browser }) => {
   const db = database();
   await db.connect();
   try {
-    lecturerId = String(
+    authorId = String(
       (
         await db.query('SELECT id FROM hucescholar.users WHERE email=$1', [
-          'e2e-perf-lecturer@example.test',
+          'e2e-perf-author@example.test',
         ])
       ).rows[0].id,
     );
@@ -118,13 +118,13 @@ test.beforeAll(async ({ browser }) => {
         FOR g IN 1..${rows} LOOP
           INSERT INTO hucescholar.files(uploaded_by, object_key, original_name, byte_size, sha256,
             scan_status, page_count, has_text_layer, checked_at)
-          VALUES (${lecturerId}, 'perf/${code}/' || g || '.pdf', 'perf.pdf', 1000, repeat('0', 64),
+          VALUES (${authorId}, 'perf/${code}/' || g || '.pdf', 'perf.pdf', 1000, repeat('0', 64),
             'SAFE', 10, true, now()) RETURNING id INTO f;
-          INSERT INTO hucescholar.documents(kind, created_by, manager_id)
-          VALUES ('LECTURER_MATERIAL', ${lecturerId}, ${lecturerId}) RETURNING id INTO d;
+          INSERT INTO hucescholar.documents(created_by, manager_id)
+          VALUES (${authorId}, ${authorId}) RETURNING id INTO d;
           INSERT INTO hucescholar.document_versions(document_id, version_no, file_id, created_by,
             title, authors, material_type, source_reference, rights_basis)
-          VALUES (d, 1, f, ${lecturerId},
+          VALUES (d, 1, f, ${authorId},
             kinds[1 + g % 4] || ' ' || subjects[1 + g % 8] || ' tập ' || g ||
               CASE WHEN g % 1000 = 0 THEN ' chuyên đề hiếm' ELSE '' END || ' ${code}',
             names[1 + g % 4], types[1 + g % 4], 'Tự biên soạn — đo hiệu năng',

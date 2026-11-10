@@ -42,7 +42,7 @@ describe('database-backed browser sessions', () => {
       timeCost: 2,
       parallelism: 1,
     });
-    for (const role of ['ADMIN', 'LECTURER', 'STUDENT']) {
+    for (const role of ['ADMIN', 'STUDENT']) {
       const result = await db.query(
         "INSERT INTO hucescholar.users(email,display_name,password_hash,role,status,verified_at) VALUES($1,$2,$3,$4,'ACTIVE',now()) RETURNING id",
         [`integration-${role.toLowerCase()}@example.test`, `${role} test`, hash, role],
@@ -103,7 +103,7 @@ describe('database-backed browser sessions', () => {
       });
   }
 
-  it.each(['ADMIN', 'LECTURER', 'STUDENT'])(
+  it.each(['ADMIN', 'STUDENT'])(
     'logs in %s and returns string ID with safe HttpOnly cookie',
     async (role) => {
       const browser = request.agent(app.getHttpServer());
@@ -200,7 +200,7 @@ describe('database-backed browser sessions', () => {
     const browser = request.agent(app.getHttpServer());
     expect((await login(browser)).status).toBe(200);
     await browser.get('/api/v1/workspace/admin').expect(403);
-    await browser.get('/api/v1/workspace/lecturer').expect(403);
+    await browser.get('/api/v1/workspace/lecturer').expect(404);
   });
 
   it.each(['csrf', 'origin', 'foreign-seed'])(

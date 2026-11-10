@@ -3,10 +3,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { reviewList, reviewError, requestStatuses, type ReviewList } from '../../lib/moderation';
 import { ModerationDetail } from './moderation-detail';
 export function ModerationManagement() {
-  const [query, setQuery] = useState({ search: '', status: 'PENDING', kind: '', page: 1 });
+  const [query, setQuery] = useState({ search: '', status: 'PENDING', page: 1 });
   const [search, setSearch] = useState(''),
-    [status, setStatus] = useState('PENDING'),
-    [kind, setKind] = useState('');
+    [status, setStatus] = useState('PENDING');
   const [data, setData] = useState<ReviewList | null>(null),
     [error, setError] = useState(''),
     [attempt, setAttempt] = useState(0),
@@ -19,7 +18,6 @@ export function ModerationManagement() {
         status: query.status,
         page: String(query.page),
         limit: '20',
-        ...(query.kind ? { kind: query.kind } : {}),
       }),
       controller.signal,
     )
@@ -40,7 +38,7 @@ export function ModerationManagement() {
     event.preventDefault();
     setData(null);
     setError('');
-    setQuery({ search: search.trim(), status, kind, page: 1 });
+    setQuery({ search: search.trim(), status, page: 1 });
   }
   return (
     <div className="users-management">
@@ -79,14 +77,6 @@ export function ModerationManagement() {
                   {label}
                 </option>
               ))}
-            </select>
-          </div>
-          <div className="form-field">
-            <label htmlFor="review-kind">Nguồn học liệu</label>
-            <select id="review-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-              <option value="">Tất cả</option>
-              <option value="LECTURER_MATERIAL">Giảng viên</option>
-              <option value="STUDENT_SUPPLEMENT">Sinh viên bổ sung</option>
             </select>
           </div>
           <button className="secondary-button">Tìm kiếm</button>
@@ -130,10 +120,7 @@ export function ModerationManagement() {
                     <tr key={row.id}>
                       <td className="user-identity">
                         <strong>{row.title}</strong>
-                        <span>
-                          {row.kind === 'LECTURER_MATERIAL' ? 'Giảng viên' : 'Sinh viên bổ sung'} ·{' '}
-                          {row.submitter.name}
-                        </span>
+                        <span>{row.submitter.name}</span>
                         <span>Gửi {new Date(row.submittedAt).toLocaleString('vi-VN')}</span>
                       </td>
                       <td>

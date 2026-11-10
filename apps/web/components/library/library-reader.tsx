@@ -694,12 +694,12 @@ function LibraryReaderContent({
                     <dl className="scope-list">
                       <div>
                         <dt>Nguồn</dt>
-                        <dd>{item.sourceReference || 'Giảng viên chưa ghi nguồn tham khảo.'}</dd>
+                        <dd>{item.sourceReference || 'Chưa ghi nguồn tham khảo.'}</dd>
                       </div>
                       {item.publicationMethod === 'LECTURER_SELF' ? (
                         <div>
                           <dt>Công bố</dt>
-                          <dd>Giảng viên tự công bố.</dd>
+                          <dd>Giảng viên tự công bố trước khi bỏ vai trò giảng viên.</dd>
                         </div>
                       ) : (
                         <div>

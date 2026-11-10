@@ -3,7 +3,6 @@ import type { Role } from './auth';
 export type WorkspaceSection =
   | 'users'
   | 'catalog'
-  | 'assignments'
   | 'materials'
   | 'moderation'
   | 'reports'
@@ -63,9 +62,9 @@ export function workspaceNavigation(role: Role): WorkspaceGroup[] {
             label: 'Danh mục đào tạo',
           },
           {
-            section: 'assignments',
-            href: '/workspace/admin/assignments',
-            label: 'Phân công giảng viên',
+            section: 'readingEditor',
+            href: '/workspace/admin/reading-lists',
+            label: 'Soạn danh sách đọc',
           },
         ],
       },
@@ -73,27 +72,9 @@ export function workspaceNavigation(role: Role): WorkspaceGroup[] {
   return [
     learning,
     {
-      label: role === 'LECTURER' ? 'Giảng dạy' : 'Đóng góp',
+      label: 'Đóng góp',
       links: [
-        {
-          section: 'materials',
-          href: `/workspace/${role.toLowerCase()}/materials`,
-          label: 'Học liệu của tôi',
-        },
-        ...(role === 'LECTURER'
-          ? [
-              {
-                section: 'assignments' as const,
-                href: '/workspace/lecturer/assignments',
-                label: 'Phân công của tôi',
-              },
-              {
-                section: 'readingEditor' as const,
-                href: '/workspace/lecturer/reading-lists',
-                label: 'Soạn danh sách đọc',
-              },
-            ]
-          : []),
+        { section: 'materials', href: '/workspace/student/materials', label: 'Học liệu của tôi' },
       ],
     },
   ];

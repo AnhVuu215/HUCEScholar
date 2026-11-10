@@ -21,6 +21,7 @@ export function MaterialFileStatus({
   blocked: boolean;
 }) {
   const [error, setError] = useState(''),
+    [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false);
   const source = current.source;
   const waiting = source
@@ -31,6 +32,7 @@ export function MaterialFileStatus({
     if (busy || blocked) return;
     setBusy(true);
     setError('');
+    setNotice('');
     try {
       const item =
         retry === 'source'
@@ -40,6 +42,8 @@ export function MaterialFileStatus({
             : await currentDraft(current.id);
       changed(item);
       watch.refreshed();
+      if (retry === 'pdf')
+        setNotice('Đang kiểm tra lại đúng file đã tải lên. Kết quả sẽ hiển thị tại đây.');
     } catch (failure) {
       setError(materialError(failure));
     } finally {
@@ -102,8 +106,8 @@ export function MaterialFileStatus({
       )}
       {source?.conversionState === 'READY' && (
         <p className="field-hint">
-          Bản đọc được chuyển từ Word. Kiểm tra bố cục, công thức và hình ảnh trước khi công bố; bản
-          chuyển đổi có thể khác Word.
+          Bản đọc được chuyển từ Word. Kiểm tra bố cục, công thức và hình ảnh trước khi gửi duyệt;
+          bản chuyển đổi có thể khác Word.
         </p>
       )}
       <div className="user-form-actions">
@@ -156,6 +160,7 @@ export function MaterialFileStatus({
         )}
       </div>
       {waiting && <ScanWatchHint watch={watch} />}
+      {notice && <p className="field-hint">{notice}</p>}
       {error && (
         <p role="alert" className="form-error">
           {error}

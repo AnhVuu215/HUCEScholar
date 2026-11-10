@@ -23,7 +23,6 @@ export class UserFieldsDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(150) displayName!: string;
 }
 export class CreateUserDto extends UserFieldsDto {
-  @IsIn(['LECTURER', 'STUDENT']) role!: 'LECTURER' | 'STUDENT';
   @IsString() @MinLength(16) @MaxLength(128) password!: string;
   @Equals(true) eligibilityConfirmed!: boolean;
 }
@@ -41,7 +40,7 @@ export class UserStatusDto {
 }
 export class ListUsersDto {
   @IsOptional() @Transform(trim) @IsString() @MaxLength(254) search?: string;
-  @IsOptional() @IsIn(['ADMIN', 'LECTURER', 'STUDENT']) role?: string;
+  @IsOptional() @IsIn(['ADMIN', 'STUDENT']) role?: string;
   @IsOptional() @IsIn(['PENDING', 'ACTIVE', 'LOCKED']) status?: string;
   @Transform(queryInteger) @IsInt() @Min(1) @Max(100000) page = 1;
   @Transform(queryInteger) @IsInt() @Min(1) @Max(100) limit = 20;

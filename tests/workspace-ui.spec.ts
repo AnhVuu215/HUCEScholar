@@ -2,7 +2,7 @@ import { expect, test, type Page } from './helpers/test';
 import { closeNavigation, navLink, workspaceNavigation } from './helpers/navigation';
 import { mkdirSync } from 'node:fs';
 
-async function login(page: Page, role: 'admin' | 'lecturer' | 'student' = 'student') {
+async function login(page: Page, role: 'admin' | 'student' = 'student') {
   await page.goto('/login');
   await page.getByLabel('Email', { exact: true }).fill(`e2e-workspace-ui-${role}@example.test`);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
@@ -33,7 +33,7 @@ test('library controls align and keep readable targets', async ({ page }) => {
       fullPage: true,
     });
     await page.getByRole('button', { name: 'Bộ lọc', exact: true }).click();
-    await page.getByRole('combobox', { name: 'Nguồn học liệu', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Loại học liệu', exact: true }).click();
     await page.screenshot({
       path: '.impeccable/review/workspace-v2/dropdown-desktop.png',
       fullPage: true,
@@ -43,7 +43,6 @@ test('library controls align and keep readable targets', async ({ page }) => {
 
 for (const [role, count] of [
   ['admin', 13],
-  ['lecturer', 10],
   ['student', 8],
 ] as const) {
   test(`${role}: grouped navigation and account disclosure preserve destinations`, async ({
@@ -83,27 +82,26 @@ test('rounded select supports keyboard, cancel, outside click and real filter su
   await login(page);
   await page.goto('/workspace/library');
   await page.getByRole('button', { name: 'Bộ lọc', exact: true }).click();
-  const source = page.getByRole('combobox', { name: 'Nguồn học liệu', exact: true });
+  const source = page.getByRole('combobox', { name: 'Loại học liệu', exact: true });
   await source.focus();
   await page.keyboard.press('Enter');
-  const popup = page.getByRole('listbox', { name: 'Nguồn học liệu', exact: true });
+  const popup = page.getByRole('listbox', { name: 'Loại học liệu', exact: true });
   await expect(popup).toBeVisible();
   expect(await popup.evaluate((element) => getComputedStyle(element).borderRadius)).toBe('12px');
   await page.keyboard.press('End');
   await page.keyboard.press('Escape');
   await expect(source).toBeFocused();
-  await expect(source).toContainText('Tất cả nguồn');
+  await expect(source).toContainText('Tất cả loại');
   await page.keyboard.press('Space');
-  await page.keyboard.press('h');
+  await page.keyboard.press('b');
   await page.keyboard.press('Enter');
-  await expect(source).toContainText('Học liệu giảng viên');
+  await expect(source).toContainText('Bài giảng');
   await source.click();
   await page.getByRole('heading', { name: 'Kho học liệu', exact: true }).click();
   await expect(popup).toHaveCount(0);
   const request = page.waitForRequest(
     (request) =>
-      request.url().includes('/api/v1/library?') &&
-      request.url().includes('kind=LECTURER_MATERIAL'),
+      request.url().includes('/api/v1/library?') && request.url().includes('materialType=LECTURE'),
   );
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await request;
@@ -111,7 +109,7 @@ test('rounded select supports keyboard, cancel, outside click and real filter su
   await page.keyboard.press('Enter');
   await page.keyboard.press('Tab');
   await expect(popup).toHaveCount(0);
-  await expect(page.getByRole('combobox', { name: 'Loại học liệu', exact: true })).toBeFocused();
+  await expect(source).not.toBeFocused();
 });
 
 for (const width of [320, 390]) {
@@ -126,10 +124,10 @@ for (const width of [320, 390]) {
       .getByRole('link', { name: 'Kho học liệu', exact: true })
       .click();
     await page.getByRole('button', { name: 'Bộ lọc', exact: true }).click();
-    const source = page.getByRole('combobox', { name: 'Nguồn học liệu', exact: true });
+    const source = page.getByRole('combobox', { name: 'Loại học liệu', exact: true });
     await source.scrollIntoViewIfNeeded();
     await source.click();
-    const popup = page.getByRole('listbox', { name: 'Nguồn học liệu', exact: true });
+    const popup = page.getByRole('listbox', { name: 'Loại học liệu', exact: true });
     const bounds = await popup.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);

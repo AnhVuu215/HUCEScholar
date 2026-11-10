@@ -11,7 +11,7 @@ test('web reaches the real API through its own origin', async ({ page, request }
   await expect(page.getByRole('status')).toContainText('API đang hoạt động');
   await expect(
     page.getByText(
-      'Đã có tài khoản, danh mục, phân công, PDF riêng tư, kiểm duyệt, kho học liệu và trình đọc theo quyền, ghi chú riêng theo trang, lưu tiến độ, phiên bản kế tiếp, bàn giao và ẩn/khôi phục học liệu, tài liệu đã lưu và đọc gần đây.',
+      'Đã có tài khoản, danh mục, PDF riêng tư, kiểm duyệt, kho học liệu và trình đọc theo quyền, ghi chú riêng theo trang, lưu tiến độ, phiên bản kế tiếp, ẩn/khôi phục học liệu, tài liệu đã lưu và đọc gần đây. Từ 10/11/2026 hệ thống chỉ còn hai vai trò: quản trị viên và sinh viên.',
     ),
   ).toBeVisible();
 });

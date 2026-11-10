@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsIn, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { CsrfGuard } from './csrf.guard';
@@ -8,7 +8,7 @@ import { AuthenticatedRequest } from './auth.types';
 import { AllowPendingPasswordChange, SessionGuard } from './session.guard';
 import { ChangePasswordDto, ResetPasswordDto, utf16Bound } from './change-password.dto';
 import { RecoveryService } from './recovery.service';
-import { SignupService, type SignupRole } from './signup.service';
+import { SignupService } from './signup.service';
 
 class RecoveryRequestDto {
   @Transform(({ value }: { value: unknown }) =>
@@ -26,8 +26,6 @@ class SignupCompleteDto {
   @MinLength(1)
   @MaxLength(150)
   displayName!: string;
-  /** Admin accounts are only ever issued by an administrator. */
-  @IsIn(['STUDENT', 'LECTURER']) role!: SignupRole;
   @IsString() @MinLength(16) @utf16Bound() password!: string;
 }
 
@@ -92,7 +90,7 @@ export class AuthController {
   async completeSignup(@Body() body: SignupCompleteDto, @Req() request: Request) {
     await this.signup.complete(
       body.token,
-      { displayName: body.displayName, role: body.role, password: body.password },
+      { displayName: body.displayName, password: body.password },
       request.ip ?? '',
     );
   }
