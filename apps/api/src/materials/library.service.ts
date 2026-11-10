@@ -57,7 +57,7 @@ const selection = {
   },
   version_courses: { select: { courses: { select: { id: true, code: true, name: true } } } },
   documents_document_versions_document_idTodocuments: {
-    select: { kind: true, current_version_id: true },
+    select: { current_version_id: true },
   },
 } satisfies Prisma.document_versionsSelect;
 type LibraryRow = Prisma.document_versionsGetPayload<{ select: typeof selection }>;
@@ -84,7 +84,6 @@ function serialize(
     description: v.description,
     materialType: v.material_type,
     publicationMethod: v.publication_method,
-    kind: v.documents_document_versions_document_idTodocuments.kind,
     current: v.documents_document_versions_document_idTodocuments.current_version_id === v.id,
     sourceReference: v.source_reference,
     rightsBasis: v.rights_basis,
@@ -290,7 +289,7 @@ export class LibraryService {
         available(),
         {
           documents_documents_id_current_version_idTodocument_versions: {
-            some: { visibility: 'VISIBLE', ...(query.kind ? { kind: query.kind } : {}) },
+            some: { visibility: 'VISIBLE' },
           },
           ...(query.materialType ? { material_type: query.materialType } : {}),
           ...(query.courseId

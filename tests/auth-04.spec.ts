@@ -31,7 +31,7 @@ async function newestLink(to: string, after: number) {
   return link;
 }
 
-test('a lecturer signs up by email, chooses the role and signs in', async ({ page }) => {
+test('a student signs up by email without choosing a role and signs in', async ({ page }) => {
   test.setTimeout(90_000);
   // A fresh address per attempt, so a retry never meets an account made earlier.
   const email = `e2e-signup-${randomBytes(5).toString('hex')}@example.test`;
@@ -47,13 +47,12 @@ test('a lecturer signs up by email, chooses the role and signs in', async ({ pag
 
   await page.goto(link);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hoàn tất đăng ký');
-  await expect(page.getByRole('radio', { name: /Quản trị/ })).toHaveCount(0);
-  await page.getByLabel('Tên hiển thị', { exact: true }).fill('Giảng viên tự đăng ký');
+  // ROLE-01: every self-registered account is a student; there is no role to choose.
+  await expect(page.getByRole('radio')).toHaveCount(0);
+  await expect(page.getByRole('main')).toContainText('Tài khoản tự đăng ký là tài khoản sinh viên');
+  await page.getByLabel('Tên hiển thị', { exact: true }).fill('Sinh viên tự đăng ký');
   await page.getByLabel('Mật khẩu', { exact: true }).fill(password);
   await page.getByLabel('Nhập lại mật khẩu', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Tạo tài khoản', exact: true }).click();
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('Chọn vai trò');
-  await page.getByRole('radio', { name: /Giảng viên/ }).check();
   await page.getByRole('button', { name: 'Tạo tài khoản', exact: true }).click();
   await expect(page.getByRole('main').getByRole('status')).toContainText('Đã tạo tài khoản');
   // The token leaves the address bar once used, and the link cannot be used twice.
@@ -61,7 +60,6 @@ test('a lecturer signs up by email, chooses the role and signs in', async ({ pag
   await page.goto('/login');
   await page.goto(link);
   await page.getByLabel('Tên hiển thị', { exact: true }).fill('Lần hai');
-  await page.getByRole('radio', { name: /Sinh viên/ }).check();
   await page.getByLabel('Mật khẩu', { exact: true }).fill(password);
   await page.getByLabel('Nhập lại mật khẩu', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Tạo tài khoản', exact: true }).click();
@@ -71,7 +69,7 @@ test('a lecturer signs up by email, chooses the role and signs in', async ({ pag
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-  await expect(page).toHaveURL('/workspace/lecturer');
+  await expect(page).toHaveURL('/workspace/student');
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto('/signup');

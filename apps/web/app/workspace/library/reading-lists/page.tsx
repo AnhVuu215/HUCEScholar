@@ -13,7 +13,7 @@ export default async function ReadingListsPage({
     <LibraryWorkspace
       readingLists
       title="Danh sách đọc"
-      description="Tài liệu giảng viên sắp xếp cho từng môn."
+      description="Tài liệu quản trị viên sắp xếp cho từng môn."
     >
       <ReadingListBrowser
         initialCourse={

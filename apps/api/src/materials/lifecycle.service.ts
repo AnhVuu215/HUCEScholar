@@ -10,11 +10,10 @@ import { academicId } from '../academic/academic.service';
 import { Prisma } from '../generated/prisma/client';
 import { MaterialsService } from './materials.service';
 import { DraftListDto } from './materials.dto';
-import { LifecycleListDto, MaterialVisibilityDto, TransferMaterialDto } from './lifecycle.dto';
+import { LifecycleListDto, MaterialVisibilityDto } from './lifecycle.dto';
 const fail = (code: string, message: string) => new ConflictException({ code, message });
 const docSelect = {
   id: true,
-  kind: true,
   visibility: true,
   revision: true,
   manager_id: true,
@@ -50,7 +49,6 @@ const versionItem = (v: Version | null) =>
     : null;
 const overview = (d: Doc, v: Version) => ({
   id: String(d.id),
-  kind: d.kind,
   visibility: d.visibility,
   revision: d.revision,
   manager: { id: String(d.manager_id), name: d.users_documents_manager_idTousers.display_name },
@@ -151,7 +149,6 @@ export class LifecycleService {
       SELECT v.id,v.title FROM hucescholar.document_versions v WHERE v.document_id=d.id ORDER BY v.version_no DESC LIMIT 1
     ) latest ON TRUE WHERE TRUE
     ${query.search ? Prisma.sql`AND latest.title ILIKE ${`%${query.search}%`}` : Prisma.empty}
-    ${query.kind ? Prisma.sql`AND d.kind=${query.kind}` : Prisma.empty}
     ${query.visibility ? Prisma.sql`AND d.visibility=${query.visibility}` : Prisma.empty}`;
     return this.db.$transaction(
       async (tx) => {
@@ -183,49 +180,6 @@ export class LifecycleService {
       { isolationLevel: 'RepeatableRead' },
     );
   }
-  recipients(rawId: string, query: DraftListDto) {
-    const id = academicId(rawId);
-    return this.db.$transaction(
-      async (tx) => {
-        const doc = await this.read(tx, id),
-          ids = await this.courseIds(tx, id);
-        const valid =
-          doc.kind === 'LECTURER_MATERIAL' &&
-          ids.length > 0 &&
-          (await tx.courses.count({
-            where: { id: { in: ids }, is_active: true, faculties: { is_active: true } },
-          })) === ids.length;
-        const where: Prisma.usersWhereInput = {
-          id: valid ? { not: doc.manager_id } : { in: [] },
-          role: 'LECTURER',
-          status: 'ACTIVE',
-          verified_at: { not: null },
-          AND: ids.map((course_id) => ({
-            lecturer_assignments_lecturer_assignments_lecturer_idTousers: {
-              some: { course_id, revoked_at: null },
-            },
-          })),
-          ...(query.search
-            ? { display_name: { contains: query.search, mode: 'insensitive' } }
-            : {}),
-        };
-        const users = await tx.users.findMany({
-          where,
-          select: { id: true, display_name: true },
-          orderBy: [{ display_name: 'asc' }, { id: 'asc' }],
-          skip: (query.page - 1) * query.limit,
-          take: query.limit,
-        });
-        return {
-          items: users.map((u) => ({ id: String(u.id), name: u.display_name })),
-          total: await tx.users.count({ where }),
-          page: query.page,
-          limit: query.limit,
-        };
-      },
-      { isolationLevel: 'RepeatableRead' },
-    );
-  }
   private async lock(
     tx: Prisma.TransactionClient,
     actor: Profile,
@@ -244,82 +198,6 @@ export class LifecycleService {
     if (doc.revision !== revision)
       throw fail('STALE_REVISION', 'Tài liệu đã thay đổi. Tải trạng thái trước khi tiếp tục.');
     return { doc, id, actorId };
-  }
-  transfer(actor: Profile, rawId: string, body: TransferMaterialDto) {
-    return this.db.$transaction(async (tx) => {
-      const { doc, id, actorId } = await this.lock(tx, actor, rawId, body.revision),
-        recipientId = academicId(body.recipientId);
-      if (doc.kind !== 'LECTURER_MATERIAL')
-        throw fail('TRANSFER_NOT_ALLOWED', 'Chỉ bàn giao giáo trình giảng viên.');
-      if (recipientId === doc.manager_id)
-        throw fail('SAME_MANAGER', 'Người nhận đang quản lý tài liệu.');
-      await tx.$queryRaw`SELECT id FROM hucescholar.document_versions WHERE document_id=${id} ORDER BY id FOR UPDATE`;
-      await tx.$queryRaw`SELECT r.id FROM hucescholar.publication_requests r JOIN hucescholar.document_versions v ON v.id=r.version_id WHERE v.document_id=${id} AND r.status='PENDING' ORDER BY r.id FOR UPDATE OF r`;
-      await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${recipientId} FOR SHARE`;
-      const recipient = await tx.users.findUnique({ where: { id: recipientId } });
-      if (
-        !recipient ||
-        recipient.role !== 'LECTURER' ||
-        recipient.status !== 'ACTIVE' ||
-        !recipient.verified_at
-      )
-        throw fail(
-          'RECIPIENT_UNAVAILABLE',
-          'Người nhận phải là giảng viên hoạt động và đã xác minh.',
-        );
-      const ids = await this.courseIds(tx, id);
-      if (!ids.length) throw fail('ASSIGNMENT_REQUIRED', 'Tài liệu phải có môn liên quan.');
-      await this.materials.checkCourses(
-        tx,
-        {
-          id: String(recipient.id),
-          role: 'LECTURER',
-          email: recipient.email,
-          displayName: recipient.display_name,
-        },
-        ids,
-      );
-      const pending = await tx.document_versions.findMany({
-        where: { document_id: id, review_status: 'SUBMITTED' },
-        select: { id: true, revision: true },
-      });
-      for (const v of pending) {
-        const request = await tx.publication_requests.findFirst({
-          where: { version_id: v.id, status: 'PENDING' },
-        });
-        if (!request || request.submitted_revision !== v.revision)
-          throw fail('REQUEST_CHANGED', 'Yêu cầu chờ đã thay đổi.');
-        await tx.publication_requests.update({
-          where: { id: request.id },
-          data: {
-            status: 'WITHDRAWN',
-            resolved_by: actorId,
-            resolved_at: new Date(),
-            reason: body.reason,
-            revision: { increment: 1 },
-          },
-        });
-        await tx.document_versions.update({
-          where: { id: v.id },
-          data: { review_status: 'DRAFT', revision: { increment: 1 }, updated_at: new Date() },
-        });
-      }
-      await tx.documents.update({
-        where: { id },
-        data: { manager_id: recipientId, revision: { increment: 1 }, updated_at: new Date() },
-      });
-      await tx.ownership_transfers.create({
-        data: {
-          document_id: id,
-          from_user_id: doc.manager_id,
-          to_user_id: recipientId,
-          performed_by: actorId,
-          reason: body.reason,
-        },
-      });
-      await this.materials.audit(tx, actorId, id, 'MATERIAL_TRANSFERRED');
-      return { item: await this.detail(tx, id) };
-    });
   }
   visibility(actor: Profile, rawId: string, body: MaterialVisibilityDto) {
     return this.db.$transaction(async (tx) => {
@@ -345,6 +223,7 @@ export class LifecycleService {
           !v ||
           v.review_status !== 'APPROVED' ||
           file?.scan_status !== 'SAFE' ||
+          // Versions a lecturer self-published before ROLE-01 had no required source fields.
           (v.publication_method !== 'LECTURER_SELF' &&
             (!v.source_reference.trim() || !v.rights_basis.trim())) ||
           (v.rights_valid_until && v.rights_valid_until <= new Date())

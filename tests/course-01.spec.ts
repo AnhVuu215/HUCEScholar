@@ -6,7 +6,7 @@ import { parseEnv } from 'node:util';
 import { readerHeaders, readerLogout } from './helpers/reader-session';
 import { readerPdf } from './helpers/reader-pdf';
 
-async function login(page: Page, role: 'admin' | 'lecturer' | 'student', account = 'course1') {
+async function login(page: Page, role: 'admin' | 'student', account = 'course1') {
   const response = await page.request.post('/api/v1/auth/login', {
     headers: await readerHeaders(page),
     data: { email: `e2e-${account}-${role}@example.test`, password: process.env.E2E_PASSWORD! },
@@ -31,7 +31,7 @@ async function markSafe(documentId: string) {
   }
 }
 
-/** A course with an assigned lecturer and two published materials. */
+/** A course with two published materials; admins keep its reading list (ROLE-01). */
 async function courseWithMaterials(page: Page, account = 'course1') {
   const code = `CL1-${randomBytes(5).toString('hex').toUpperCase()}`;
   await login(page, 'admin', account);
@@ -46,21 +46,6 @@ async function courseWithMaterials(page: Page, account = 'course1') {
   });
   expect(course.status()).toBe(201);
   const courseId = (await course.json()).item.id as string;
-  const lecturer = (
-    await (
-      await page.request.get(
-        `/api/v1/admin/users?search=${encodeURIComponent(`e2e-${account}-lecturer@example.test`)}`,
-      )
-    ).json()
-  ).items[0];
-  expect(
-    (
-      await page.request.post('/api/v1/admin/assignments', {
-        headers,
-        data: { courseId, lecturerId: lecturer.id },
-      })
-    ).status(),
-  ).toBe(201);
   await readerLogout(page);
   await login(page, 'student', account);
   headers = await readerHeaders(page);
@@ -131,14 +116,14 @@ async function courseWithMaterials(page: Page, account = 'course1') {
   return { code, courseId, titles };
 }
 
-test('a lecturer arranges published materials by week and students open the chosen versions', async ({
+test('an admin arranges published materials by week and students open the chosen versions', async ({
   page,
 }) => {
   test.setTimeout(120_000);
   const { code, courseId, titles } = await courseWithMaterials(page);
-  await login(page, 'lecturer');
-  await page.goto('/workspace/lecturer/reading-lists');
-  await page.getByRole('combobox', { name: 'Môn được phân công', exact: true }).click();
+  await login(page, 'admin');
+  await page.goto('/workspace/admin/reading-lists');
+  await page.getByRole('combobox', { name: 'Môn học', exact: true }).click();
   await page.getByRole('option', { name: `${code} · Môn có danh sách đọc`, exact: true }).click();
   await page.getByLabel('Tên danh sách', { exact: true }).fill('Lộ trình đọc học kỳ 1');
   await page.getByLabel('Tìm tài liệu của môn để thêm', { exact: true }).fill(code);
@@ -176,7 +161,7 @@ test('a lecturer arranges published materials by week and students open the chos
   );
 });
 
-test('CAL-04b: a due date set by the lecturer shows on calendars of students who follow the course', async ({
+test('CAL-04b: a due date set by an admin shows on calendars of students who follow the course', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -186,9 +171,9 @@ test('CAL-04b: a due date set by the lecturer shows on calendars of students who
   due.setDate(due.getDate() + 3);
   const pad = (n: number) => String(n).padStart(2, '0');
   const dueKey = `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}`;
-  await login(page, 'lecturer');
-  await page.goto('/workspace/lecturer/reading-lists');
-  await page.getByRole('combobox', { name: 'Môn được phân công', exact: true }).click();
+  await login(page, 'admin');
+  await page.goto('/workspace/admin/reading-lists');
+  await page.getByRole('combobox', { name: 'Môn học', exact: true }).click();
   await page.getByRole('option', { name: `${code} · Môn có danh sách đọc`, exact: true }).click();
   await page.getByLabel('Tên danh sách', { exact: true }).fill('Danh sách có hạn');
   await page.getByLabel('Tìm tài liệu của môn để thêm', { exact: true }).fill(code);
@@ -272,7 +257,7 @@ test('COURSE-02: a student marks listed materials as read and sees progress only
 }) => {
   test.setTimeout(120_000);
   const { code, courseId, titles } = await courseWithMaterials(page, 'course2');
-  await login(page, 'lecturer', 'course2');
+  await login(page, 'admin', 'course2');
   const found = (await (await page.request.get(`/api/v1/library?search=${code}`)).json()).items as {
     versionId: string;
     title: string;
@@ -280,7 +265,7 @@ test('COURSE-02: a student marks listed materials as read and sees progress only
   const versionOf = (title: string) => found.find((i) => i.title === title)!.versionId;
   expect(
     (
-      await page.request.put(`/api/v1/courses/${courseId}/reading-lists/mine`, {
+      await page.request.put(`/api/v1/courses/${courseId}/reading-lists/manage`, {
         headers: await readerHeaders(page),
         data: {
           title: 'Danh sách theo dõi đọc',
@@ -328,8 +313,8 @@ test('COURSE-02: a student marks listed materials as read and sees progress only
   await expect(list.getByText('Đã đọc 1/2 tài liệu')).toBeVisible();
   await readerLogout(page);
 
-  // The mark is private: the lecturer reading the same list sees none of it.
-  await login(page, 'lecturer', 'course2');
+  // The mark is private: the admin reading the same list sees none of it.
+  await login(page, 'admin', 'course2');
   await page.goto(`/workspace/library/reading-lists?courseId=${courseId}`);
   await expect(list.getByText('Đã đọc 0/2 tài liệu')).toBeVisible();
 });
@@ -345,7 +330,7 @@ test('home: followed courses show reading progress and the nearest unread due da
   past.setDate(past.getDate() - 2);
   const soon = new Date();
   soon.setDate(soon.getDate() + 5);
-  await login(page, 'lecturer', 'course3');
+  await login(page, 'admin', 'course3');
   const found = (await (await page.request.get(`/api/v1/library?search=${code}`)).json()).items as {
     versionId: string;
     title: string;
@@ -353,7 +338,7 @@ test('home: followed courses show reading progress and the nearest unread due da
   const versionOf = (title: string) => found.find((i) => i.title === title)!.versionId;
   expect(
     (
-      await page.request.put(`/api/v1/courses/${courseId}/reading-lists/mine`, {
+      await page.request.put(`/api/v1/courses/${courseId}/reading-lists/manage`, {
         headers: await readerHeaders(page),
         data: {
           title: 'Danh sách trang đầu',
@@ -442,10 +427,10 @@ test('CAL-07: due times, read marks and reminders from the calendar, and change 
   due.setDate(due.getDate() + 3);
   const pad = (n: number) => String(n).padStart(2, '0');
   const dueKey = `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}`;
-  // The lecturer gives the due date a time (Vietnam time).
-  await login(page, 'lecturer', 'course4');
-  await page.goto('/workspace/lecturer/reading-lists');
-  await page.getByRole('combobox', { name: 'Môn được phân công', exact: true }).click();
+  // The admin gives the due date a time (Vietnam time).
+  await login(page, 'admin', 'course4');
+  await page.goto('/workspace/admin/reading-lists');
+  await page.getByRole('combobox', { name: 'Môn học', exact: true }).click();
   await page.getByRole('option', { name: `${code} · Môn có danh sách đọc`, exact: true }).click();
   await page.getByLabel('Tên danh sách', { exact: true }).fill('Danh sách có giờ');
   await page.getByLabel('Tìm tài liệu của môn để thêm', { exact: true }).fill(code);
@@ -499,10 +484,10 @@ test('CAL-07: due times, read marks and reminders from the calendar, and change 
   await expect(page.getByRole('link', { name, exact: true })).toHaveCount(1);
   await readerLogout(page);
 
-  // The lecturer moves the due time; the follower hears about it.
-  await login(page, 'lecturer', 'course4');
-  await page.goto('/workspace/lecturer/reading-lists');
-  await page.getByRole('combobox', { name: 'Môn được phân công', exact: true }).click();
+  // The admin moves the due time; the follower hears about it.
+  await login(page, 'admin', 'course4');
+  await page.goto('/workspace/admin/reading-lists');
+  await page.getByRole('combobox', { name: 'Môn học', exact: true }).click();
   await page.getByRole('option', { name: `${code} · Môn có danh sách đọc`, exact: true }).click();
   await page.getByLabel('Giờ hạn (giờ Việt Nam)').first().fill('17:30');
   await page.getByRole('button', { name: 'Lưu danh sách', exact: true }).click();

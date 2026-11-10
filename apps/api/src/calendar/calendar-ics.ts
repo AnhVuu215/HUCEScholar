@@ -38,7 +38,7 @@ export type IcsDeadline = {
   listTitle: string;
   dueOn: string;
   due: Date;
-  /** False: a whole day (the lecturer set no time). */
+  /** False: a whole day (the admin set no time). */
   timed: boolean;
   read: boolean;
 };

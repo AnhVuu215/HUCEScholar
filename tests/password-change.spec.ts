@@ -20,7 +20,7 @@ async function blank(page: Page) {
   for (const label of ['Mật khẩu hiện tại', 'Mật khẩu mới', 'Nhập lại mật khẩu mới'])
     expect((await page.getByLabel(label, { exact: true }).inputValue()) === '').toBe(true);
 }
-for (const role of ['admin', 'lecturer', 'student'])
+for (const role of ['admin', 'student'])
   test(`${role}: changes password once, rotates session and revokes a second browser`, async ({
     page,
     browser,

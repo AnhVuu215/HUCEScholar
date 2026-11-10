@@ -10,10 +10,8 @@ import {
 } from '../../lib/materials';
 import { MaterialEditor } from './material-editor';
 export function MaterialManagement({
-  role,
   initialDraft,
 }: {
-  role: 'LECTURER' | 'STUDENT';
   /** From a notification link; the editor loads it through the owner-checked API. */
   initialDraft?: string;
 }) {
@@ -70,12 +68,9 @@ export function MaterialManagement({
     <div className="users-management materials-management">
       <div className="users-toolbar">
         <p className="users-guidance">
-          {role === 'LECTURER'
-            ? 'Bản nháp học liệu cho các môn bạn phụ trách.'
-            : 'Tài liệu bổ sung của bạn, tách biệt với giáo trình giảng viên.'}{' '}
-          {role === 'LECTURER'
-            ? 'Chọn PDF hoặc DOCX, nhập thông tin rồi lưu. Xem trước và tự công bố khi bản đọc đã sẵn sàng. Không cần tài liệu HUCE hoặc admin duyệt.'
-            : 'Lưu thông tin, mở lại bản nháp rồi đính kèm PDF. Khi PDF đã qua kiểm tra, bạn có thể gửi yêu cầu duyệt hoặc rút về nháp để sửa.'}
+          Tài liệu bạn đóng góp cho kho học liệu. Chọn PDF hoặc Word, nhập thông tin rồi lưu. Khi
+          bản đọc đã qua kiểm tra, xem trước rồi gửi quản trị viên duyệt; bạn có thể rút về nháp để
+          sửa.
         </p>
         <button
           ref={create}
@@ -96,7 +91,6 @@ export function MaterialManagement({
       )}
       {editor && (
         <MaterialEditor
-          role={role}
           key={editor.id ?? 'new'}
           id={editor.id}
           close={close}
@@ -128,9 +122,7 @@ export function MaterialManagement({
             />
           </div>
           <div className="form-field">
-            <label htmlFor="material-status">
-              {role === 'LECTURER' ? 'Trạng thái công bố' : 'Trạng thái duyệt'}
-            </label>
+            <label htmlFor="material-status">Trạng thái duyệt</label>
             <select
               id="material-status"
               value={status}
@@ -140,7 +132,7 @@ export function MaterialManagement({
               <option value="DRAFT">Bản nháp</option>
               <option value="SUBMITTED">Chờ duyệt</option>
               <option value="CHANGES_REQUIRED">Yêu cầu sửa</option>
-              <option value="APPROVED">{role === 'LECTURER' ? 'Đã công bố' : 'Đã duyệt'}</option>
+              <option value="APPROVED">Đã duyệt</option>
               <option value="REJECTED">Từ chối</option>
             </select>
           </div>
@@ -203,12 +195,7 @@ export function MaterialManagement({
                     <tr key={item.id}>
                       <td className="user-identity">
                         <strong>{item.title}</strong>
-                        <span>
-                          {item.kind === 'LECTURER_MATERIAL'
-                            ? 'Học liệu giảng viên'
-                            : 'Sinh viên bổ sung'}{' '}
-                          · {materialTypes[item.materialType]}
-                        </span>
+                        <span>{materialTypes[item.materialType]}</span>
                         <span>Cập nhật {new Date(item.updatedAt).toLocaleString('vi-VN')}</span>
                       </td>
                       <td>
@@ -241,9 +228,6 @@ export function MaterialManagement({
                                   ? fileFailedLabel(item.fileError)
                                   : 'PDF đã kiểm tra'}
                         </p>
-                        {item.editBlock === 'ASSIGNMENT_REQUIRED' && (
-                          <p className="field-hint">Cần kiểm tra phân công</p>
-                        )}
                       </td>
                       <td className="user-row-actions">
                         <button

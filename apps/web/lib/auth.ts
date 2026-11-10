@@ -1,6 +1,5 @@
 export const roleLabels = {
   ADMIN: 'Quản trị viên',
-  LECTURER: 'Giảng viên',
   STUDENT: 'Sinh viên',
 } as const;
 export type Role = keyof typeof roleLabels;

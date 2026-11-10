@@ -127,9 +127,9 @@ export function notificationMessage(n: AppNotification) {
       return `Sắp đến hạn đọc ${title}: ${deadlineWhen(n.eventAt!)}.`;
     case 'READING_DEADLINE_CHANGED':
       return n.detail === 'DUE_REMOVED'
-        ? `Giảng viên đã bỏ hạn đọc của ${title}.`
+        ? `Quản trị viên đã bỏ hạn đọc của ${title}.`
         : n.detail === 'DUE_ADDED'
-          ? `Giảng viên đặt hạn đọc cho ${title}: ${deadlineWhen(n.eventAt!)}.`
+          ? `Quản trị viên đặt hạn đọc cho ${title}: ${deadlineWhen(n.eventAt!)}.`
           : `Hạn đọc của ${title} đổi sang ${deadlineWhen(n.eventAt!)}.`;
     case 'CALENDAR_REMINDER': {
       const at = new Date(n.eventAt!);
@@ -140,7 +140,7 @@ export function notificationMessage(n: AppNotification) {
     }
   }
 }
-/** A course due time, in Vietnam time like the lecturer set it. */
+/** A course due time, in Vietnam time like the admin set it. */
 function deadlineWhen(eventAt: string) {
   const at = new Date(eventAt);
   const time = at.toLocaleTimeString('vi-VN', {

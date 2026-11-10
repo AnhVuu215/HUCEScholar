@@ -1,24 +1,10 @@
 import { expect, test } from './helpers/test';
 import { readerLogin } from './helpers/reader-session';
-for (const role of ['admin', 'lecturer', 'student'] as const) {
+for (const role of ['admin', 'student'] as const) {
   test(`${role}: edits its profile, updates shell, reloads and preserves legacy route`, async ({
     page,
   }) => {
-    // The helper's role union only excludes lecturer because original reader fixtures did not need it.
-    if (role === 'lecturer') {
-      const token = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
-      expect(
-        (
-          await page.request.post('/api/v1/auth/login', {
-            headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': token },
-            data: {
-              email: 'e2e-account-v2-lecturer@example.test',
-              password: process.env.E2E_PASSWORD!,
-            },
-          })
-        ).status(),
-      ).toBe(200);
-    } else await readerLogin(page, role, 'account-v2');
+    await readerLogin(page, role, 'account-v2');
     await page.goto('/workspace/profile');
     await expect(
       page.getByRole('heading', { name: 'Tài khoản của bạn', exact: true }),

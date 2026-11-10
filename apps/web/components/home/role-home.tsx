@@ -284,15 +284,13 @@ function DraftGroup({ title, list, empty }: { title: string; list: DraftList; em
   );
 }
 
-function MaterialTasks({ role }: { role: 'LECTURER' | 'STUDENT' }) {
+function MaterialTasks() {
   const changes = useSection<DraftList>(loadChanges, materialError);
   const drafts = useSection<DraftList>(loadDrafts, materialError);
-  const href = `/workspace/${role.toLowerCase()}/materials`;
+  const href = '/workspace/student/materials';
   return (
     <section className="content-section home-section" aria-labelledby="home-materials">
-      <h2 id="home-materials">
-        {role === 'LECTURER' ? 'Học liệu cần xử lý' : 'Tài liệu đóng góp của bạn'}
-      </h2>
+      <h2 id="home-materials">Tài liệu đóng góp của bạn</h2>
       <SectionState
         section={changes}
         loading="Đang tải yêu cầu sửa…"
@@ -398,7 +396,7 @@ export function RoleHome({ role }: { role: Role }) {
           <OpenReports />
         </>
       ) : (
-        <MaterialTasks role={role} />
+        <MaterialTasks />
       )}
     </div>
   );

@@ -109,7 +109,6 @@ describe('self-service sign-up confirmed by email (AUTH-04)', () => {
     post(agent, 'signup/complete', {
       token,
       displayName: 'Sinh viên tự đăng ký',
-      role: 'STUDENT',
       password,
       ...overrides,
     });
@@ -154,6 +153,8 @@ describe('self-service sign-up confirmed by email (AUTH-04)', () => {
     expect((await complete(browser, older)).body.code).toBe('SIGNUP_TOKEN_INVALID');
     for (const body of [
       { role: 'ADMIN' },
+      { role: 'STUDENT' },
+      { role: 'LECTURER' },
       { role: 'student' },
       { password: 'quá ngắn' },
       { displayName: '   ' },
@@ -183,13 +184,8 @@ describe('self-service sign-up confirmed by email (AUTH-04)', () => {
     expect(login.body.user).toMatchObject({ role: 'STUDENT', displayName: 'Sinh viên tự đăng ký' });
   });
 
-  it('registers a lecturer and refuses a link once the address has an account', async () => {
+  it('refuses a link once the address has an account', async () => {
     const browser = request.agent(app.getHttpServer());
-    await post(browser, 'signup', { email: email('lecturer') });
-    const token = tokenOf((await mails(email('lecturer')))[0].text);
-    expect((await complete(browser, token, { role: 'LECTURER' })).status).toBe(204);
-    const login = await post(browser, 'login', { email: email('lecturer'), password });
-    expect(login.body.user.role).toBe('LECTURER');
 
     // An admin issues the account while the link is still open: the link no longer creates one.
     await post(browser, 'signup', { email: email('raced') });

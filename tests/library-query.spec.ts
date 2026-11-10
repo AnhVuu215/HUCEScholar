@@ -10,11 +10,12 @@ test('public library filters round-trip with the API bounds', () => {
   expect(query).toEqual({
     search: 'Cơ học',
     courseId: '9223372036854775807',
-    kind: 'LECTURER_MATERIAL',
     materialType: 'EXAM',
     page: 100000,
   });
   expect(parseLibraryQuery(new URLSearchParams(libraryQueryString(query)))).toEqual(query);
+  // ROLE-01: the old source filter is dropped from links made before it was removed.
+  expect(libraryQueryString(query)).not.toContain('kind=');
 });
 
 test('invalid, repeated and private parameters never enter a library request', () => {

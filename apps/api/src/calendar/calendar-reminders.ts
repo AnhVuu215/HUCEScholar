@@ -165,7 +165,7 @@ export class CalendarReminders {
       where: {
         due_on: { gte: day(from - DAY), lte: day(to + 3 * DAY) },
         document_versions: available(),
-        reading_lists: { OR: courses.map((id) => ({ course_id: id, ...shown(id) })) },
+        reading_lists: { course_id: { in: courses }, ...shown },
       },
       select: {
         version_id: true,

@@ -1,11 +1,9 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { CatalogPicker, type CatalogChoice } from '../academic/catalog-picker';
+import { useEffect, useRef, useState } from 'react';
 import {
   changeMaterial,
   lifecycleError,
   materialLifecycle,
-  transferRecipients,
   type MaterialLifecycle,
 } from '../../lib/lifecycle';
 import { fileFailedLabel, publicationLabel } from '../../lib/materials';
@@ -27,11 +25,9 @@ export function LifecycleDetail({
     [notice, setNotice] = useState(''),
     [uncertain, setUncertain] = useState(false),
     [pending, setPending] = useState(false);
-  const [recipient, setRecipient] = useState<CatalogChoice | null>(null),
-    [transferReason, setTransferReason] = useState(''),
-    [visibilityReason, setVisibilityReason] = useState(''),
+  const [visibilityReason, setVisibilityReason] = useState(''),
     [resolved, setResolved] = useState(false);
-  const [confirmation, setConfirmation] = useState<'transfer' | 'visibility' | null>(null);
+  const [confirmation, setConfirmation] = useState<'visibility' | null>(null);
   const feedback = useRef<HTMLParagraphElement>(null),
     heading = useRef<HTMLHeadingElement>(null),
     alive = useRef(true);
@@ -57,10 +53,6 @@ export function LifecycleDetail({
       alive.current = false;
     };
   }, []);
-  const loadRecipients = useCallback(
-    (params: URLSearchParams, signal: AbortSignal) => transferRecipients(id, params, signal),
-    [id],
-  );
   function refresh() {
     setUncertain(true);
     setConfirmation(null);
@@ -69,37 +61,23 @@ export function LifecycleDetail({
     setError('');
     setAttempt((n) => n + 1);
   }
-  async function run(action: 'transfer' | 'visibility') {
+  async function run() {
     if (!current || pending || uncertain) return;
     setPending(true);
     setError('');
     setNotice('');
     try {
-      const item = await changeMaterial(
-        current,
-        action,
-        action === 'transfer'
-          ? { recipientId: recipient?.id, reason: transferReason.trim() }
-          : {
-              visibility: current.visibility === 'VISIBLE' ? 'HIDDEN' : 'VISIBLE',
-              reason: visibilityReason.trim(),
-              resolved,
-            },
-      );
+      const item = await changeMaterial(current, 'visibility', {
+        visibility: current.visibility === 'VISIBLE' ? 'HIDDEN' : 'VISIBLE',
+        reason: visibilityReason.trim(),
+        resolved,
+      });
       if (!alive.current) return;
       setCurrent(item);
       setConfirmation(null);
       setResolved(false);
-      setRecipient(null);
-      if (action === 'transfer') setTransferReason('');
-      else setVisibilityReason('');
-      setNotice(
-        action === 'transfer'
-          ? 'Đã bàn giao. Người nhận có thể rà soát và tiếp tục biên soạn.'
-          : item.visibility === 'HIDDEN'
-            ? 'Đã ẩn toàn tài liệu.'
-            : 'Đã khôi phục hiển thị.',
-      );
+      setVisibilityReason('');
+      setNotice(item.visibility === 'HIDDEN' ? 'Đã ẩn toàn tài liệu.' : 'Đã khôi phục hiển thị.');
       changed();
       requestAnimationFrame(() => feedback.current?.focus());
     } catch (e) {
@@ -161,78 +139,6 @@ export function LifecycleDetail({
             Môn trong các phiên bản:{' '}
             {current.courses.map((c) => `${c.code} · ${c.name}`).join('; ') || 'Chưa có môn'}
           </p>
-          {current.kind === 'LECTURER_MATERIAL' && (
-            <fieldset className="draft-fields" disabled={locked}>
-              <legend>Bàn giao giảng viên</legend>
-              <p className="field-hint">
-                Người nhận phải hoạt động, đã xác minh và được phân công mọi môn của tài liệu. Bản
-                đang chờ duyệt sẽ được rút về nháp; PDF, tác giả, ghi chú và bản công bố giữ nguyên.
-              </p>
-              <CatalogPicker
-                key={current.manager.id}
-                kind="courses"
-                label="Giảng viên nhận"
-                value={recipient}
-                onChange={(v) => {
-                  setRecipient(v);
-                  setConfirmation(null);
-                }}
-                loadItems={loadRecipients}
-              />
-              <div className="form-field">
-                <label htmlFor="transfer-reason">Lý do bàn giao</label>
-                <textarea
-                  id="transfer-reason"
-                  maxLength={1000}
-                  value={transferReason}
-                  onChange={(e) => {
-                    setTransferReason(e.target.value);
-                    setConfirmation(null);
-                  }}
-                />
-              </div>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={!recipient || !transferReason.trim()}
-                onClick={() => {
-                  returnFocus.remember();
-                  setConfirmation('transfer');
-                }}
-              >
-                Bàn giao
-              </button>
-              {confirmation === 'transfer' && (
-                <div className="form-confirmation">
-                  <p>
-                    Bàn giao từ {current.manager.name} cho {recipient?.label}?{' '}
-                    {current.latest.reviewStatus === 'SUBMITTED'
-                      ? 'Yêu cầu chờ của phiên bản mới nhất sẽ bị rút.'
-                      : 'Bản công bố và lịch sử tiếp tục được giữ.'}
-                  </p>
-                  <div className="user-form-actions">
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() => void run('transfer')}
-                    >
-                      Xác nhận bàn giao
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => {
-                        setConfirmation(null);
-                        returnFocus.restore();
-                      }}
-                    >
-                      Chưa bàn giao
-                    </button>
-                  </div>
-                </div>
-              )}
-            </fieldset>
-          )}
           <fieldset className="draft-fields" disabled={locked}>
             <legend>Hiển thị toàn tài liệu</legend>
             <p className="field-hint">
@@ -283,11 +189,7 @@ export function LifecycleDetail({
                     : 'Khôi phục tài liệu sau khi đã giải quyết lý do ẩn?'}
                 </p>
                 <div className="user-form-actions">
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={() => void run('visibility')}
-                  >
+                  <button type="button" className="primary-button" onClick={() => void run()}>
                     Xác nhận đổi hiển thị
                   </button>
                   <button
@@ -306,20 +208,20 @@ export function LifecycleDetail({
           </fieldset>
           <section className="draft-pdf" aria-label="Lịch sử quản lý tài liệu">
             <h3>Lịch sử quản lý</h3>
-            <h4>Bàn giao</h4>
-            {!current.history.totalTransfers ? (
-              <p className="field-hint">Chưa có bàn giao.</p>
-            ) : (
-              <ol className="publication-history">
-                {current.history.transfers.map((t) => (
-                  <li key={t.id}>
-                    <p>
-                      {t.fromName} → {t.toName} · {new Date(t.createdAt).toLocaleString('vi-VN')}
-                    </p>
-                    <p className="publication-reason">{t.reason}</p>
-                  </li>
-                ))}
-              </ol>
+            {current.history.totalTransfers > 0 && (
+              <>
+                <h4>Bàn giao trước khi bỏ vai trò giảng viên</h4>
+                <ol className="publication-history">
+                  {current.history.transfers.map((t) => (
+                    <li key={t.id}>
+                      <p>
+                        {t.fromName} → {t.toName} · {new Date(t.createdAt).toLocaleString('vi-VN')}
+                      </p>
+                      <p className="publication-reason">{t.reason}</p>
+                    </li>
+                  ))}
+                </ol>
+              </>
             )}
             <h4>Hiển thị</h4>
             {!current.history.totalVisibility ? (
