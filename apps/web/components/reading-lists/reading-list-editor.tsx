@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState, type FormEvent } from 'react';
-import { libraryList, type LibraryItem } from '../../lib/library';
-import { draftCourses, materialTypes } from '../../lib/materials';
+import { libraryCourses, libraryList, type LibraryItem } from '../../lib/library';
+import { materialTypes } from '../../lib/materials';
 import {
-  myReadingList,
+  managedReadingList,
   readingListError,
   saveReadingList,
   type ReadingList,
@@ -43,7 +43,7 @@ function fromList(list: ReadingList | null): Loaded {
   };
 }
 
-/** The signed-in lecturer's own list for one assigned course; the API enforces assignment. */
+/** ROLE-01: an admin edits the one list of a course; any admin may continue another's edits. */
 export function ReadingListEditor() {
   const [courses, setCourses] = useState<{ id: string; code: string; name: string }[] | null>(null);
   const [courseId, setCourseId] = useState('');
@@ -57,9 +57,10 @@ export function ReadingListEditor() {
   const [searchError, setSearchError] = useState('');
   useEffect(() => {
     const controller = new AbortController();
-    void draftCourses(new URLSearchParams({ limit: '100' }), controller.signal)
+    // Only courses with readable material: nothing else could be listed.
+    void libraryCourses(controller.signal)
       .then((result) => {
-        if (!controller.signal.aborted) setCourses(result.items);
+        if (!controller.signal.aborted) setCourses(result);
       })
       .catch((failure) => {
         if (!controller.signal.aborted) setError(readingListError(failure));
@@ -69,7 +70,7 @@ export function ReadingListEditor() {
   useEffect(() => {
     if (!courseId) return;
     const controller = new AbortController();
-    void myReadingList(courseId, controller.signal)
+    void managedReadingList(courseId, controller.signal)
       .then((list) => {
         if (!controller.signal.aborted) setForm(fromList(list));
       })
@@ -147,9 +148,9 @@ export function ReadingListEditor() {
     <section className="users-directory reading-lists" aria-labelledby="reading-editor-title">
       <h2 id="reading-editor-title">Soạn danh sách đọc</h2>
       <p className="field-hint">
-        Mỗi môn bạn được phân công có một danh sách. Mỗi mục giữ đúng phiên bản bạn chọn; khi tài
-        liệu có bản mới, người đọc thấy gợi ý và bạn tự quyết định đổi. Hạn đọc hiện trên lịch học
-        của người đọc đã chọn theo dõi môn.
+        Mỗi môn có một danh sách chung do quản trị viên soạn. Mỗi mục giữ đúng phiên bản được chọn;
+        khi tài liệu có bản mới, người đọc thấy gợi ý và quản trị viên tự quyết định đổi. Hạn đọc
+        hiện trên lịch học của người đọc đã chọn theo dõi môn.
       </p>
       {!courses ? (
         error ? (
@@ -157,14 +158,14 @@ export function ReadingListEditor() {
             {error}
           </p>
         ) : (
-          <p role="status">Đang tải môn được phân công…</p>
+          <p role="status">Đang tải danh sách môn…</p>
         )
       ) : courses.length === 0 ? (
-        <p className="users-list-message">Bạn chưa được phân công môn nào.</p>
+        <p className="users-list-message">Chưa có môn nào có tài liệu đã công bố.</p>
       ) : (
         <SelectField
           id="reading-editor-course"
-          label="Môn được phân công"
+          label="Môn học"
           value={courseId}
           onChange={choose}
           options={[

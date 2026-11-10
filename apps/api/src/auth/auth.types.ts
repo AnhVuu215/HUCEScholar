@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 
-export type Role = 'ADMIN' | 'LECTURER' | 'STUDENT';
+export type Role = 'ADMIN' | 'STUDENT';
 export interface Profile {
   id: string;
   email: string;

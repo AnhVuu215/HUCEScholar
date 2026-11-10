@@ -51,12 +51,12 @@ async function checkingDraft(page: Page) {
   return { id, title };
 }
 
-const pdf = (page: Page) => page.getByRole('region', { name: 'PDF của bản nháp' });
+const pdf = (page: Page) => page.getByRole('region', { name: 'Trạng thái file tài liệu' });
 
 async function openDraft(page: Page, title: string) {
   await page.goto('/workspace/student/materials');
   await page.getByRole('button', { name: `Mở bản nháp ${title}`, exact: true }).click();
-  await expect(pdf(page).getByText('PDF đang kiểm tra', { exact: true })).toBeVisible();
+  await expect(pdf(page).getByText('PDF đang kiểm tra an toàn', { exact: true })).toBeVisible();
 }
 
 async function markSafe(id: string) {
@@ -94,8 +94,8 @@ test('lost connection while waiting is reported as connectivity, not as a file p
   await expect(pdf(page).getByText(/không đạt kiểm tra/)).toHaveCount(0);
   await page.unroute(status);
   await markSafe(id);
-  await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
-  await expect(pdf(page).getByText('PDF đã qua kiểm tra kỹ thuật', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Cập nhật trạng thái file', exact: true }).click();
+  await expect(pdf(page).getByText('PDF đã qua kiểm tra an toàn', { exact: true })).toBeVisible();
   await expect(hint(page)).toHaveCount(0);
 });
 

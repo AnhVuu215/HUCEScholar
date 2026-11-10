@@ -274,22 +274,20 @@ export default function HomePage() {
                 <li>
                   <strong>Bản nháp của riêng bạn</strong>
                   <span>
-                    Lưu thông tin và chọn môn liên quan. Nguồn tham khảo là tùy chọn với học liệu
-                    giảng viên.
+                    Lưu thông tin, môn liên quan, nguồn và căn cứ quyền sử dụng của tài liệu.
                   </span>
                 </li>
                 <li>
                   <strong>PDF được kiểm tra trước</strong>
                   <span>
-                    Giảng viên đính kèm PDF hoặc DOCX tối đa 25 MiB. Word được chuyển thành bản PDF
+                    Sinh viên đính kèm PDF hoặc DOCX tối đa 25 MiB. Word được chuyển thành bản PDF
                     để đọc và ghi chú.
                   </span>
                 </li>
                 <li>
-                  <strong>Mỗi vai trò, một không gian</strong>
+                  <strong>Quản trị viên duyệt trước khi công bố</strong>
                   <span>
-                    Giảng viên tự công bố sau khi PDF quét đạt. Tài liệu sinh viên bổ sung được gửi
-                    kiểm duyệt.
+                    Tài liệu sinh viên gửi lên chỉ xuất hiện trong kho sau khi quản trị viên duyệt.
                   </span>
                 </li>
               </ul>
@@ -328,9 +326,9 @@ export default function HomePage() {
             <details>
               <summary>Làm thế nào để có tài khoản?</summary>
               <p>
-                Sinh viên và giảng viên tự <Link href="/signup">đăng ký</Link> bằng email: mở liên
-                kết xác nhận trong thư, chọn vai trò và đặt mật khẩu. Quản trị viên vẫn cấp được tài
-                khoản cho mọi vai trò. Chưa có đăng nhập bằng tài khoản trường.
+                Sinh viên tự <Link href="/signup">đăng ký</Link> bằng email: mở liên kết xác nhận
+                trong thư rồi đặt mật khẩu. Quản trị viên cũng cấp được tài khoản sinh viên. Chưa có
+                đăng nhập bằng tài khoản trường.
               </p>
             </details>
             <details>

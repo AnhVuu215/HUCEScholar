@@ -1,6 +1,5 @@
 import {
   ConflictException,
-  ForbiddenException,
   HttpException,
   Inject,
   Injectable,
@@ -33,7 +32,6 @@ export class SourceUploadService {
   ) {}
 
   async upload(actor: Profile, id: string, req: Request) {
-    if (actor.role !== 'LECTURER') throw new ForbiddenException('Chỉ giảng viên tải Word.');
     const header = docxHeaders(
       req.get('Content-Type'),
       req.get('X-File-Name'),
@@ -54,7 +52,7 @@ export class SourceUploadService {
     let callbackCompleted = false;
     let committed = false;
     try {
-      // Replay may use the original revision, but never bypasses current ownership/assignment checks.
+      // Replay may use the original revision, but never bypasses current ownership checks.
       await this.db.$transaction(async (tx) => {
         const { row } = await this.materials.lockDraft(tx, actor, id);
         const existing = await tx.document_source_uploads.findUnique({
@@ -154,7 +152,6 @@ export class SourceUploadService {
     }
   }
   async retry(actor: Profile, id: string, body: SourceRetryDto) {
-    if (actor.role !== 'LECTURER') throw new ForbiddenException();
     const sourceId = await this.db.$transaction(async (tx) => {
       const {
         row,

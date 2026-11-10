@@ -34,7 +34,7 @@ export default function HomePage() {
           <h1>HUCEScholar</h1>
           <p className="intro">Nền tảng học liệu điện tử dành cho sinh viên HUCE.</p>
           <p className="development-note">
-            Bản phát triển với tài khoản, danh mục đào tạo, phân công và bản nháp học liệu.
+            Bản phát triển với tài khoản, danh mục đào tạo, học liệu sinh viên và kiểm duyệt.
           </p>
         </header>
 
@@ -46,9 +46,10 @@ export default function HomePage() {
           <h2 id="scope-heading">Phạm vi hiện tại</h2>
           <p>Web responsive và API đã được khởi tạo theo kiến trúc đã chốt.</p>
           <p className="scope-disclosure">
-            Đã có tài khoản, danh mục, phân công, PDF riêng tư, kiểm duyệt, kho học liệu và trình
-            đọc theo quyền, ghi chú riêng theo trang, lưu tiến độ, phiên bản kế tiếp, bàn giao và
-            ẩn/khôi phục học liệu, tài liệu đã lưu và đọc gần đây.
+            Đã có tài khoản, danh mục, PDF riêng tư, kiểm duyệt, kho học liệu và trình đọc theo
+            quyền, ghi chú riêng theo trang, lưu tiến độ, phiên bản kế tiếp, ẩn/khôi phục học liệu,
+            tài liệu đã lưu và đọc gần đây. Từ 10/11/2026 hệ thống chỉ còn hai vai trò: quản trị
+            viên và sinh viên.
           </p>
           <dl className="scope-list">
             <div>
@@ -80,27 +81,24 @@ export default function HomePage() {
         >
           <h2 id="next-heading">Mốc tiếp theo: hoàn thiện trải nghiệm trên web</h2>
           <p>
-            Đã có phiên bản kế tiếp, bàn giao và quản lý ẩn/khôi phục học liệu; ghi chú cũ vẫn gắn
-            với bản PDF ban đầu. Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây. Trình đọc
-            bảo vệ bản soạn ghi chú khi dùng Quay lại/Tiến tới trong ứng dụng; đã có tô sáng chữ và
-            ghi chú riêng theo đoạn PDF. Phần tài khoản còn thiếu tự đổi/khôi phục mật khẩu. Tạm
-            hoãn cài PWA và kiểm thử thiết bị thật; môi trường pilot vẫn cần S3 private, HTTPS và
-            backup/phục hồi.
+            Đã có phiên bản kế tiếp và quản lý ẩn/khôi phục học liệu; ghi chú cũ vẫn gắn với bản PDF
+            ban đầu. Thư viện cá nhân đã có tài liệu đã lưu và đọc gần đây. Trình đọc bảo vệ bản
+            soạn ghi chú khi dùng Quay lại/Tiến tới trong ứng dụng; đã có tô sáng chữ và ghi chú
+            riêng theo đoạn PDF. Phần tài khoản còn thiếu tự đổi/khôi phục mật khẩu. Tạm hoãn cài
+            PWA và kiểm thử thiết bị thật; môi trường pilot vẫn cần S3 private, HTTPS và backup/phục
+            hồi.
           </p>
           <ul className="role-list">
             <li>
               <strong>Quản trị viên</strong>
-              <span>Cấp tài khoản, phân công và kiểm duyệt.</span>
-            </li>
-            <li>
-              <strong>Giảng viên</strong>
-              <span>
-                Upload PDF/DOCX, xem trước bản đọc và tự công bố sau khi kiểm tra an toàn.
-              </span>
+              <span>Cấp tài khoản, kiểm duyệt tài liệu và soạn danh sách đọc.</span>
             </li>
             <li>
               <strong>Sinh viên</strong>
-              <span>Tìm, đọc, ghi chú riêng và đóng góp học liệu.</span>
+              <span>
+                Tìm, đọc, ghi chú riêng và tải PDF/DOCX lên để quản trị viên duyệt trước khi công
+                bố.
+              </span>
             </li>
           </ul>
         </section>

@@ -24,16 +24,17 @@ async function openAccount(page: Page) {
   if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
 }
 
-async function login(page: Page, role: 'lecturer' | 'student', accountPrefix = 'e2e-drafts') {
+/** ROLE-01: both accounts are students; "author" is a second one for tests that need two. */
+async function login(page: Page, role: 'author' | 'student', accountPrefix = 'e2e-drafts') {
   await page.goto('/login');
   await page.getByLabel('Email', { exact: true }).fill(`${accountPrefix}-${role}@example.test`);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-  await expect(page).toHaveURL(`/workspace/${role}`);
+  await expect(page).toHaveURL('/workspace/student');
   await (await navLink(page, 'Học liệu của tôi')).click();
   await expect(page.getByRole('heading', { name: 'Học liệu của tôi', exact: true })).toBeVisible();
 }
-async function seed(page: Page, role: 'lecturer' | 'student', accountPrefix = 'e2e-drafts') {
+async function seed(page: Page, accountPrefix = 'e2e-drafts') {
   const code = `MAT-${randomBytes(5).toString('hex').toUpperCase()}`;
   const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
   const headers = { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf };
@@ -61,19 +62,6 @@ async function seed(page: Page, role: 'lecturer' | 'student', accountPrefix = 'e
     },
   });
   expect(course.status()).toBe(201);
-  if (role === 'lecturer') {
-    const users = await (
-      await page.request.get(`/api/v1/admin/users?search=${accountPrefix}-lecturer%40example.test`)
-    ).json();
-    expect(
-      (
-        await page.request.post('/api/v1/admin/assignments', {
-          headers,
-          data: { lecturerId: users.items[0].id, courseId: (await course.json()).item.id },
-        })
-      ).status(),
-    ).toBe(201);
-  }
   expect((await page.request.post('/api/v1/auth/logout', { headers })).status()).toBe(204);
   return code;
 }
@@ -111,7 +99,7 @@ async function markSyntheticSafe(id: string, pageCount = 1) {
   try {
     // Explicit synthetic scan fixture; does not claim real scanner evidence.
     const result = await db.query(
-      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-highlights-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-personal-%@example.test' OR u.email LIKE 'e2e-selfpublish-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
+      "UPDATE hucescholar.files SET scan_status='SAFE',checked_at=now(),page_count=$2,has_text_layer=true WHERE id=(SELECT file_id FROM hucescholar.document_versions v JOIN hucescholar.users u ON u.id=v.created_by WHERE document_id=$1 AND (u.email LIKE 'e2e-drafts-%@example.test' OR u.email LIKE 'e2e-reader-%@example.test' OR u.email LIKE 'e2e-notes-%@example.test' OR u.email LIKE 'e2e-highlights-%@example.test' OR u.email LIKE 'e2e-progress-%@example.test' OR u.email LIKE 'e2e-personal-%@example.test' OR u.email LIKE 'e2e-versions-%@example.test' OR u.email LIKE 'e2e-lifecycle-%@example.test'))",
       [id, pageCount],
     );
     expect(result.rowCount).toBe(1);
@@ -143,11 +131,11 @@ async function adminReviewLogin(page: Page, code: string, accountPrefix = 'e2e-d
 }
 async function submittedForReview(
   page: Page,
-  role: 'student' | 'lecturer',
+  role: 'student' | 'author',
   readable = false,
   accountPrefix = readable ? 'e2e-reader' : 'e2e-drafts',
 ) {
-  const code = await seed(page, role, accountPrefix);
+  const code = await seed(page, accountPrefix);
   await login(page, role, accountPrefix);
   const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
   const headers = { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf };
@@ -395,27 +383,22 @@ async function capturePersonal(page: Page, prefix: string) {
     });
   }
 }
-test('lecturer self-publication needs no rights declaration or admin decision and recovers after response loss', async ({
+test('student uploads from the draft form, then submits for review and recovers after response loss', async ({
   page,
 }) => {
   test.setTimeout(90000);
-  const code = await seed(page, 'lecturer', 'e2e-selfpublish');
-  await login(page, 'lecturer', 'e2e-selfpublish');
-  await page.getByRole('button', { name: 'Tạo bản nháp', exact: true }).click();
-  await page.getByLabel('Tiêu đề học liệu', { exact: true }).fill(`PDF tự công bố ${code}`);
-  await page.getByLabel('Tìm môn học liên quan', { exact: true }).fill(code);
-  await page
-    .getByLabel('Môn học liên quan', { exact: true })
-    .selectOption({ label: `${code} · Môn minh họa kiểm thử học liệu` });
-  await page.getByRole('button', { name: 'Thêm môn', exact: true }).click();
+  const code = await seed(page);
+  await login(page, 'author');
+  await fill(page, code);
   await page.getByRole('button', { name: 'Lưu bản nháp', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Đã lưu bản nháp' })).toBeVisible();
   await page
-    .getByRole('button', { name: `Mở bản nháp PDF tự công bố ${code}`, exact: true })
+    .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
     .click();
-  await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toHaveCount(0);
   await page.getByLabel('File tài liệu (PDF hoặc DOCX)', { exact: true }).setInputFiles({
-    name: 'self-published.pdf',
+    name: 'student-upload.pdf',
     mimeType: 'application/pdf',
     buffer: readerPdf(),
   });
@@ -425,59 +408,26 @@ test('lecturer self-publication needs no rights declaration or admin decision an
     .items[0];
   await markSyntheticSafe(item.id, 2);
   await page.getByRole('button', { name: 'Cập nhật trạng thái file', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toBeEnabled();
-  await page.route('**/api/v1/material-drafts/*/publish', async (route) => {
+  await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeEnabled();
+  await page.route('**/api/v1/material-drafts/*/submit', async (route) => {
     await route.fetch();
     await route.abort();
   });
-  await page.getByRole('button', { name: 'Công bố', exact: true }).click();
-  await page.getByRole('button', { name: 'Xác nhận công bố', exact: true }).click();
+  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
   await expect(page.locator('.publication-actions [role="alert"]')).toContainText(
-    'Tải trạng thái công bố',
+    'Tải trạng thái duyệt',
   );
-  await page.unroute('**/api/v1/material-drafts/*/publish');
-  await page.getByRole('button', { name: 'Tải trạng thái công bố', exact: true }).click();
-  await expect(page.locator('.publication-actions')).toContainText('Đã công bố');
-  await expect(
-    page
-      .getByRole('region', { name: 'Lịch sử phiên bản', exact: true })
-      .getByRole('listitem')
-      .first(),
-  ).toContainText('Phiên bản 1 · Đã công bố');
+  await page.unroute('**/api/v1/material-drafts/*/submit');
+  await page.getByRole('button', { name: 'Tải trạng thái duyệt', exact: true }).click();
+  await expect(page.locator('.publication-actions')).toContainText('Chờ duyệt');
   await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
-  if (process.env.CAPTURE_SELF_PUBLISH_UI === '1') {
-    mkdirSync('.impeccable/review/self-publication', { recursive: true });
-    for (const [name, width, height] of [
-      ['desktop', 1440, 1000],
-      ['tablet', 768, 1024],
-      ['mobile', 360, 900],
-    ] as const) {
-      await page.setViewportSize({ width, height });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-        true,
-      );
-      await page.screenshot({
-        path: `.impeccable/review/self-publication/${name}.png`,
-        fullPage: true,
-      });
-    }
-  }
+  // Nothing reaches the library before an admin approves it.
+  expect((await page.request.get(`/api/v1/library/versions/${item.versionId}`)).status()).toBe(404);
   const history = await (
     await page.request.get(`/api/v1/material-drafts/${item.id}/requests`)
   ).json();
-  expect(history.total).toBe(0);
-  const current = (await (await page.request.get(`/api/v1/material-drafts/${item.id}`)).json())
-    .item;
-  expect(current).toMatchObject({
-    publicationMethod: 'LECTURER_SELF',
-    sourceReference: '',
-    rightsBasis: '',
-  });
-  await (await navLink(page, 'Kho học liệu')).click();
-  await page.getByLabel('Tìm học liệu', { exact: false }).fill(code);
-  await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
-  await page.getByRole('link', { name: `Đọc PDF tự công bố ${code}`, exact: true }).click();
-  await expect(page.getByText('Đã hiển thị trang 1 / 2', { exact: true })).toBeVisible();
+  expect(history.total).toBe(1);
 });
 test('personal library saves after response loss, shows recent page and removes only its saved link', async ({
   page,
@@ -585,8 +535,8 @@ test('lifecycle owner creates one successor after a lost response and can inspec
   await expect(page.getByLabel('Nguồn tài liệu', { exact: true })).toHaveValue('');
   await expect(
     page
-      .getByRole('region', { name: 'PDF của bản nháp' })
-      .getByText('Chưa có PDF', { exact: true }),
+      .getByRole('region', { name: 'Trạng thái file tài liệu' })
+      .getByText('Chưa có file tài liệu', { exact: true }),
   ).toBeVisible();
   const versions = (
     await (await page.request.get(`/api/v1/material-drafts/${draft.id}/versions`)).json()
@@ -617,11 +567,11 @@ test('lifecycle owner creates one successor after a lost response and can inspec
   }
 });
 
-test('lifecycle admin transfers published material and recovers a stale hide before restoring', async ({
+test('lifecycle admin recovers a stale hide before restoring published material', async ({
   page,
 }) => {
   test.setTimeout(90000);
-  const { code } = await submittedForReview(page, 'lecturer', false, 'e2e-lifecycle');
+  const { code } = await submittedForReview(page, 'author', false, 'e2e-lifecycle');
   await adminReviewLogin(page, code, 'e2e-lifecycle');
   const pending = (
     await (await page.request.get('/api/v1/admin/publication-requests?search=' + code)).json()
@@ -642,31 +592,14 @@ test('lifecycle admin transfers published material and recovers a stale hide bef
       })
     ).status(),
   ).toBe(201);
-  const recipient = (
-    await (
-      await page.request.get('/api/v1/admin/users?search=e2e-lifecycle-receiver%40example.test')
-    ).json()
-  ).items[0];
-  for (const c of pending.courses)
-    expect(
-      (
-        await page.request.post('/api/v1/admin/assignments', {
-          headers,
-          data: { lecturerId: recipient.id, courseId: c.id },
-        })
-      ).status(),
-    ).toBe(201);
   await (await navLink(page, 'Quản lý học liệu')).click();
   await page.getByLabel('Tìm tài liệu quản lý', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await page
     .getByRole('button', { name: `Quản lý Học liệu minh họa ${code}`, exact: true })
     .click();
-  await page.getByLabel('Giảng viên nhận', { exact: true }).selectOption(recipient.id);
-  await page.getByLabel('Lý do bàn giao', { exact: true }).fill('Bàn giao để tiếp tục biên soạn');
-  await page.getByRole('button', { name: 'Bàn giao', exact: true }).click();
-  await page.getByRole('button', { name: 'Xác nhận bàn giao', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Đã bàn giao' })).toBeVisible();
+  // ROLE-01: there is nobody to hand material over to.
+  await expect(page.getByRole('button', { name: 'Bàn giao', exact: true })).toHaveCount(0);
   await page.getByLabel('Lý do đổi hiển thị', { exact: true }).fill('Đối chiếu quyền nguồn');
   await page.getByRole('button', { name: 'Ẩn toàn tài liệu', exact: true }).click();
   const current = (
@@ -1377,11 +1310,11 @@ test('admin approves with rights confirmation and recovers a committed decision 
     (await (await page.request.get(`/api/v1/material-drafts/${id}`)).json()).item.reviewStatus,
   ).toBe('APPROVED');
 });
-test('lecturer reopens a legacy change request, self-publishes and retains older request history', async ({
+test('student reopens a change request, resubmits and retains older request history', async ({
   page,
 }) => {
   test.setTimeout(60000);
-  const { code } = await submittedForReview(page, 'lecturer');
+  const { code } = await submittedForReview(page, 'author');
   let moderationDocuments = 0;
   page.on('request', (request) => {
     if (
@@ -1422,8 +1355,8 @@ test('lecturer reopens a legacy change request, self-publishes and retains older
   await page.getByRole('button', { name: 'Lưu quyết định', exact: true }).click();
   await expect(page.locator('.moderation-detail')).toContainText('Đã lưu quyết định');
   await logoutForTest(page);
-  await login(page, 'lecturer');
-  await page.getByLabel('Trạng thái công bố', { exact: true }).selectOption('CHANGES_REQUIRED');
+  await login(page, 'author');
+  await page.getByLabel('Trạng thái duyệt', { exact: true }).selectOption('CHANGES_REQUIRED');
   await page.getByLabel('Tìm bản nháp', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await page
@@ -1431,26 +1364,27 @@ test('lecturer reopens a legacy change request, self-publishes and retains older
     .click();
   await expect(
     page
-      .getByRole('region', { name: 'Công bố tài liệu', exact: true })
+      .getByRole('region', { name: 'Yêu cầu duyệt', exact: true })
       .locator('.publication-history'),
   ).toContainText('Bổ sung dẫn chứng quyền sử dụng');
   await page.getByRole('button', { name: 'Mở lại để chỉnh sửa', exact: true }).click();
   await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Công bố', exact: true }).click();
-  await page.getByRole('button', { name: 'Xác nhận công bố', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Đã công bố tài liệu' })).toBeVisible();
-  await page.getByRole('button', { name: 'Tạo phiên bản kế tiếp', exact: true }).click();
-  await page.getByRole('button', { name: 'Xác nhận tạo phiên bản', exact: true }).click();
-  await page.getByRole('button', { name: 'Xem lịch sử yêu cầu phiên bản 1', exact: true }).click();
-  await expect(page.getByText('Bổ sung dẫn chứng quyền sử dụng', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Đã gửi yêu cầu duyệt' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'Yêu cầu duyệt', exact: true })
+      .locator('.publication-history'),
+  ).toContainText('Bổ sung dẫn chứng quyền sử dụng');
 });
-for (const role of ['student', 'lecturer'] as const)
+for (const role of ['student'] as const)
   test(`${role} can withdraw a pending review with a retained reason and history`, async ({
     page,
   }) => {
-    const actionLabel = role === 'lecturer' ? 'Công bố' : 'Gửi duyệt';
-    const refreshLabel = role === 'lecturer' ? 'Tải trạng thái công bố' : 'Tải trạng thái duyệt';
-    const code = await seed(page, role);
+    const actionLabel = 'Gửi duyệt';
+    const refreshLabel = 'Tải trạng thái duyệt';
+    const code = await seed(page);
     await login(page, role);
     await fill(page, code);
     await page.getByRole('button', { name: 'Lưu bản nháp', exact: true }).click();
@@ -1460,76 +1394,27 @@ for (const role of ['student', 'lecturer'] as const)
       .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
       .click();
     await expect(page.getByRole('button', { name: actionLabel, exact: true })).toBeDisabled();
-    await page
-      .getByLabel(role === 'lecturer' ? 'File tài liệu (PDF hoặc DOCX)' : 'Chọn PDF', {
-        exact: true,
-      })
-      .setInputFiles({
-        name: 'synthetic-publication.pdf',
-        mimeType: 'application/pdf',
-        buffer: Buffer.from('%PDF-1.7\nSynthetic publication fixture'),
-      });
-    await page
-      .getByRole('button', {
-        name: role === 'lecturer' ? 'Lưu và tải file lên' : 'Tải PDF lên',
-        exact: true,
-      })
-      .click();
+    await page.getByLabel('File tài liệu (PDF hoặc DOCX)', { exact: true }).setInputFiles({
+      name: 'synthetic-publication.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.7\nSynthetic publication fixture'),
+    });
+    await page.getByRole('button', { name: 'Lưu và tải file lên', exact: true }).click();
     await expect(page.getByText('Lần lưu 2', { exact: false })).toBeVisible();
     const item = (await (await page.request.get('/api/v1/material-drafts?search=' + code)).json())
       .items[0];
     await markSyntheticSafe(item.id);
-    await page
-      .getByRole('button', {
-        name: role === 'lecturer' ? 'Cập nhật trạng thái file' : 'Cập nhật trạng thái',
-        exact: true,
-      })
-      .click();
+    await page.getByRole('button', { name: 'Cập nhật trạng thái file', exact: true }).click();
     await page.getByLabel('Tác giả', { exact: false }).fill('Chưa lưu');
     await expect(page.getByRole('button', { name: actionLabel, exact: true })).toBeDisabled();
     await page.getByLabel('Tác giả', { exact: false }).fill('Tác giả kiểm thử');
-    if (role === 'lecturer') {
-      // Compatibility: a lecturer's pending request created before self-publication can still be withdrawn.
-      const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
-      const legacy = await page.request.patch(`/api/v1/material-drafts/${item.id}`, {
-        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
-        data: {
-          title: item.title,
-          authors: item.authors,
-          description: item.description,
-          materialType: item.materialType,
-          sourceReference: 'Synthetic legacy source',
-          rightsBasis: 'Synthetic legacy declaration',
-          downloadAllowed: item.downloadAllowed,
-          courseIds: item.courses.map((c: { id: string }) => c.id),
-          revision: item.revision,
-        },
-      });
-      expect(legacy.status()).toBe(200);
-      const legacyRevision = (await legacy.json()).item.revision;
-      expect(
-        (
-          await page.request.post(`/api/v1/material-drafts/${item.id}/submit`, {
-            headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
-            data: { revision: legacyRevision },
-          })
-        ).status(),
-      ).toBe(201);
-      await page.getByRole('button', { name: refreshLabel, exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Rút về nháp', exact: true })).toBeVisible();
-    } else {
-      await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
-      await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
-      await expect(
-        page.getByRole('status').filter({ hasText: 'Đã gửi yêu cầu duyệt' }),
-      ).toBeVisible();
-    }
-    await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
+    await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
     await expect(
-      page.getByLabel(role === 'lecturer' ? 'File tài liệu (PDF hoặc DOCX)' : 'Chọn PDF', {
-        exact: true,
-      }),
-    ).toBeDisabled();
+      page.getByRole('status').filter({ hasText: 'Đã gửi yêu cầu duyệt' }),
+    ).toBeVisible();
+    await expect(page.getByLabel('Tiêu đề học liệu', { exact: true })).toBeDisabled();
+    await expect(page.getByLabel('File tài liệu (PDF hoặc DOCX)', { exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Rút về nháp', exact: true })).toBeDisabled();
     if (role === 'student' && process.env.CAPTURE_PUBLICATION_UI === '1') {
       mkdirSync('.impeccable/review/publication', { recursive: true });
@@ -1597,9 +1482,7 @@ for (const role of ['student', 'lecturer'] as const)
         .filter({ hasText: 'Lý do: Bổ sung nguồn tài liệu trước khi duyệt' }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Đóng bản nháp', exact: true }).click();
-    await page
-      .getByLabel(role === 'lecturer' ? 'Trạng thái công bố' : 'Trạng thái duyệt', { exact: true })
-      .selectOption('SUBMITTED');
+    await page.getByLabel('Trạng thái duyệt', { exact: true }).selectOption('SUBMITTED');
     await page.getByLabel('Tìm bản nháp', { exact: true }).fill(code);
     await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
     await expect(
@@ -1607,90 +1490,29 @@ for (const role of ['student', 'lecturer'] as const)
     ).toHaveCount(0);
   });
 test('student attaches a synthetic private PDF and sees its technical status', async ({ page }) => {
-  const code = await seed(page, 'student');
+  const code = await seed(page);
   await login(page, 'student');
   await fill(page, code);
   await page.getByRole('button', { name: 'Lưu bản nháp', exact: true }).click();
   await page
     .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
     .click();
-  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
+  await page.getByLabel('File tài liệu (PDF hoặc DOCX)', { exact: true }).setInputFiles({
     name: 'synthetic.pdf',
     mimeType: 'application/pdf',
     buffer: Buffer.from('%PDF-1.7\nSynthetic test PDF'),
   });
-  await page.getByLabel('Tác giả', { exact: false }).fill('Thay đổi sau khi chọn file');
-  await page.getByRole('button', { name: 'Bỏ file đã chọn', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Lưu bản nháp', exact: true })).toBeEnabled();
-  await page.getByLabel('Tác giả', { exact: false }).fill('Tác giả kiểm thử');
-  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
-    name: 'synthetic.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.7\nSynthetic test PDF'),
-  });
-  await page.getByRole('button', { name: 'Tải PDF lên', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'PDF đang kiểm tra' })).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: code })).toContainText('PDF đang kiểm tra');
+  await page.getByRole('button', { name: 'Lưu và tải file lên', exact: true }).click();
+  const status = page.getByRole('region', { name: 'Trạng thái file tài liệu' });
+  await expect(status.getByText('PDF đang kiểm tra an toàn', { exact: true })).toBeVisible();
   await expect(page.getByText('synthetic.pdf', { exact: false }).first()).toBeVisible();
   await expect(page.getByText('Lần lưu 2', { exact: false })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Đọc PDF', exact: true })).toHaveCount(0);
+  await capture(page, 'draft-pdf-checking');
+  await page.getByRole('button', { name: 'Đóng bản nháp', exact: true }).click();
+  await expect(page.getByRole('row').filter({ hasText: code })).toContainText('PDF đang kiểm tra');
   await page.setViewportSize({ width: 360, height: 800 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const response = await page.request.get('/api/v1/material-drafts?search=' + code);
-  const item = (await response.json()).items[0];
-  const csrf = (await (await page.request.get('/api/v1/auth/csrf')).json()).csrfToken;
-  expect(
-    (
-      await page.request.patch(`/api/v1/material-drafts/${item.id}`, {
-        headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf },
-        data: {
-          title: item.title,
-          authors: 'Tác giả ở tab khác',
-          description: item.description,
-          materialType: item.materialType,
-          sourceReference: item.sourceReference,
-          rightsBasis: item.rightsBasis,
-          downloadAllowed: item.downloadAllowed,
-          courseIds: item.courses.map((c: { id: string }) => c.id),
-          revision: item.revision,
-        },
-      })
-    ).status(),
-  ).toBe(200);
-  await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
-  await expect(page.getByLabel('Tác giả', { exact: false })).toHaveValue('Tác giả ở tab khác');
-  await capture(page, 'draft-pdf-checking');
-  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
-    name: 'retry.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.7\nSynthetic retry'),
-  });
-  await page.route('**/material-drafts/*/pdf', (route) =>
-    route.fulfill({
-      status: 503,
-      contentType: 'application/json',
-      body: JSON.stringify({ code: 'UPLOAD_UNCERTAIN' }),
-    }),
-  );
-  await page.getByRole('button', { name: 'Tải PDF lên', exact: true }).click();
-  await expect(page.locator('.draft-pdf [role="alert"]')).toContainText(
-    'Chưa xác nhận được kết quả upload',
-  );
-  await expect(page.getByLabel('Tác giả', { exact: false })).toHaveValue('Tác giả ở tab khác');
-  await expect(page.getByRole('button', { name: 'Tải PDF lên', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Bỏ file đã chọn', exact: true }).click();
-  await expect(page.locator('.draft-pdf [role="alert"]')).toContainText('Cập nhật trạng thái');
-  await page.getByLabel('Chọn PDF', { exact: true }).setInputFiles({
-    name: 'retry-again.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.7\nSynthetic retry again'),
-  });
-  await expect(page.locator('.draft-pdf [role="alert"]')).toContainText('Cập nhật trạng thái');
-  await expect(page.getByRole('button', { name: 'Tải PDF lên', exact: true })).toBeDisabled();
-  await capture(page, 'draft-pdf-retry');
-  await page.unroute('**/material-drafts/*/pdf');
-  await page.getByRole('button', { name: 'Cập nhật trạng thái', exact: true }).click();
-  await expect(page.locator('.draft-pdf [role="alert"]')).toHaveCount(0);
 });
 async function capture(page: Page, name: string) {
   if (
@@ -1717,11 +1539,11 @@ async function capture(page: Page, name: string) {
   }
   await page.setViewportSize({ width: 1280, height: 720 });
 }
-test('lecturer creates, reloads and edits an owned draft without claiming a PDF exists', async ({
+test('student creates, reloads and edits an owned draft without claiming a PDF exists', async ({
   page,
 }) => {
-  const code = await seed(page, 'lecturer');
-  await login(page, 'lecturer');
+  const code = await seed(page);
+  await login(page, 'author');
   await fill(page, code);
   await capture(page, 'draft-editor');
   await page.getByRole('button', { name: 'Lưu bản nháp', exact: true }).click();
@@ -1746,14 +1568,14 @@ test('lecturer creates, reloads and edits an owned draft without claiming a PDF 
 test('student keeps entered draft after stale conflict and explicitly discards changes', async ({
   page,
 }) => {
-  const code = await seed(page, 'student');
+  const code = await seed(page);
   await login(page, 'student');
   await fill(page, code);
   await page.getByRole('button', { name: 'Lưu bản nháp', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Đã lưu bản nháp' })).toBeVisible();
   await page.getByLabel('Tìm bản nháp', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
-  await expect(page.getByRole('row').filter({ hasText: code })).toContainText('Sinh viên bổ sung');
+  await expect(page.getByRole('row').filter({ hasText: code })).toContainText('Bài tập');
   await page
     .getByRole('button', { name: `Mở bản nháp Học liệu minh họa ${code}`, exact: true })
     .click();

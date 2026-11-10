@@ -1,4 +1,4 @@
-import { expect, test, type Page } from './helpers/test';
+import { expect, test, type Browser, type Page } from './helpers/test';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -8,12 +8,49 @@ test.use({ actionTimeout: 15000 });
 
 const word = () => readFileSync('apps/api/test/fixtures/docx/vietnamese.docx');
 const picker = (page: Page) => page.getByLabel('File tài liệu (PDF hoặc DOCX)', { exact: true });
-async function login(page: Page, role = 'lecturer') {
+/** ROLE-01: "author" and "student" are both student accounts. */
+async function login(page: Page, role: 'author' | 'student' = 'author') {
   await page.goto('/login');
   await page.getByLabel('Email', { exact: true }).fill(`e2e-docx-${role}@example.test`);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-  await expect(page).toHaveURL(`/workspace/${role}`);
+  await expect(page).toHaveURL('/workspace/student');
+}
+/** The only way to publish now: an admin approves the pending request. */
+async function approveAsAdmin(browser: Browser, code: string) {
+  const context = await browser.newContext();
+  try {
+    const admin = await context.newPage();
+    const token = async () =>
+      (await (await admin.request.get('/api/v1/auth/csrf')).json()).csrfToken as string;
+    expect(
+      (
+        await admin.request.post('/api/v1/auth/login', {
+          headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': await token() },
+          data: { email: 'e2e-docx-admin@example.test', password: process.env.E2E_PASSWORD! },
+        })
+      ).status(),
+    ).toBe(200);
+    const pending = (
+      await (await admin.request.get(`/api/v1/admin/publication-requests?search=${code}`)).json()
+    ).items[0];
+    expect(
+      (
+        await admin.request.post(`/api/v1/admin/publication-requests/${pending.id}/decision`, {
+          headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': await token() },
+          data: {
+            revision: pending.revision,
+            submittedRevision: pending.submittedRevision,
+            outcome: 'APPROVED',
+            reason: 'Tài liệu Word minh họa được phép',
+            rightsConfirmed: true,
+          },
+        })
+      ).status(),
+    ).toBe(201);
+  } finally {
+    await context.close();
+  }
 }
 async function setup(page: Page) {
   const code = `DOCX-${randomBytes(5).toString('hex').toUpperCase()}`;
@@ -38,21 +75,16 @@ async function setup(page: Page) {
     data: { code, name: 'Môn kiểm thử DOCX', facultyId: (await faculty.json()).item.id },
   });
   expect(course.status()).toBe(201);
-  const users = await (
-    await page.request.get('/api/v1/admin/users?search=e2e-docx-lecturer%40example.test')
-  ).json();
-  expect(
-    (
-      await page.request.post('/api/v1/admin/assignments', {
-        headers,
-        data: { lecturerId: users.items[0].id, courseId: (await course.json()).item.id },
-      })
-    ).status(),
-  ).toBe(201);
   await page.request.post('/api/v1/auth/logout', { headers });
   await login(page);
-  await page.goto('/workspace/lecturer/materials');
+  await page.goto('/workspace/student/materials');
   await page.getByRole('button', { name: 'Tạo bản nháp', exact: true }).click();
+  await page
+    .getByLabel('Nguồn tài liệu', { exact: true })
+    .fill('Bài giảng tự biên soạn — minh họa');
+  await page
+    .getByLabel('Căn cứ quyền sử dụng', { exact: true })
+    .fill('Tác giả cho phép chia sẻ học tập — minh họa');
   await page.getByLabel('Tìm môn học liên quan', { exact: true }).fill(code);
   const choice = page.getByLabel('Môn học liên quan', { exact: true });
   await expect(
@@ -66,7 +98,7 @@ async function latest(page: Page, code: string) {
   return (await (await page.request.get(`/api/v1/material-drafts?search=${code}`)).json()).items[0];
 }
 
-test('lecturer picks PDF or DOCX on the new form; title, metadata and file survive upload response loss', async ({
+test('student picks PDF or DOCX on the new form; title, metadata and file survive upload response loss', async ({
   page,
 }) => {
   test.setTimeout(90000);
@@ -215,7 +247,7 @@ test('an uncertain metadata create blocks duplicate creation and keeps selected 
   expect((await latest(page, code)).pdf).toBeNull();
 });
 
-test('real DOCX conversion supports lecturer publication and student private notes, highlights and original Word download', async ({
+test('real DOCX conversion goes through admin review and supports private notes, highlights and original Word download', async ({
   page,
   browser,
 }) => {
@@ -231,7 +263,9 @@ test('real DOCX conversion supports lecturer publication and student private not
     buffer: word(),
   });
   await page.getByLabel('Tiêu đề học liệu', { exact: true }).fill(`DOCX thật ${code}`);
-  await page.getByLabel('Cho phép người đọc tải file gốc và bản PDF', { exact: true }).check();
+  await page
+    .getByLabel('Đề nghị cho phép tải file gốc và bản PDF sau khi được duyệt', { exact: true })
+    .check();
   await page.getByRole('button', { name: 'Lưu và tải file lên', exact: true }).click();
   await expect(
     page.getByText('Đã lưu thông tin và file riêng tư.', { exact: false }),
@@ -265,9 +299,12 @@ test('real DOCX conversion supports lecturer publication and student private not
       'content-type'
     ],
   ).toContain('application/pdf');
-  await page.getByRole('button', { name: 'Công bố', exact: true }).click();
-  await page.getByRole('button', { name: 'Xác nhận công bố', exact: true }).click();
-  await expect(page.locator('.publication-actions')).toContainText('Đã công bố');
+  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
+  await expect(page.locator('.publication-actions')).toContainText('Chờ duyệt');
+  await approveAsAdmin(browser, code);
+  await page.getByRole('button', { name: 'Tải trạng thái duyệt', exact: true }).click();
+  await expect(page.locator('.publication-actions')).toContainText('Đã duyệt');
   const context = await browser.newContext();
   try {
     const student = await context.newPage();

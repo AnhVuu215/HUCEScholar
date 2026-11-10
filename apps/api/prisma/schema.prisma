@@ -153,7 +153,6 @@ model courses {
   revision             Int                    @default(1)
   book_courses         book_courses[]
   faculties            faculties              @relation(fields: [faculty_id], references: [id], onUpdate: NoAction)
-  lecturer_assignments lecturer_assignments[]
   program_courses      program_courses[]
   version_courses      version_courses[]
   reading_lists reading_lists[]
@@ -219,7 +218,6 @@ model document_versions {
 /// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
 model documents {
   id                                                                   BigInt                @id @default(autoincrement())
-  kind                                                                 String                @db.VarChar(20)
   created_by                                                           BigInt
   manager_id                                                           BigInt
   visibility                                                           String                @default("VISIBLE") @db.VarChar(8)
@@ -238,7 +236,7 @@ model documents {
   saved_documents                                                      saved_documents[]
   visibility_events                                                    visibility_events[]
 
-  @@index([manager_id, kind], map: "ix_document_manager")
+  @@index([manager_id], map: "ix_document_manager")
   @@schema("hucescholar")
 }
 
@@ -280,27 +278,6 @@ model files {
   users             users               @relation(fields: [uploaded_by], references: [id], onUpdate: NoAction)
 
   @@index([sha256], map: "ix_file_hash")
-  @@schema("hucescholar")
-}
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model lecturer_assignments {
-  id                                            BigInt    @id @default(autoincrement())
-  lecturer_id                                   BigInt
-  course_id                                     BigInt
-  assigned_by                                   BigInt
-  assigned_at                                   DateTime  @default(now()) @db.Timestamptz(6)
-  revoked_at                                    DateTime? @db.Timestamptz(6)
-  revoked_by                                    BigInt?
-  reason                                        String?
-  users_lecturer_assignments_assigned_byTousers users     @relation("lecturer_assignments_assigned_byTousers", fields: [assigned_by], references: [id], onUpdate: NoAction)
-  courses                                       courses   @relation(fields: [course_id], references: [id], onUpdate: NoAction)
-  users_lecturer_assignments_lecturer_idTousers users     @relation("lecturer_assignments_lecturer_idTousers", fields: [lecturer_id], references: [id], onUpdate: NoAction)
-  users_lecturer_assignments_revoked_byTousers  users?    @relation("lecturer_assignments_revoked_byTousers", fields: [revoked_by], references: [id], onDelete: Restrict, onUpdate: NoAction)
-
-  @@unique([lecturer_id, course_id], map: "ux_active_assignment", where: raw("(revoked_at IS NULL)"))
-  @@index([course_id], map: "ix_assignment_course", where: raw("(revoked_at IS NULL)"))
   @@schema("hucescholar")
 }
 
@@ -487,9 +464,6 @@ model users {
   documents_documents_created_byTousers                         documents[]             @relation("documents_created_byTousers")
   documents_documents_manager_idTousers                         documents[]             @relation("documents_manager_idTousers")
   files                                                         files[]
-  lecturer_assignments_lecturer_assignments_assigned_byTousers  lecturer_assignments[]  @relation("lecturer_assignments_assigned_byTousers")
-  lecturer_assignments_lecturer_assignments_lecturer_idTousers  lecturer_assignments[]  @relation("lecturer_assignments_lecturer_idTousers")
-  lecturer_assignments_lecturer_assignments_revoked_byTousers   lecturer_assignments[]  @relation("lecturer_assignments_revoked_byTousers")
   ownership_transfers_ownership_transfers_from_user_idTousers   ownership_transfers[]   @relation("ownership_transfers_from_user_idTousers")
   ownership_transfers_ownership_transfers_performed_byTousers   ownership_transfers[]   @relation("ownership_transfers_performed_byTousers")
   ownership_transfers_ownership_transfers_to_user_idTousers     ownership_transfers[]   @relation("ownership_transfers_to_user_idTousers")
@@ -577,7 +551,8 @@ model reading_lists {
   courses courses @relation(fields: [course_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   users users @relation(fields: [owner_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   reading_list_items reading_list_items[]
-  @@unique([course_id, owner_id], map: "ux_reading_list_owner")
+  @@unique([course_id], map: "ux_reading_list_course")
+  @@index([owner_id], map: "ix_reading_list_owner")
   @@schema("hucescholar")
 }
 

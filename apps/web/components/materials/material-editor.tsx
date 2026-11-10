@@ -11,7 +11,6 @@ import {
   type MaterialDraft,
 } from '../../lib/materials';
 import { CatalogPicker, type CatalogChoice } from '../academic/catalog-picker';
-import { DraftPdf } from './draft-pdf';
 import { PublicationActions } from './publication-actions';
 import { VersionHistory } from './version-history';
 import { ApiError } from '../../lib/auth';
@@ -24,13 +23,11 @@ export function MaterialEditor({
   close,
   saved,
   updated,
-  role,
 }: {
   id?: string;
   close: () => void;
   saved: () => void;
   updated: (item: MaterialDraft) => void;
-  role: 'LECTURER' | 'STUDENT';
 }) {
   const [initial, setInitial] = useState<MaterialDraft | null>(null);
   const [loading, setLoading] = useState(!!id);
@@ -81,7 +78,7 @@ export function MaterialEditor({
         </button>
       </section>
     );
-  return <DraftForm initial={initial} close={close} saved={saved} updated={updated} role={role} />;
+  return <DraftForm initial={initial} close={close} saved={saved} updated={updated} />;
 }
 function fieldsFor(initial: MaterialDraft | null): DraftFields {
   return {
@@ -100,26 +97,21 @@ function DraftForm({
   close,
   saved,
   updated,
-  role,
 }: {
   initial: MaterialDraft | null;
   close: () => void;
   saved: () => void;
   updated: (item: MaterialDraft) => void;
-  role: 'LECTURER' | 'STUDENT';
 }) {
-  const lecturer = role === 'LECTURER';
   const [current, setCurrent] = useState(initial);
   const [latest, setLatest] = useState<MaterialDraft | null>(null);
   const [reconciled, setReconciled] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState(false);
-  const [studentPdfSelected, setPdfSelected] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploadId, setUploadId] = useState('');
   const [fileUncertain, setFileUncertain] = useState(false);
   const [createUncertain, setCreateUncertain] = useState(false);
   const [notice, setNotice] = useState('');
-  const pdfSelected = lecturer ? !!file : studentPdfSelected;
+  const pdfSelected = !!file;
   const [publicationBusy, setPublicationBusy] = useState(false);
   const [publicationDirty, setPublicationDirty] = useState(false);
   const [publicationUncertain, setPublicationUncertain] = useState(false);
@@ -142,7 +134,7 @@ function DraftForm({
   const heading = useRef<HTMLHeadingElement>(null);
   const errorMessage = useRef<HTMLParagraphElement>(null);
   const metadataDirty = JSON.stringify(fields) !== JSON.stringify(fieldsFor(current));
-  const dirty = metadataDirty || pdfSelected || pdfBusy || publicationDirty || publicationBusy;
+  const dirty = metadataDirty || pdfSelected || publicationDirty || publicationBusy;
   const editable = !current || current.editable;
   useEffect(() => {
     heading.current?.focus();
@@ -182,7 +174,7 @@ function DraftForm({
         return;
       event.preventDefault();
       event.stopPropagation();
-      if (pdfBusy || publicationBusy || pending) return;
+      if (publicationBusy || pending) return;
       setDestination(logout ? null : link!.href);
       setLogoutButton(logout);
       setConfirm(true);
@@ -194,7 +186,7 @@ function DraftForm({
       window.removeEventListener('beforeunload', leave);
       document.removeEventListener('click', navigate, true);
     };
-  }, [dirty, pdfBusy, publicationBusy, pending]);
+  }, [dirty, publicationBusy, pending]);
   function acceptCurrent(item: MaterialDraft) {
     setLatest(null);
     setReconciled(false);
@@ -272,7 +264,6 @@ function DraftForm({
     event.preventDefault();
     if (
       pending ||
-      pdfBusy ||
       publicationBusy ||
       publicationUncertain ||
       fileUncertain ||
@@ -294,7 +285,7 @@ function DraftForm({
         current && !metadataDirty && !latest
           ? current
           : await saveDraft(fields, latest ?? current ?? undefined);
-      if (!lecturer || !file) {
+      if (!file) {
         saved();
         return;
       }
@@ -304,15 +295,14 @@ function DraftForm({
       acceptCurrent(attached);
       setFile(null);
       setNotice(
-        'Đã lưu thông tin và file riêng tư. Chờ kiểm tra rồi xem trước bản PDF trước khi công bố.',
+        'Đã lưu thông tin và file riêng tư. Chờ kiểm tra, xem trước bản PDF rồi gửi quản trị viên duyệt.',
       );
     } catch (failure) {
-      if (lecturer && (!(failure instanceof ApiError) || failure.status >= 500)) {
+      if (!(failure instanceof ApiError) || failure.status >= 500) {
         if (stage === 'metadata' && !current) setCreateUncertain(true);
         else setFileUncertain(true);
       }
-      if (lecturer && failure instanceof ApiError && failure.code === 'STALE_REVISION')
-        setFileUncertain(true);
+      if (failure instanceof ApiError && failure.code === 'STALE_REVISION') setFileUncertain(true);
       fail(materialError(failure));
     } finally {
       setPending(false);
@@ -325,22 +315,19 @@ function DraftForm({
       </h2>
       <p className="field-hint">
         {current ? `Phiên bản ${current.versionNo} · Lần lưu ${current.revision}. ` : ''}
-        {lecturer
-          ? 'Chọn file, nhập tiêu đề và môn học rồi lưu. Học liệu chỉ xuất hiện cho người đọc sau khi bạn công bố.'
-          : 'Lưu thông tin trước khi thêm PDF. Học liệu chưa được công bố khi đang nháp hoặc chờ duyệt.'}
+        Chọn file PDF hoặc Word, nhập thông tin và môn học rồi lưu. Học liệu chỉ xuất hiện cho người
+        đọc sau khi quản trị viên duyệt.
       </p>
       {!editable && (
         <p
           role={current?.reviewStatus === 'SUBMITTED' ? 'status' : 'alert'}
           className={current?.reviewStatus === 'SUBMITTED' ? 'field-hint' : 'form-error'}
         >
-          {current?.editBlock === 'ASSIGNMENT_REQUIRED'
-            ? 'Bạn không còn phân công hợp lệ ở tất cả môn liên quan. Metadata được giữ lại; cần quản trị viên kiểm tra phân công trước khi sửa.'
-            : current?.reviewStatus === 'CHANGES_REQUIRED'
-              ? 'Admin đã yêu cầu sửa. Xem lý do ở lịch sử và chọn Mở lại để chỉnh sửa.'
-              : current?.reviewStatus === 'SUBMITTED'
-                ? 'Phiên bản đang chờ duyệt. Rút yêu cầu về nháp trước khi sửa thông tin hoặc thay PDF.'
-                : 'Phiên bản không còn ở trạng thái nháp, không thể sửa tại đây.'}
+          {current?.reviewStatus === 'CHANGES_REQUIRED'
+            ? 'Admin đã yêu cầu sửa. Xem lý do ở lịch sử và chọn Mở lại để chỉnh sửa.'
+            : current?.reviewStatus === 'SUBMITTED'
+              ? 'Phiên bản đang chờ duyệt. Rút yêu cầu về nháp trước khi sửa thông tin hoặc thay file.'
+              : 'Phiên bản không còn ở trạng thái nháp, không thể sửa tại đây.'}
         </p>
       )}
       {error && (
@@ -379,7 +366,6 @@ function DraftForm({
         <fieldset
           disabled={
             pending ||
-            pdfBusy ||
             publicationBusy ||
             publicationUncertain ||
             createUncertain ||
@@ -389,18 +375,16 @@ function DraftForm({
           className="draft-fields"
         >
           <legend className="sr-only">Metadata học liệu</legend>
-          {lecturer && (
-            <MaterialFilePicker
-              file={file}
-              disabled={pending}
-              changed={(selected) => {
-                setFile(selected);
-                setUploadId(selected ? crypto.randomUUID() : '');
-                if (selected && !fields.title.trim())
-                  update('title', selected.name.replace(/\.(pdf|docx)$/i, '').slice(0, 300));
-              }}
-            />
-          )}
+          <MaterialFilePicker
+            file={file}
+            disabled={pending}
+            changed={(selected) => {
+              setFile(selected);
+              setUploadId(selected ? crypto.randomUUID() : '');
+              if (selected && !fields.title.trim())
+                update('title', selected.name.replace(/\.(pdf|docx)$/i, '').slice(0, 300));
+            }}
+          />
           <div className="user-fields">
             <div className="form-field draft-wide">
               <label htmlFor="draft-title">Tiêu đề học liệu</label>
@@ -454,40 +438,34 @@ function DraftForm({
               <label htmlFor="draft-source">Nguồn tài liệu</label>
               <textarea
                 id="draft-source"
-                required={!lecturer}
+                required
                 maxLength={1000}
                 aria-describedby="source-hint"
                 value={fields.sourceReference}
                 onChange={(e) => update('sourceReference', e.target.value)}
               />
               <p id="source-hint" className="field-hint">
-                {lecturer
-                  ? 'Không bắt buộc. Bạn có thể ghi tác giả, nơi xuất bản hoặc đường dẫn để người đọc tham khảo; không giới hạn tài liệu HUCE.'
-                  : 'Ghi nguồn xuất bản, đường dẫn nguồn hoặc tài liệu do bạn biên soạn.'}
+                Ghi nguồn xuất bản, đường dẫn nguồn hoặc tài liệu do bạn biên soạn.
               </p>
             </div>
-            {!lecturer && (
-              <div className="form-field">
-                <label htmlFor="draft-rights">Căn cứ quyền sử dụng</label>
-                <textarea
-                  id="draft-rights"
-                  required
-                  maxLength={1000}
-                  aria-describedby="rights-hint"
-                  value={fields.rightsBasis}
-                  onChange={(e) => update('rightsBasis', e.target.value)}
-                />
-                <p id="rights-hint" className="field-hint">
-                  Ghi giấy phép, sự cho phép của tác giả hoặc căn cứ bạn có quyền chia sẻ.
-                </p>
-              </div>
-            )}
+            <div className="form-field">
+              <label htmlFor="draft-rights">Căn cứ quyền sử dụng</label>
+              <textarea
+                id="draft-rights"
+                required
+                maxLength={1000}
+                aria-describedby="rights-hint"
+                value={fields.rightsBasis}
+                onChange={(e) => update('rightsBasis', e.target.value)}
+              />
+              <p id="rights-hint" className="field-hint">
+                Ghi giấy phép, sự cho phép của tác giả hoặc căn cứ bạn có quyền chia sẻ.
+              </p>
+            </div>
           </div>
           <div className="draft-courses">
             <h3>Môn liên quan</h3>
-            <p className="field-hint">
-              Thêm từ 1 đến 20 môn. Giảng viên chỉ chọn môn được phân công hiện hành.
-            </p>
+            <p className="field-hint">Thêm từ 1 đến 20 môn đang hoạt động.</p>
             <ul className="catalog-linked-list" aria-label="Các môn đã chọn">
               {courses.map((c) => (
                 <li key={c.id}>
@@ -539,16 +517,10 @@ function DraftForm({
               checked={fields.downloadAllowed}
               onChange={(e) => update('downloadAllowed', e.target.checked)}
             />
-            <span>
-              {lecturer
-                ? 'Cho phép người đọc tải file gốc và bản PDF'
-                : 'Đề nghị cho phép tải sau khi được duyệt'}
-            </span>
+            <span>Đề nghị cho phép tải file gốc và bản PDF sau khi được duyệt</span>
           </label>
           <p className="field-hint">
-            {lecturer
-              ? 'Lựa chọn tải có hiệu lực sau khi bạn công bố tài liệu đã qua kiểm tra kỹ thuật.'
-              : 'Lựa chọn này chưa cấp quyền tải. Học liệu còn phải được quản trị viên duyệt và công bố.'}
+            Lựa chọn này chưa cấp quyền tải. Học liệu còn phải được quản trị viên duyệt và công bố.
           </p>
         </fieldset>
         {latest && (
@@ -557,7 +529,7 @@ function DraftForm({
             reconciled={reconciled}
             confirm={setReconciled}
             useServer={() => acceptCurrent(latest)}
-            disabled={pending || pdfBusy || publicationBusy}
+            disabled={pending || publicationBusy}
           />
         )}
         {confirm && (
@@ -619,8 +591,6 @@ function DraftForm({
               className="primary-button"
               disabled={
                 pending ||
-                pdfBusy ||
-                (!lecturer && pdfSelected) ||
                 publicationBusy ||
                 publicationUncertain ||
                 fileUncertain ||
@@ -628,13 +598,13 @@ function DraftForm({
                 (!!latest && !reconciled)
               }
             >
-              {pending ? 'Đang lưu…' : lecturer && file ? 'Lưu và tải file lên' : 'Lưu bản nháp'}
+              {pending ? 'Đang lưu…' : file ? 'Lưu và tải file lên' : 'Lưu bản nháp'}
             </button>
           )}
           <button
             type="button"
             className="secondary-button"
-            disabled={pending || pdfBusy || publicationBusy}
+            disabled={pending || publicationBusy}
             onClick={() => {
               setDestination(null);
               setLogoutButton(null);
@@ -648,18 +618,7 @@ function DraftForm({
           </button>
         </div>
       </form>
-      {current && !lecturer && (
-        <DraftPdf
-          current={current}
-          metadataDirty={metadataDirty || pending}
-          interactionBlocked={publicationBusy || publicationUncertain}
-          changed={acceptCurrent}
-          watched={updateFileState}
-          busy={setPdfBusy}
-          selectionChanged={setPdfSelected}
-        />
-      )}
-      {current && lecturer && (
+      {current && (
         <MaterialFileStatus
           current={current}
           changed={updateFileState}
@@ -670,13 +629,7 @@ function DraftForm({
         <PublicationActions
           current={current}
           blocked={
-            metadataDirty ||
-            pending ||
-            pdfBusy ||
-            pdfSelected ||
-            fileUncertain ||
-            createUncertain ||
-            !!latest
+            metadataDirty || pending || pdfSelected || fileUncertain || createUncertain || !!latest
           }
           changed={acceptCurrent}
           busy={setPublicationBusy}

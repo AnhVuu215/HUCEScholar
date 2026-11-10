@@ -5,7 +5,6 @@ if (!password) throw new Error('Run pnpm test:setup before browser tests.');
 
 for (const [role, label] of [
   ['ADMIN', 'Quản trị viên'],
-  ['LECTURER', 'Giảng viên'],
   ['STUDENT', 'Sinh viên'],
 ] as const) {
   test(`${role}: login, restore session and logout`, async ({ page }) => {

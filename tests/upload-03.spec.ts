@@ -85,7 +85,7 @@ test('a failed PDF says why, so the uploader knows what to fix', async ({ page }
       .getByText('PDF không đạt kiểm tra: PDF có mật khẩu'),
   ).toBeVisible();
   await page.getByRole('button', { name: `Mở bản nháp ${title}`, exact: true }).click();
-  const pdf = page.getByRole('region', { name: 'PDF của bản nháp' });
+  const pdf = page.getByRole('region', { name: 'Trạng thái file tài liệu' });
   await expect(pdf.getByText('PDF đang đặt mật khẩu để mở', { exact: false })).toBeVisible();
   await expect(pdf.getByText('Đang kiểm tra', { exact: false })).toHaveCount(0);
   // The admin lifecycle screen names the same reason.
@@ -108,10 +108,10 @@ test('a PDF the scanner never answered for is checked again without a new upload
   await failWith(id, 'CHECK_UNAVAILABLE');
   await page.goto('/workspace/student/materials');
   await page.getByRole('button', { name: `Mở bản nháp ${title}`, exact: true }).click();
-  const pdf = page.getByRole('region', { name: 'PDF của bản nháp' });
+  const pdf = page.getByRole('region', { name: 'Trạng thái file tài liệu' });
   await expect(pdf.getByText('không cần tải lên lại', { exact: false })).toBeVisible();
   await pdf.getByRole('button', { name: 'Kiểm tra lại', exact: true }).click();
-  await expect(pdf.getByText('PDF đang kiểm tra', { exact: true })).toBeVisible();
+  await expect(pdf.getByText('PDF đang kiểm tra an toàn', { exact: true })).toBeVisible();
   await expect(
     pdf.getByText('Đang kiểm tra lại đúng file đã tải lên', { exact: false }),
   ).toBeVisible();

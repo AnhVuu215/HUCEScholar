@@ -11,7 +11,6 @@ const item: LibraryItem = {
   authors: 'Tác giả kiểm thử',
   description: '',
   materialType: 'EXAM',
-  kind: 'LECTURER_MATERIAL',
   publicationMethod: 'ADMIN_REVIEW',
   current: true,
   sourceReference: '',
@@ -48,17 +47,15 @@ test.beforeEach(async ({ page }) => {
 test('public filters restore through history, pagination resets on submit and clear', async ({
   page,
 }) => {
-  await page.goto(
-    '/workspace/library?search=cũ&courseId=1&kind=LECTURER_MATERIAL&materialType=EXAM&page=2',
-  );
+  await page.goto('/workspace/library?search=cũ&courseId=1&materialType=EXAM&page=2');
   await expect(page.getByRole('status').filter({ hasText: '25 học liệu · Trang 2' })).toBeVisible();
-  const filters = page.getByRole('button', { name: 'Bộ lọc (2)' });
+  const filters = page.getByRole('button', { name: 'Bộ lọc (1)' });
   await expect(filters).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByRole('combobox', { name: 'Nguồn học liệu' })).toBeHidden();
+  await expect(page.getByRole('combobox', { name: 'Loại học liệu' })).toBeHidden();
   await filters.click();
-  await expect(page.getByRole('combobox', { name: 'Nguồn học liệu' })).toContainText(
-    'Học liệu giảng viên',
-  );
+  await expect(page.getByRole('combobox', { name: 'Loại học liệu' })).toContainText('Đề thi');
+  // ROLE-01: every material comes from a student and admin review; there is no source filter.
+  await expect(page.getByRole('combobox', { name: 'Nguồn học liệu' })).toHaveCount(0);
   await page.getByLabel('Tìm học liệu', { exact: true }).fill('mới');
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await expect(page).toHaveURL(/search=m%E1%BB%9Bi.*materialType=EXAM$/);
@@ -150,7 +147,7 @@ test('long titles and expanded controls reflow at supported viewport sizes', asy
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole('combobox', { name: 'Nguồn học liệu' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Loại học liệu' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

@@ -125,7 +125,9 @@ async function readBack(session, state) {
 async function flow() {
   const password = randomBytes(18).toString('hex');
   const suffix = randomBytes(3).toString('hex');
-  const lecturerEmail = `lecturer-${suffix}@example.test`;
+  // ROLE-01: a student uploads and an admin approves; there is no lecturer role.
+  const adminEmail = `admin-${suffix}@example.test`;
+  const authorEmail = `author-${suffix}@example.test`;
   const studentEmail = `student-${suffix}@example.test`;
   const courseId = await database(async (db) => {
     const hash = await argon2.hash(password, { type: argon2.argon2id });
@@ -137,8 +139,8 @@ async function flow() {
           [email, `${role} diễn tập`, hash, role],
         )
       ).rows[0].id;
-    const admin = await user(`admin-${suffix}@example.test`, 'ADMIN');
-    const lecturer = await user(lecturerEmail, 'LECTURER');
+    await user(adminEmail, 'ADMIN');
+    await user(authorEmail, 'STUDENT');
     await user(studentEmail, 'STUDENT');
     const code = `OPS${suffix}`.toUpperCase();
     const faculty = (
@@ -152,10 +154,6 @@ async function flow() {
         [code, faculty],
       )
     ).rows[0].id;
-    await db.query(
-      'INSERT INTO hucescholar.lecturer_assignments(lecturer_id,course_id,assigned_by) VALUES($1,$2,$3)',
-      [lecturer, course, admin],
-    );
     return String(course);
   });
 
@@ -167,8 +165,8 @@ async function flow() {
     /__Host-hs_csrf=/.test(cookie) && /Secure/i.test(cookie) && /HttpOnly/i.test(cookie),
   );
 
-  const lecturer = new Session();
-  const login = await lecturer.login(lecturerEmail, password);
+  const author = new Session();
+  const login = await author.login(authorEmail, password);
   const session = login.headers
     .getSetCookie()
     .find((value) => value.startsWith('__Host-hs_session'));
@@ -180,7 +178,7 @@ async function flow() {
       /SameSite=Lax/i.test(session),
   );
 
-  const draft = await lecturer.write('/api/v1/material-drafts', {
+  const draft = await author.write('/api/v1/material-drafts', {
     title: `Diễn tập OPS-02 ${suffix}`,
     authors: 'Tác giả minh họa',
     description: 'Tài liệu tự tạo cho diễn tập phục hồi.',
@@ -193,7 +191,7 @@ async function flow() {
   if (draft.status !== 201) throw new Error(`Draft: ${draft.status} ${await draft.text()}`);
   const draftId = (await draft.json()).item.id;
   const file = pdf();
-  const upload = await lecturer.write(`/api/v1/material-drafts/${draftId}/pdf`, file, {
+  const upload = await author.write(`/api/v1/material-drafts/${draftId}/pdf`, file, {
     'Content-Type': 'application/pdf',
     'X-File-Name': 'dien-tap.pdf',
     'If-Match': '"1"',
@@ -212,13 +210,27 @@ async function flow() {
   }
   check('Worker scanned the S3 object with ClamAV and Poppler', scan === 'SAFE', scan);
 
-  const current = (
-    await (await lecturer.request(`/api/v1/material-drafts?search=${suffix}`)).json()
-  ).items[0];
-  const published = await lecturer.write(`/api/v1/material-drafts/${draftId}/publish`, {
+  const current = (await (await author.request(`/api/v1/material-drafts?search=${suffix}`)).json())
+    .items[0];
+  const submitted = await author.write(`/api/v1/material-drafts/${draftId}/submit`, {
     revision: current.revision ?? uploaded.item?.revision,
   });
-  check('Lecturer published', published.ok, `HTTP ${published.status}`);
+  check('Student submitted for review', submitted.ok, `HTTP ${submitted.status}`);
+  const admin = new Session();
+  await admin.login(adminEmail, password);
+  const pending = (
+    await (await admin.request(`/api/v1/admin/publication-requests?search=${suffix}`)).json()
+  ).items?.[0];
+  const approved = pending
+    ? await admin.write(`/api/v1/admin/publication-requests/${pending.id}/decision`, {
+        revision: pending.revision,
+        submittedRevision: pending.submittedRevision,
+        outcome: 'APPROVED',
+        reason: 'Diễn tập OPS-02 — tài liệu minh họa',
+        rightsConfirmed: true,
+      })
+    : null;
+  check('Admin approved', !!approved?.ok, `HTTP ${approved?.status ?? 'no request'}`);
   const versionId = String(current.versionId);
 
   const student = new Session();
@@ -230,7 +242,7 @@ async function flow() {
     requestId: randomUUID(),
   });
   check('Student saved a private note', created.status === 201, `HTTP ${created.status}`);
-  const state = { versionId, sha256: sha256(file), note, studentEmail, lecturerEmail, password };
+  const state = { versionId, sha256: sha256(file), note, studentEmail, authorEmail, password };
   await readBack(student, state);
 
   const stranger = await anonymous.request(`/api/v1/library/versions/${versionId}/pdf`);

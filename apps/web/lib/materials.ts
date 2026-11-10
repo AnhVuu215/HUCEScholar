@@ -42,6 +42,7 @@ export function fileFailedLabel(code: string | null | undefined) {
 export function fileErrorMessage(code: string | null | undefined) {
   return (code && fileErrors[code]) ?? 'Chọn file khác hoặc liên hệ quản trị viên.';
 }
+/** LECTURER_SELF only appears on versions a lecturer published before ROLE-01. */
 export function publicationLabel(item: { reviewStatus: string; publicationMethod: string }) {
   return item.reviewStatus === 'APPROVED' && item.publicationMethod === 'LECTURER_SELF'
     ? 'Đã công bố'
@@ -80,7 +81,6 @@ export interface MaterialDraft {
     conversionState: 'QUEUED' | 'RUNNING' | 'READY' | 'FAILED' | 'CANCELLED';
     errorCode: string | null;
   } | null;
-  kind: 'LECTURER_MATERIAL' | 'STUDENT_SUPPLEMENT';
   title: string;
   authors: string;
   description: string;
@@ -130,7 +130,6 @@ function isDraft(value: unknown): value is MaterialDraft {
     isId(d.versionId) &&
     Number.isInteger(d.versionNo) &&
     Number(d.versionNo) > 0 &&
-    ['LECTURER_MATERIAL', 'STUDENT_SUPPLEMENT'].includes(String(d.kind)) &&
     ['ADMIN_REVIEW', 'LECTURER_SELF'].includes(String(d.publicationMethod)) &&
     ['title', 'authors', 'description', 'sourceReference', 'rightsBasis', 'updatedAt'].every(
       (k) => typeof d[k] === 'string',
@@ -272,7 +271,7 @@ export async function publicationHistory(
 }
 export async function changePublication(
   current: MaterialDraft,
-  action: 'submit' | 'withdraw' | 'reopen' | 'publish',
+  action: 'submit' | 'withdraw' | 'reopen',
   reason?: string,
 ) {
   return readItem(
@@ -280,24 +279,6 @@ export async function changePublication(
       `/material-drafts/${current.id}/${action}`,
       { revision: current.revision, ...(action === 'withdraw' ? { reason } : {}) },
       'POST',
-    ),
-  );
-}
-export async function uploadDraftPdf(current: MaterialDraft, file: File) {
-  return readItem(
-    await apiRequest(
-      `/material-drafts/${current.id}/pdf`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/pdf',
-          'X-CSRF-Token': await csrfToken(),
-          'X-File-Name': encodeURIComponent(file.name),
-          'If-Match': `"${current.revision}"`,
-        },
-        body: file,
-      },
-      120_000,
     ),
   );
 }
@@ -352,8 +333,6 @@ export async function retryDraftSource(current: MaterialDraft) {
 }
 export function materialError(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.code === 'ASSIGNMENT_REQUIRED')
-      return 'Phân công đã thay đổi. Bạn cần phân công hiện hành cho tất cả môn cũ và môn mới để sửa bản nháp. Nội dung đang nhập được giữ lại.';
     if (error.code === 'COURSE_UNAVAILABLE')
       return 'Có môn hoặc khoa đã ngừng sử dụng. Kiểm tra lại các môn đã chọn. Nội dung đang nhập được giữ lại.';
     if (error.code === 'PDF_NOT_RECHECKABLE')

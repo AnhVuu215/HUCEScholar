@@ -65,7 +65,6 @@ function CatalogSession({
 }) {
   const [search, setSearch] = useState(query.search),
     [courseId, setCourseId] = useState(query.courseId),
-    [kind, setKind] = useState(query.kind),
     [materialType, setType] = useState(query.materialType);
   const [data, setData] = useState<LibraryList | null>(null),
     [error, setError] = useState(''),
@@ -127,7 +126,7 @@ function CatalogSession({
   }, [attempt]);
   function submit(e: FormEvent) {
     e.preventDefault();
-    navigate(parseLibraryQuery(new URLSearchParams({ search, courseId, kind, materialType })));
+    navigate(parseLibraryQuery(new URLSearchParams({ search, courseId, materialType })));
   }
   function navigate(next: LibraryQuery) {
     const value = libraryQueryString(next);
@@ -135,7 +134,6 @@ function CatalogSession({
     if (value === current) {
       setSearch(next.search);
       setCourseId(next.courseId);
-      setKind(next.kind);
       setType(next.materialType);
       retry();
       return;
@@ -153,8 +151,8 @@ function CatalogSession({
     setError('');
     setAttempt((n) => n + 1);
   }
-  const count = Number(Boolean(kind)) + Number(Boolean(materialType));
-  const hasFilters = Boolean(search || courseId || kind || materialType || query.page > 1);
+  const count = Number(Boolean(materialType));
+  const hasFilters = Boolean(search || courseId || materialType || query.page > 1);
   return (
     <section className="content-section" aria-labelledby="library-results">
       <form className="library-filters" onSubmit={submit}>
@@ -208,19 +206,6 @@ function CatalogSession({
         <div id="library-extra-filters" className="library-extra-filters" hidden={!expanded}>
           <div className="form-field">
             <SelectField
-              id="library-kind"
-              label="Nguồn học liệu"
-              value={kind}
-              onChange={setKind}
-              options={[
-                { value: '', label: 'Tất cả nguồn' },
-                { value: 'LECTURER_MATERIAL', label: 'Học liệu giảng viên' },
-                { value: 'STUDENT_SUPPLEMENT', label: 'Tài liệu sinh viên bổ sung' },
-              ]}
-            />
-          </div>
-          <div className="form-field">
-            <SelectField
               id="library-type"
               label="Loại học liệu"
               value={materialType}
@@ -258,8 +243,7 @@ function CatalogSession({
       )}
       <h2 id="library-results">Học liệu đã công bố</h2>
       <p className="field-hint">
-        Chỉ hiển thị bản hiện hành đủ quyền đọc. Học liệu giảng viên và tài liệu sinh viên bổ sung
-        được ghi nhãn riêng.
+        Chỉ hiển thị bản hiện hành đủ quyền đọc, đã được quản trị viên duyệt.
       </p>
       {error ? (
         <div role="alert">
@@ -286,10 +270,7 @@ function CatalogSession({
                 <li key={item.versionId}>
                   <div>
                     <p className="field-hint">
-                      {item.kind === 'LECTURER_MATERIAL'
-                        ? 'Học liệu giảng viên'
-                        : 'Tài liệu sinh viên bổ sung'}{' '}
-                      · {materialTypes[item.materialType]} · Phiên bản {item.versionNo}
+                      {materialTypes[item.materialType]} · Phiên bản {item.versionNo}
                     </p>
                     <h3>{item.title}</h3>
                     <p>{item.authors || 'Chưa ghi tác giả'}</p>

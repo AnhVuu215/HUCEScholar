@@ -127,8 +127,8 @@ export function ReadingListBrowser({ initialCourse }: { initialCourse?: string }
     <section className="users-directory reading-lists" aria-labelledby="reading-lists-title">
       <h2 id="reading-lists-title">Danh sách đọc theo môn</h2>
       <p className="field-hint">
-        Giảng viên phụ trách môn sắp tài liệu theo tuần hoặc chủ đề. Mỗi mục mở đúng phiên bản giảng
-        viên đã chọn.
+        Quản trị viên sắp tài liệu của từng môn theo tuần hoặc chủ đề. Mỗi mục mở đúng phiên bản đã
+        được chọn.
       </p>
       {courseError ? (
         <div className="users-list-message">
@@ -197,8 +197,8 @@ export function ReadingListBrowser({ initialCourse }: { initialCourse?: string }
             </p>
           )}
           <p className="field-hint">
-            Đánh dấu &quot;Đã đọc&quot; ở từng tài liệu để theo dõi tiến độ; giảng viên không thấy
-            dấu này.
+            Đánh dấu &quot;Đã đọc&quot; ở từng tài liệu để theo dõi tiến độ; quản trị viên không
+            thấy dấu này.
           </p>
           {readNotice && <p role="status">{readNotice}</p>}
           {readError && (

@@ -29,8 +29,7 @@ export function PublicationActions({
   reasonChanged: (value: boolean) => void;
   recoveryRequired: (value: boolean) => void;
 }) {
-  const lecturer = current.kind === 'LECTURER_MATERIAL';
-  const refreshLabel = lecturer ? 'Tải trạng thái công bố' : 'Tải trạng thái duyệt';
+  const refreshLabel = 'Tải trạng thái duyệt';
   const returnFocus = useReturnFocus();
   const [reason, setReason] = useState('');
   const [confirm, setConfirm] = useState(false);
@@ -63,7 +62,7 @@ export function PublicationActions({
     current.fileState === 'SAFE' &&
     (!current.source || current.source.conversionState === 'READY') &&
     current.courses.every((c) => c.active);
-  async function run(action: 'submit' | 'withdraw' | 'reopen' | 'refresh' | 'next' | 'publish') {
+  async function run(action: 'submit' | 'withdraw' | 'reopen' | 'refresh' | 'next') {
     if (locked || (action !== 'refresh' && uncertain)) return;
     setPending(true);
     busy(true);
@@ -91,19 +90,15 @@ export function PublicationActions({
       setPage(1);
       setAttempt((v) => v + 1);
       setNotice(
-        action === 'publish'
-          ? 'Đã công bố tài liệu. Người học có thể đọc khi tài liệu đang hiển thị và file an toàn.'
-          : action === 'submit'
-            ? 'Đã gửi yêu cầu duyệt. Học liệu chưa được công bố.'
-            : action === 'withdraw'
-              ? 'Đã rút về bản nháp. Bạn có thể chỉnh sửa khi còn quyền biên soạn.'
-              : action === 'next'
-                ? lecturer
-                  ? 'Đã tạo phiên bản kế tiếp. Đính kèm PDF rồi công bố khi file quét đạt.'
-                  : 'Đã tạo phiên bản kế tiếp. Nhập nguồn/quyền mới và đính kèm PDF trước khi gửi.'
-                : action === 'reopen'
-                  ? 'Đã mở lại bản nháp để chỉnh sửa.'
-                  : 'Đã tải trạng thái hiện hành. Kiểm tra trước khi tiếp tục.',
+        action === 'submit'
+          ? 'Đã gửi yêu cầu duyệt. Học liệu chưa được công bố.'
+          : action === 'withdraw'
+            ? 'Đã rút về bản nháp. Bạn có thể chỉnh sửa khi còn quyền biên soạn.'
+            : action === 'next'
+              ? 'Đã tạo phiên bản kế tiếp. Nhập nguồn/quyền mới và đính kèm file trước khi gửi.'
+              : action === 'reopen'
+                ? 'Đã mở lại bản nháp để chỉnh sửa.'
+                : 'Đã tải trạng thái hiện hành. Kiểm tra trước khi tiếp tục.',
       );
       requestAnimationFrame(() => feedback.current?.focus());
     } catch (failure) {
@@ -113,9 +108,7 @@ export function PublicationActions({
       }
       const codes: Record<string, string> = {
         FILE_NOT_SAFE: 'PDF chưa qua kiểm tra kỹ thuật. Cập nhật trạng thái trước khi tiếp tục.',
-        METADATA_REQUIRED: lecturer
-          ? 'Cần bổ sung tiêu đề và môn trước khi công bố.'
-          : 'Cần bổ sung thông tin, môn, nguồn và căn cứ quyền trước khi gửi.',
+        METADATA_REQUIRED: 'Cần bổ sung thông tin, môn, nguồn và căn cứ quyền trước khi gửi.',
         RIGHTS_EXPIRED: 'Căn cứ quyền đã hết hạn. Kiểm tra lại trước khi gửi.',
         NOT_SUBMITTED: 'Yêu cầu không còn chờ duyệt. Tải trạng thái mới để kiểm tra.',
         REQUEST_CHANGED: 'Yêu cầu duyệt đã thay đổi. Tải trạng thái mới để kiểm tra.',
@@ -135,14 +128,14 @@ export function PublicationActions({
   }
   return (
     <section className="draft-pdf publication-actions" aria-labelledby="publication-title">
-      <h3 id="publication-title">{lecturer ? 'Công bố tài liệu' : 'Yêu cầu duyệt'}</h3>
+      <h3 id="publication-title">Yêu cầu duyệt</h3>
       <p>
         <strong>{publicationLabel(current)}</strong>
       </p>
       <p className="field-hint">
-        {lecturer
-          ? 'Bạn tự công bố sau khi PDF qua kiểm tra an toàn, không cần admin duyệt. Bản công bố được giữ nguyên; muốn sửa hãy tạo phiên bản kế tiếp. Công bố không tự mở tài liệu đang ẩn.'
-          : 'Gửi duyệt khóa thông tin và PDF của phiên bản này. Rút về nháp trước khi sửa. Chức năng kiểm duyệt do admin quyết định; duyệt không tự mở tài liệu đang ẩn. Bản đủ quyền đọc xuất hiện trong Kho học liệu; tải bản gốc cần quyền riêng.'}
+        Gửi duyệt khóa thông tin và file của phiên bản này. Rút về nháp trước khi sửa. Quản trị viên
+        quyết định duyệt; duyệt không tự mở tài liệu đang ẩn. Bản đủ quyền đọc xuất hiện trong Kho
+        học liệu; tải bản gốc cần quyền riêng.
       </p>
       {(error || uncertain) && (
         <p role="alert" className="form-error" ref={feedback} tabIndex={-1}>
@@ -158,8 +151,7 @@ export function PublicationActions({
       )}
       {blocked && (
         <p className="field-hint">
-          Lưu thay đổi thông tin và tải hoặc bỏ PDF đã chọn trước khi{' '}
-          {lecturer ? 'công bố.' : 'thao tác duyệt.'}
+          Lưu thay đổi thông tin và tải hoặc bỏ file đã chọn trước khi thao tác duyệt.
         </p>
       )}
       {current.reviewStatus === 'CHANGES_REQUIRED' && (
@@ -180,9 +172,8 @@ export function PublicationActions({
       {['APPROVED', 'REJECTED'].includes(current.reviewStatus) && (
         <>
           <p className="field-hint">
-            {lecturer
-              ? 'Phiên bản đã kết thúc và được giữ nguyên. Bản kế tiếp dùng PDF mới; ghi chú cũ không chuyển sang bản mới.'
-              : 'Phiên bản đã kết thúc và được giữ nguyên. Bản kế tiếp có PDF, nguồn và căn cứ quyền mới; ghi chú cũ không chuyển sang bản mới.'}
+            Phiên bản đã kết thúc và được giữ nguyên. Bản kế tiếp có file, nguồn và căn cứ quyền
+            mới; ghi chú cũ không chuyển sang bản mới.
           </p>
           <button
             type="button"
@@ -199,10 +190,7 @@ export function PublicationActions({
             <div className="form-confirmation">
               <p>
                 Tạo phiên bản {current.versionNo + 1} từ thông tin nhận diện và môn hiện tại? Bản
-                công bố tiếp tục phục vụ;{' '}
-                {lecturer
-                  ? 'đính kèm PDF cho bản mới trước khi công bố.'
-                  : 'cần nhập lại nguồn/quyền và upload PDF cho bản mới.'}
+                công bố tiếp tục phục vụ; cần nhập lại nguồn/quyền và tải file cho bản mới.
               </p>
               <div className="user-form-actions">
                 <button
@@ -233,7 +221,8 @@ export function PublicationActions({
         <>
           {!canSubmit && (
             <p className="field-hint">
-              Cần PDF đã qua kiểm tra, môn đang hoạt động và quyền biên soạn hợp lệ để gửi.
+              Cần file đã qua kiểm tra (Word đã chuyển xong sang PDF), môn đang hoạt động và quyền
+              biên soạn hợp lệ để gửi.
             </p>
           )}
           <button
@@ -246,29 +235,28 @@ export function PublicationActions({
               requestAnimationFrame(() => confirmation.current?.focus());
             }}
           >
-            {lecturer ? 'Công bố' : 'Gửi duyệt'}
+            Gửi duyệt
           </button>
           {confirm && (
             <div
               className="draft-discard"
               role="group"
-              aria-label={lecturer ? 'Xác nhận công bố' : 'Xác nhận gửi duyệt'}
+              aria-label="Xác nhận gửi duyệt"
               tabIndex={-1}
               ref={confirmation}
             >
               <p>
-                {lecturer
-                  ? `Công bố phiên bản ${current.versionNo}, lần lưu ${current.revision}? Bản PDF này sẽ được giữ nguyên; tài liệu đang ẩn vẫn giữ trạng thái ẩn.`
-                  : `Gửi phiên bản ${current.versionNo}, lần lưu ${current.revision} để kiểm duyệt? Thông tin và PDF sẽ được giữ nguyên khi chờ duyệt.`}
+                Gửi phiên bản {current.versionNo}, lần lưu {current.revision} để kiểm duyệt? Thông
+                tin và file sẽ được giữ nguyên khi chờ duyệt.
               </p>
               <div className="user-form-actions">
                 <button
                   type="button"
                   className="primary-button"
                   disabled={locked || uncertain || !canSubmit}
-                  onClick={() => void run(lecturer ? 'publish' : 'submit')}
+                  onClick={() => void run('submit')}
                 >
-                  {lecturer ? 'Xác nhận công bố' : 'Xác nhận gửi duyệt'}
+                  Xác nhận gửi duyệt
                 </button>
                 <button
                   type="button"
@@ -324,12 +312,11 @@ export function PublicationActions({
           {refreshLabel}
         </button>
       </div>
-      {pending && (
-        <p role="status">{lecturer ? 'Đang xử lý công bố…' : 'Đang xử lý yêu cầu duyệt…'}</p>
-      )}
+      {pending && <p role="status">Đang xử lý yêu cầu duyệt…</p>}
       {current.publicationMethod === 'LECTURER_SELF' && (
         <p className="field-hint">
-          Phiên bản này do giảng viên tự công bố, không tạo yêu cầu duyệt của admin.
+          Phiên bản này do giảng viên tự công bố trước khi hệ thống bỏ vai trò giảng viên, không có
+          yêu cầu duyệt của admin.
         </p>
       )}
       <h4>Lịch sử gửi và rút</h4>

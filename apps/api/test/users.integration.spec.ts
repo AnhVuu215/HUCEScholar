@@ -43,11 +43,12 @@ describe('ADMIN account management', () => {
       timeCost: 2,
       parallelism: 1,
     });
-    for (const role of ['ADMIN', 'LECTURER', 'STUDENT']) {
+    // PEER is a second student account (ROLE-01 left two roles).
+    for (const role of ['ADMIN', 'PEER', 'STUDENT']) {
       emails[role] = `${prefix}-${role.toLowerCase()}@example.test`;
       const result = await db.query(
         "INSERT INTO hucescholar.users(email,display_name,password_hash,role,status,verified_at) VALUES($1,$2,$3,$4,'ACTIVE',now()) RETURNING id",
-        [emails[role], `Account fixture ${role}`, hash, role],
+        [emails[role], `Account fixture ${role}`, hash, role === 'PEER' ? 'STUDENT' : role],
       );
       ids.push(result.rows[0].id);
     }
@@ -103,15 +104,14 @@ describe('ADMIN account management', () => {
       .set('X-CSRF-Token', await csrf(browser))
       .send(body);
   }
-  async function create(suffix: string, role = 'STUDENT') {
+  async function create(suffix: string) {
     const response = await admin
       .post('/api/v1/admin/users')
       .set('Origin', origin)
       .set('X-CSRF-Token', await csrf(admin))
       .send({
         email: `${prefix}-${suffix}@example.test`,
-        displayName: `Nguyễn ${suffix}`,
-        role,
+        displayName: `Nguyá»…n ${suffix}`,
         password,
         eligibilityConfirmed: true,
       });
@@ -133,9 +133,9 @@ describe('ADMIN account management', () => {
       .send(body);
   }
 
-  it('rejects anonymous, lecturer and student list access', async () => {
+  it('rejects anonymous and student list access', async () => {
     await request(app.getHttpServer()).get('/api/v1/admin/users').expect(401);
-    for (const role of ['LECTURER', 'STUDENT']) {
+    for (const role of ['PEER', 'STUDENT']) {
       const browser = request.agent(app.getHttpServer());
       await login(browser, emails[role]).then((response) => expect(response.status).toBe(200));
       await browser.get('/api/v1/admin/users').expect(403);
@@ -161,7 +161,7 @@ describe('ADMIN account management', () => {
   });
 
   it('creates a verified account with safe projection, hash and audit; it can log in', async () => {
-    const user = await create('created', 'LECTURER');
+    const user = await create('created');
     expect(user).toEqual(
       expect.objectContaining({ id: expect.any(String), status: 'ACTIVE', revision: 1 }),
     );
@@ -207,8 +207,7 @@ describe('ADMIN account management', () => {
   it('normalizes email and prevents duplicates including simultaneous creates', async () => {
     const data = {
       email: `  ${prefix.toUpperCase()}-NORMAL@example.test  `,
-      displayName: '  Nguyễn An  ',
-      role: 'STUDENT',
+      displayName: '  Nguyá»…n An  ',
       password,
       eligibilityConfirmed: true,
     };
@@ -225,7 +224,10 @@ describe('ADMIN account management', () => {
     for (const result of results) if (result.body.user?.id) ids.push(result.body.user.id);
     expect(results.map((result) => result.status).sort()).toEqual([201, 409]);
     expect(results.find((result) => result.status === 201)?.body.user).toEqual(
-      expect.objectContaining({ email: `${prefix}-normal@example.test`, displayName: 'Nguyễn An' }),
+      expect.objectContaining({
+        email: `${prefix}-normal@example.test`,
+        displayName: 'Nguyá»…n An',
+      }),
     );
   });
 
@@ -235,6 +237,8 @@ describe('ADMIN account management', () => {
     { displayName: '   ' },
     { email: 'invalid' },
     { role: 'ADMIN' },
+    { role: 'STUDENT' },
+    { role: 'LECTURER' },
     { eligibilityConfirmed: false },
     { eligibilityConfirmed: undefined },
     { status: 'ACTIVE' },
@@ -248,7 +252,6 @@ describe('ADMIN account management', () => {
         email: `${prefix}-bad@example.test`,
         displayName: 'Valid name',
         password,
-        role: 'STUDENT',
         eligibilityConfirmed: true,
         ...invalid,
       })
@@ -285,11 +288,11 @@ describe('ADMIN account management', () => {
       .then((result) => expect(result.body.total).toBe(0));
     const named = await admin
       .get('/api/v1/admin/users')
-      .query({ search: 'Nguyễn created', role: 'LECTURER', status: 'ACTIVE' })
+      .query({ search: 'Nguyá»…n created', role: 'STUDENT', status: 'ACTIVE' })
       .expect(200);
     expect(
       named.body.items.some(
-        (item: { displayName: string }) => item.displayName === 'Nguyễn created',
+        (item: { displayName: string }) => item.displayName === 'Nguyá»…n created',
       ),
     ).toBe(true);
   });
@@ -313,7 +316,7 @@ describe('ADMIN account management', () => {
     await login(browser, user.email).then((response) => expect(response.status).toBe(200));
     const renamed = await patch(user.id, {
       email: user.email,
-      displayName: 'Tên mới',
+      displayName: 'TÃªn má»›i',
       revision: user.revision,
     });
     expect(renamed.status).toBe(200);
@@ -328,7 +331,7 @@ describe('ADMIN account management', () => {
           .set('X-CSRF-Token', token)
           .send({
             email: `${prefix}-edit-${suffix}@example.test`,
-            displayName: 'Tên mới',
+            displayName: 'TÃªn má»›i',
             revision: 2,
           }),
       ),
@@ -341,7 +344,7 @@ describe('ADMIN account management', () => {
     const stored = (
       await db.query('SELECT revision,display_name FROM hucescholar.users WHERE id=$1', [user.id])
     ).rows[0];
-    expect(stored).toEqual({ revision: 3, display_name: 'Tên mới' });
+    expect(stored).toEqual({ revision: 3, display_name: 'TÃªn má»›i' });
   });
 
   it('locks and unlocks without reviving previous sessions', async () => {
@@ -464,7 +467,7 @@ describe('ADMIN account management', () => {
   });
 
   it('requires an issued password to be changed before any other workspace request', async () => {
-    const user = await create('forced', 'STUDENT');
+    const user = await create('forced');
     expect(user).toEqual(expect.objectContaining({ mustChangePassword: true }));
     const browser = request.agent(app.getHttpServer());
     const signedIn = await login(browser, user.email);
@@ -505,7 +508,7 @@ describe('ADMIN account management', () => {
   });
 
   it('resets a password to a temporary one, revoking sessions and old credentials', async () => {
-    const user = await create('reset', 'LECTURER');
+    const user = await create('reset');
     const owner = request.agent(app.getHttpServer());
     await login(owner, user.email);
     const settled = randomBytes(24).toString('base64url');
@@ -535,7 +538,7 @@ describe('ADMIN account management', () => {
     const signedIn = await login(next, user.email, temporary);
     expect(signedIn.status).toBe(200);
     expect(signedIn.body.user.mustChangePassword).toBe(true);
-    await next.get('/api/v1/workspace/lecturer').expect(403);
+    await next.get('/api/v1/workspace/admin').expect(403);
     const audit = (
       await db.query(
         "SELECT actor_id FROM hucescholar.audit_events WHERE entity_type='USER' AND entity_id=$1 AND event_type='ACCOUNT_PASSWORD_RESET'",
@@ -556,11 +559,11 @@ describe('ADMIN account management', () => {
       .post(`/api/v1/admin/users/${ids[2]}/password`)
       .send({ password: temporary, revision: 1 })
       .expect(403);
-    const lecturer = request.agent(app.getHttpServer());
-    await login(lecturer, emails.LECTURER);
-    expect(
-      (await resetPassword(lecturer, ids[2], { password: temporary, revision: 1 })).status,
-    ).toBe(403);
+    const peer = request.agent(app.getHttpServer());
+    await login(peer, emails.PEER);
+    expect((await resetPassword(peer, ids[2], { password: temporary, revision: 1 })).status).toBe(
+      403,
+    );
     expect(
       (await resetPassword(admin, '9223372036854775807', { password: temporary, revision: 1 }))
         .status,
