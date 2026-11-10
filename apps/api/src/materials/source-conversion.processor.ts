@@ -120,7 +120,7 @@ export class SourceConversionProcessor {
       await this.store.put(outputKey, output, size);
       const actor = {
         id: String(source.uploaded_by),
-        role: 'LECTURER' as const,
+        role: 'STUDENT' as const,
         email: '',
         displayName: '',
       };

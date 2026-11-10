@@ -65,7 +65,7 @@ const selection = {
         },
       },
       documents_document_versions_document_idTodocuments: {
-        select: { kind: true, visibility: true, current_version_id: true, manager_id: true },
+        select: { visibility: true, current_version_id: true, manager_id: true },
       },
     },
   },
@@ -112,7 +112,6 @@ export class ModerationService {
       versionNo: v.version_no,
       versionRevision: v.revision,
       reviewStatus: v.review_status,
-      kind: doc.kind,
       visibility: doc.visibility,
       currentVersionId: doc.current_version_id ? String(doc.current_version_id) : null,
       title: v.title,
@@ -151,9 +150,6 @@ export class ModerationService {
       status: query.status ?? 'PENDING',
       document_versions: {
         ...(query.search ? { title: { contains: query.search, mode: 'insensitive' } } : {}),
-        ...(query.kind
-          ? { documents_document_versions_document_idTodocuments: { kind: query.kind } }
-          : {}),
       },
     };
     return this.db.$transaction(
@@ -218,10 +214,9 @@ export class ModerationService {
         const doc = v.documents_document_versions_document_idTodocuments;
         await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${doc.manager_id} FOR SHARE`;
         const manager = await tx.users.findUnique({ where: { id: doc.manager_id } });
-        const role = doc.kind === 'LECTURER_MATERIAL' ? 'LECTURER' : 'STUDENT';
         if (
           !manager ||
-          manager.role !== role ||
+          manager.role !== 'STUDENT' ||
           manager.status !== 'ACTIVE' ||
           !manager.verified_at
         )
@@ -237,7 +232,6 @@ export class ModerationService {
           throw fail('RIGHTS_EXPIRED', 'Căn cứ quyền đã hết hạn.');
         await this.materials.checkCourses(
           tx,
-          { id: String(manager.id), role, email: manager.email, displayName: manager.display_name },
           v.version_courses.map((c) => c.courses.id),
         );
         if (v.files)

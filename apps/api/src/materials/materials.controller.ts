@@ -32,7 +32,7 @@ import { DOCX_MIME } from '../files/receive-docx';
 import { LibraryService } from './library.service';
 @Controller('material-drafts')
 @UseGuards(SessionGuard, RolesGuard)
-@Roles('LECTURER', 'STUDENT')
+@Roles('STUDENT')
 export class MaterialsController {
   constructor(
     private readonly materials: MaterialsService,
@@ -68,15 +68,6 @@ export class MaterialsController {
   ) {
     return this.materials.submit(req.user, id, body);
   }
-  @Post(':id/publish')
-  @Roles('LECTURER')
-  publish(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Body() body: SubmitMaterialDto,
-  ) {
-    return this.materials.publish(req.user, id, body);
-  }
   @Post(':id/withdraw') withdraw(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -105,7 +96,6 @@ export class MaterialsController {
   }
   @Post(':id/file')
   @HttpCode(202)
-  @Roles('LECTURER')
   uploadFile(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return req.get('Content-Type')?.split(';')[0].trim().toLowerCase() === DOCX_MIME
       ? this.source.upload(req.user, id, req)
@@ -113,7 +103,6 @@ export class MaterialsController {
   }
   @Post(':id/source/retry')
   @HttpCode(202)
-  @Roles('LECTURER')
   retrySource(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -122,7 +111,6 @@ export class MaterialsController {
     return this.source.retry(req.user, id, body);
   }
   @Get(':id/preview')
-  @Roles('LECTURER')
   preview(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -131,7 +119,7 @@ export class MaterialsController {
     return this.library.draftPreview(req.user, id, res);
   }
   @Get('courses') courses(@Req() req: AuthenticatedRequest, @Query() query: DraftListDto) {
-    return this.materials.courses(req.user, query);
+    return this.materials.courses(query);
   }
   @Get() list(@Req() req: AuthenticatedRequest, @Query() query: MaterialListDto) {
     return this.materials.list(req.user, query);

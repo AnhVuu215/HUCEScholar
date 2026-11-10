@@ -16,7 +16,6 @@ export class ModerationListDto extends DraftListDto {
   @IsOptional()
   @IsIn(['PENDING', 'WITHDRAWN', 'APPROVED', 'CHANGES_REQUIRED', 'REJECTED'])
   status?: string;
-  @IsOptional() @IsIn(['LECTURER_MATERIAL', 'STUDENT_SUPPLEMENT']) kind?: string;
 }
 export class ModerationDecisionDto extends SubmitMaterialDto {
   @IsInt() @Min(1) @Max(2147483646) submittedRevision!: number;

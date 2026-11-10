@@ -446,7 +446,8 @@ export class CalendarService {
         due_on: { not: null },
         document_versions: available(),
         reading_lists: {
-          OR: followed.map((f) => ({ course_id: f.course_id, ...shown(f.course_id) })),
+          course_id: { in: followed.map((f) => f.course_id) },
+          ...shown,
         },
       },
       select: {

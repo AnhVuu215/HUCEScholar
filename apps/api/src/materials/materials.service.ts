@@ -58,7 +58,6 @@ const selection = {
       copy_restricted: true,
     },
   },
-  documents_document_versions_document_idTodocuments: { select: { kind: true } },
   version_courses: {
     select: {
       courses: {
@@ -74,8 +73,6 @@ const selection = {
   },
 } satisfies Prisma.document_versionsSelect;
 type DraftRow = Prisma.document_versionsGetPayload<{ select: typeof selection }>;
-const kindFor = (actor: Profile) =>
-  actor.role === 'LECTURER' ? 'LECTURER_MATERIAL' : 'STUDENT_SUPPLEMENT';
 const conflict = (code: string, message: string) => new ConflictException({ code, message });
 
 @Injectable()
@@ -87,7 +84,7 @@ export class MaterialsService {
     });
   }
   private owner(actor: Profile) {
-    return { manager_id: academicId(actor.id), kind: kindFor(actor) };
+    return { manager_id: academicId(actor.id) };
   }
   private async begin(tx: Prisma.TransactionClient, actor: Profile) {
     const id = academicId(actor.id);
@@ -99,34 +96,25 @@ export class MaterialsService {
     if (
       !user ||
       user.role !== actor.role ||
-      !['LECTURER', 'STUDENT'].includes(user.role) ||
+      user.role !== 'STUDENT' ||
       user.status !== 'ACTIVE' ||
       !user.verified_at
     )
       throw new ForbiddenException('Không còn quyền biên soạn.');
-    // Same ordering and catalog lock as assignment changes: no revocation race.
+    // Same catalog lock as moderation and course changes.
     await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(68467, 1)`;
     return id;
   }
-  async checkCourses(tx: Prisma.TransactionClient, actor: Profile, ids: bigint[]) {
+  async checkCourses(tx: Prisma.TransactionClient, ids: bigint[]) {
     const active = await tx.courses.count({
       where: { id: { in: ids }, is_active: true, faculties: { is_active: true } },
     });
     if (active !== ids.length)
       throw conflict('COURSE_UNAVAILABLE', 'Môn hoặc khoa không còn hoạt động.');
-    if (
-      actor.role === 'LECTURER' &&
-      (await tx.lecturer_assignments.count({
-        where: { lecturer_id: academicId(actor.id), course_id: { in: ids }, revoked_at: null },
-      })) !== ids.length
-    )
-      throw conflict('ASSIGNMENT_REQUIRED', 'Cần phân công hiện hành cho tất cả môn của bản nháp.');
   }
-  private fields(actor: Profile, body: DraftFieldsDto) {
-    if (actor.role === 'STUDENT' && (!body.sourceReference.trim() || !body.rightsBasis.trim()))
-      throw new BadRequestException(
-        'Bổ sung nguồn và căn cứ quyền sử dụng cho tài liệu sinh viên.',
-      );
+  private fields(body: DraftFieldsDto) {
+    if (!body.sourceReference.trim() || !body.rightsBasis.trim())
+      throw new BadRequestException('Bổ sung nguồn và căn cứ quyền sử dụng cho tài liệu.');
     return {
       title: body.title,
       authors: body.authors,
@@ -137,24 +125,7 @@ export class MaterialsService {
       download_allowed: body.downloadAllowed,
     };
   }
-  private async serialize(tx: Prisma.TransactionClient, actor: Profile, rows: DraftRow[]) {
-    const assigned =
-      actor.role === 'LECTURER'
-        ? new Set(
-            (
-              await tx.lecturer_assignments.findMany({
-                where: {
-                  lecturer_id: academicId(actor.id),
-                  revoked_at: null,
-                  course_id: {
-                    in: rows.flatMap((r) => r.version_courses.map((v) => v.courses.id)),
-                  },
-                },
-                select: { course_id: true },
-              })
-            ).map((a) => String(a.course_id)),
-          )
-        : null;
+  private serialize(rows: DraftRow[]) {
     return rows.map((row) => {
       const courses = row.version_courses
         .map(({ courses: c }) => ({
@@ -164,17 +135,11 @@ export class MaterialsService {
           active: c.is_active && c.faculties.is_active,
         }))
         .sort((a, b) => a.code.localeCompare(b.code));
-      const editBlock =
-        row.review_status !== 'DRAFT'
-          ? 'NOT_DRAFT'
-          : actor.role === 'LECTURER' && courses.some((c) => !c.active || !assigned?.has(c.id))
-            ? 'ASSIGNMENT_REQUIRED'
-            : null;
+      const editBlock = row.review_status !== 'DRAFT' ? 'NOT_DRAFT' : null;
       return {
         id: String(row.document_id),
         versionId: String(row.id),
         versionNo: row.version_no,
-        kind: row.documents_document_versions_document_idTodocuments.kind,
         title: row.title,
         authors: row.authors,
         description: row.description,
@@ -229,7 +194,7 @@ export class MaterialsService {
     const id = academicId(rawId);
     return this.db.$transaction(
       async (tx) => ({
-        item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0],
+        item: this.serialize([await this.read(tx, actor, id)])[0],
       }),
       { isolationLevel: 'RepeatableRead' },
     );
@@ -240,7 +205,7 @@ export class MaterialsService {
     const latest = Prisma.sql`FROM (
       SELECT DISTINCT ON (v.document_id) v.id, v.title, v.review_status, v.updated_at
       FROM hucescholar.document_versions v JOIN hucescholar.documents d ON d.id=v.document_id
-      WHERE d.manager_id=${academicId(actor.id)} AND d.kind=${kindFor(actor)}
+      WHERE d.manager_id=${academicId(actor.id)}
       ORDER BY v.document_id, v.version_no DESC
     ) latest WHERE TRUE
       ${query.search ? Prisma.sql`AND latest.title ILIKE ${`%${query.search}%`}` : Prisma.empty}
@@ -258,7 +223,7 @@ export class MaterialsService {
           Prisma.sql`SELECT count(*) AS total ${latest}`,
         );
         return {
-          items: await this.serialize(tx, actor, rows),
+          items: this.serialize(rows),
           total: Number(count[0].total),
           page: query.page,
           limit: query.limit,
@@ -280,7 +245,7 @@ export class MaterialsService {
           skip: (query.page - 1) * query.limit,
         });
         return {
-          items: await this.serialize(tx, actor, rows),
+          items: this.serialize(rows),
           total: await tx.document_versions.count({ where: { document_id } }),
           page: query.page,
           limit: query.limit,
@@ -300,7 +265,7 @@ export class MaterialsService {
       if (row.version_no >= 2147483647 || row.revision >= 2147483646)
         throw conflict('VERSION_LIMIT', 'Đã đạt giới hạn phiên bản.');
       const ids = row.version_courses.map((c) => c.courses.id);
-      await this.checkCourses(tx, actor, ids);
+      await this.checkCourses(tx, ids);
       await tx.document_versions.create({
         data: {
           document_id: id,
@@ -325,18 +290,13 @@ export class MaterialsService {
         data: { revision: { increment: 1 }, updated_at: new Date() },
       });
       await this.audit(tx, actorId, id, 'MATERIAL_VERSION_CREATED');
-      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+      return { item: this.serialize([await this.read(tx, actor, id)])[0] };
     });
   }
-  async courses(actor: Profile, query: DraftListDto) {
+  async courses(query: DraftListDto) {
     const where: Prisma.coursesWhereInput = {
       is_active: true,
       faculties: { is_active: true },
-      ...(actor.role === 'LECTURER'
-        ? {
-            lecturer_assignments: { some: { lecturer_id: academicId(actor.id), revoked_at: null } },
-          }
-        : {}),
       ...(query.search
         ? {
             OR: [
@@ -368,21 +328,21 @@ export class MaterialsService {
     const ids = body.courseIds.map(academicId);
     return this.db.$transaction(async (tx) => {
       const actorId = await this.begin(tx, actor);
-      await this.checkCourses(tx, actor, ids);
+      await this.checkCourses(tx, ids);
       const doc = await tx.documents.create({
-        data: { kind: kindFor(actor), created_by: actorId, manager_id: actorId },
+        data: { created_by: actorId, manager_id: actorId },
       });
       await tx.document_versions.create({
         data: {
           document_id: doc.id,
           version_no: 1,
           created_by: actorId,
-          ...this.fields(actor, body),
+          ...this.fields(body),
           version_courses: { create: ids.map((course_id) => ({ course_id })) },
         },
       });
       await this.audit(tx, actorId, doc.id, 'MATERIAL_DRAFT_CREATED');
-      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, doc.id)]))[0] };
+      return { item: this.serialize([await this.read(tx, actor, doc.id)])[0] };
     });
   }
   async update(actor: Profile, rawId: string, body: UpdateDraftDto) {
@@ -396,16 +356,10 @@ export class MaterialsService {
       if (row.revision !== body.revision)
         throw conflict('STALE_REVISION', 'Bản nháp đã thay đổi. Tải thông tin mới để đối chiếu.');
       if (row.review_status !== 'DRAFT') throw conflict('NOT_DRAFT', 'Chỉ sửa bản nháp.');
-      if (actor.role === 'LECTURER')
-        await this.checkCourses(
-          tx,
-          actor,
-          row.version_courses.map((c) => c.courses.id),
-        );
-      await this.checkCourses(tx, actor, ids);
+      await this.checkCourses(tx, ids);
       await tx.document_versions.update({
         where: { id: row.id },
-        data: { ...this.fields(actor, body), revision: { increment: 1 }, updated_at: new Date() },
+        data: { ...this.fields(body), revision: { increment: 1 }, updated_at: new Date() },
       });
       await tx.version_courses.deleteMany({
         where: { version_id: row.id, course_id: { notIn: ids } },
@@ -420,7 +374,7 @@ export class MaterialsService {
         data: { revision: { increment: 1 }, updated_at: new Date() },
       });
       await this.audit(tx, actorId, id, 'MATERIAL_DRAFT_UPDATED');
-      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+      return { item: this.serialize([await this.read(tx, actor, id)])[0] };
     });
   }
   async lockDraft(tx: Prisma.TransactionClient, actor: Profile, rawId: string, revision?: number) {
@@ -429,7 +383,6 @@ export class MaterialsService {
     if (row.review_status !== 'DRAFT') throw conflict('NOT_DRAFT', 'Chỉ thay PDF của bản nháp.');
     await this.checkCourses(
       tx,
-      actor,
       row.version_courses.map((c) => c.courses.id),
     );
     return result;
@@ -452,45 +405,6 @@ export class MaterialsService {
       );
     return { actorId, row, id };
   }
-  async publish(actor: Profile, rawId: string, body: SubmitMaterialDto) {
-    if (actor.role !== 'LECTURER')
-      throw new ForbiddenException('Chỉ giảng viên tự công bố học liệu.');
-    return this.db.$transaction(async (tx) => {
-      const { actorId, row, id } = await this.lockOwned(tx, actor, rawId, body.revision);
-      if (row.review_status !== 'DRAFT') throw conflict('NOT_DRAFT', 'Chỉ công bố bản nháp.');
-      if (!row.title.trim() || !row.version_courses.length)
-        throw conflict('METADATA_REQUIRED', 'Bổ sung tiêu đề và môn trước khi công bố.');
-      if (row.rights_valid_until && row.rights_valid_until <= new Date())
-        throw conflict('RIGHTS_EXPIRED', 'Hạn sử dụng đã khai báo cho phiên bản này đã hết.');
-      await this.checkCourses(
-        tx,
-        actor,
-        row.version_courses.map((c) => c.courses.id),
-      );
-      if (row.file_id)
-        await tx.$queryRaw`SELECT id FROM hucescholar.files WHERE id=${row.file_id} FOR SHARE`;
-      const file = row.file_id ? await tx.files.findUnique({ where: { id: row.file_id } }) : null;
-      if (!file || file.scan_status !== 'SAFE')
-        throw conflict('FILE_NOT_SAFE', 'PDF phải qua kiểm tra kỹ thuật trước khi công bố.');
-      const now = new Date();
-      await tx.document_versions.update({
-        where: { id: row.id },
-        data: {
-          review_status: 'APPROVED',
-          publication_method: 'LECTURER_SELF',
-          revision: { increment: 1 },
-          updated_at: now,
-        },
-      });
-      // Keep visibility unchanged, including HIDDEN. This transaction owns the document lock.
-      await tx.documents.update({
-        where: { id },
-        data: { current_version_id: row.id, revision: { increment: 1 }, updated_at: now },
-      });
-      await this.audit(tx, actorId, id, 'MATERIAL_SELF_PUBLISHED');
-      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
-    });
-  }
   async submit(actor: Profile, rawId: string, body: SubmitMaterialDto) {
     return this.db.$transaction(async (tx) => {
       const { actorId, row, id } = await this.lockOwned(tx, actor, rawId, body.revision);
@@ -509,7 +423,6 @@ export class MaterialsService {
         throw conflict('RIGHTS_EXPIRED', 'Căn cứ quyền sử dụng đã hết hạn.');
       await this.checkCourses(
         tx,
-        actor,
         row.version_courses.map((c) => c.courses.id),
       );
       if (row.file_id)
@@ -530,7 +443,7 @@ export class MaterialsService {
         data: { revision: { increment: 1 }, updated_at: new Date() },
       });
       await this.audit(tx, actorId, id, 'MATERIAL_SUBMITTED');
-      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+      return { item: this.serialize([await this.read(tx, actor, id)])[0] };
     });
   }
   async withdraw(actor: Profile, rawId: string, body: WithdrawMaterialDto) {
@@ -563,7 +476,7 @@ export class MaterialsService {
         data: { revision: { increment: 1 }, updated_at: new Date() },
       });
       await this.audit(tx, actorId, id, 'MATERIAL_WITHDRAWN');
-      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+      return { item: this.serialize([await this.read(tx, actor, id)])[0] };
     });
   }
   async reopen(actor: Profile, rawId: string, body: SubmitMaterialDto) {
@@ -573,7 +486,6 @@ export class MaterialsService {
         throw conflict('NOT_CHANGES_REQUIRED', 'Chỉ mở lại phiên bản được yêu cầu sửa.');
       await this.checkCourses(
         tx,
-        actor,
         row.version_courses.map((c) => c.courses.id),
       );
       await tx.document_versions.update({
@@ -585,7 +497,7 @@ export class MaterialsService {
         data: { revision: { increment: 1 }, updated_at: new Date() },
       });
       await this.audit(tx, actorId, id, 'MATERIAL_REOPENED');
-      return { item: (await this.serialize(tx, actor, [await this.read(tx, actor, id)]))[0] };
+      return { item: this.serialize([await this.read(tx, actor, id)])[0] };
     });
   }
   async history(actor: Profile, rawId: string, query: MaterialHistoryDto) {

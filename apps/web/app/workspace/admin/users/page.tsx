@@ -10,7 +10,7 @@ export default function UsersPage() {
     <RoleWorkspace
       role="ADMIN"
       title="Quản lý tài khoản"
-      description="Quản lý quyền truy cập của giảng viên và sinh viên."
+      description="Quản lý quyền truy cập của sinh viên."
       activeSection="users"
     >
       <UserManagement />

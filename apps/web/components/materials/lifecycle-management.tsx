@@ -5,9 +5,8 @@ import { publicationLabel } from '../../lib/materials';
 import { LifecycleDetail } from './lifecycle-detail';
 export function LifecycleManagement() {
   const [search, setSearch] = useState(''),
-    [visibility, setVisibility] = useState(''),
-    [kind, setKind] = useState('');
-  const [query, setQuery] = useState({ search: '', visibility: '', kind: '', page: 1 }),
+    [visibility, setVisibility] = useState('');
+  const [query, setQuery] = useState({ search: '', visibility: '', page: 1 }),
     [attempt, setAttempt] = useState(0);
   const [data, setData] = useState<Awaited<ReturnType<typeof managedMaterials>> | null>(null),
     [error, setError] = useState(''),
@@ -34,8 +33,8 @@ export function LifecycleManagement() {
   return (
     <div className="users-management materials-management">
       <p className="users-guidance">
-        Quản lý người phụ trách và hiển thị toàn tài liệu. Kiểm duyệt từng phiên bản nằm ở Kiểm
-        duyệt học liệu; admin không biên soạn thay giảng viên.
+        Quản lý hiển thị toàn tài liệu. Kiểm duyệt từng phiên bản nằm ở Kiểm duyệt học liệu; admin
+        không biên soạn thay người đóng góp.
       </p>
       {selected && (
         <LifecycleDetail
@@ -53,7 +52,7 @@ export function LifecycleManagement() {
             e.preventDefault();
             setData(null);
             setError('');
-            setQuery({ search: search.trim(), visibility, kind, page: 1 });
+            setQuery({ search: search.trim(), visibility, page: 1 });
           }}
         >
           <div className="form-field">
@@ -76,14 +75,6 @@ export function LifecycleManagement() {
               <option value="">Tất cả</option>
               <option value="VISIBLE">Hiển thị</option>
               <option value="HIDDEN">Đang ẩn</option>
-            </select>
-          </div>
-          <div className="form-field">
-            <label htmlFor="managed-kind">Nguồn biên soạn</label>
-            <select id="managed-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-              <option value="">Tất cả</option>
-              <option value="LECTURER_MATERIAL">Giảng viên</option>
-              <option value="STUDENT_SUPPLEMENT">Sinh viên bổ sung</option>
             </select>
           </div>
           <button className="secondary-button">Tìm kiếm</button>
@@ -123,9 +114,6 @@ export function LifecycleManagement() {
                         <strong>{item.latest.title}</strong>
                         <span>
                           Phiên bản {item.latest.versionNo} · {publicationLabel(item.latest)}
-                        </span>
-                        <span>
-                          {item.kind === 'LECTURER_MATERIAL' ? 'Giảng viên' : 'Sinh viên bổ sung'}
                         </span>
                       </td>
                       <td>{item.manager.name}</td>

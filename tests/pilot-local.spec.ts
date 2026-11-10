@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
  * QA-01 local pilot. Opt-in: needs `python scripts/create-pilot-corpus.py` and the real
  * ClamAV/Poppler/converter worker attached ONLY to hucescholar_test / Redis 15
  * (compose.yaml + compose.docx-test.yaml, profile files). Records observations; it is an
- * automated walk-through, not a substitute for sessions with real lecturers and students.
+ * automated walk-through, not a substitute for sessions with real students and admins.
  */
 test.skip(process.env.PILOT_REAL !== '1', 'Opt-in: real file worker and pilot corpus required.');
 test.describe.configure({ mode: 'serial' });
@@ -43,15 +43,49 @@ async function headers(page: Page) {
   return { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf };
 }
 
-async function login(browser: Browser, role: 'admin' | 'lecturer' | 'student') {
+/** ROLE-01: "author" and "student" are both student accounts. */
+async function login(browser: Browser, role: 'admin' | 'author' | 'student') {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto('/login');
   await page.getByLabel('Email', { exact: true }).fill(`e2e-pilot-${role}@example.test`);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.E2E_PASSWORD!);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
-  await expect(page).toHaveURL(`/workspace/${role}`);
+  await expect(page).toHaveURL(role === 'admin' ? '/workspace/admin' : '/workspace/student');
   return page;
+}
+
+/** Publication needs an admin decision: submit from the open draft, then approve. */
+async function submitAndApprove(browser: Browser, page: Page, title: string) {
+  await page.getByRole('button', { name: 'Gửi duyệt', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận gửi duyệt', exact: true }).click();
+  await expect(page.locator('.publication-actions')).toContainText('Chờ duyệt');
+  const admin = await login(browser, 'admin');
+  const h = await headers(admin);
+  const pending = (
+    await (
+      await admin.request.get(
+        `/api/v1/admin/publication-requests?search=${encodeURIComponent(title)}`,
+      )
+    ).json()
+  ).items[0];
+  const decision = await admin.request.post(
+    `/api/v1/admin/publication-requests/${pending.id}/decision`,
+    {
+      headers: h,
+      data: {
+        revision: pending.revision,
+        submittedRevision: pending.submittedRevision,
+        outcome: 'APPROVED',
+        reason: 'Tài liệu pilot minh họa được phép',
+        rightsConfirmed: true,
+      },
+    },
+  );
+  expect(decision.status()).toBe(201);
+  await admin.context().close();
+  await page.getByRole('button', { name: 'Tải trạng thái duyệt', exact: true }).click();
+  await expect(page.locator('.publication-actions')).toContainText('Đã duyệt');
 }
 
 const fileStatus = (page: Page) =>
@@ -60,8 +94,12 @@ const finalState =
   /đã qua kiểm tra an toàn\.?$|không đạt kiểm tra|Bản đọc PDF đã sẵn sàng|Chưa tạo được bản đọc PDF/;
 
 async function startDraft(page: Page) {
-  await page.goto('/workspace/lecturer/materials');
+  await page.goto('/workspace/student/materials');
   await page.getByRole('button', { name: 'Tạo bản nháp', exact: true }).click();
+  await page.getByLabel('Nguồn tài liệu', { exact: true }).fill('Tự biên soạn — pilot minh họa');
+  await page
+    .getByLabel('Căn cứ quyền sử dụng', { exact: true })
+    .fill('Tác giả cho phép chia sẻ — pilot minh họa');
   await page.getByLabel('Tìm môn học liên quan', { exact: true }).fill(code);
   const choice = page.getByLabel('Môn học liên quan', { exact: true });
   const label = `${code} · ${courseName}`;
@@ -127,7 +165,7 @@ test.afterAll(() => {
   );
 });
 
-test('admin prepares the course and assigns the lecturer', async ({ browser }) => {
+test('admin prepares the course', async ({ browser }) => {
   const page = await login(browser, 'admin');
   const h = await headers(page);
   const faculty = await page.request.post('/api/v1/admin/catalog/faculties', {
@@ -141,22 +179,12 @@ test('admin prepares the course and assigns the lecturer', async ({ browser }) =
   });
   expect(course.status()).toBe(201);
   courseId = (await course.json()).item.id;
-  const lecturer = (
-    await (
-      await page.request.get('/api/v1/admin/users?search=e2e-pilot-lecturer%40example.test')
-    ).json()
-  ).items[0];
-  const assignment = await page.request.post('/api/v1/admin/assignments', {
-    headers: h,
-    data: { lecturerId: lecturer.id, courseId },
-  });
-  expect(assignment.status()).toBe(201);
   await page.context().close();
 });
 
-test('lecturer uploads every corpus file through the real worker', async ({ browser }) => {
+test('a student uploads every corpus file through the real worker', async ({ browser }) => {
   test.setTimeout(40 * 60_000);
-  const page = await login(browser, 'lecturer');
+  const page = await login(browser, 'author');
   const picker = page.getByLabel('File tài liệu (PDF hoặc DOCX)', { exact: true });
 
   // Over the 25 MiB limit: the form refuses before sending, and the API refuses on its own.
@@ -172,7 +200,9 @@ test('lecturer uploads every corpus file through the real worker', async ({ brow
     await picker.setInputFiles(`${corpus}/${item.file}`);
     await page.getByLabel('Tiêu đề học liệu', { exact: true }).fill(title);
     if (item.key === 'docx')
-      await page.getByLabel('Cho phép người đọc tải file gốc và bản PDF', { exact: true }).check();
+      await page
+        .getByLabel('Đề nghị cho phép tải file gốc và bản PDF sau khi được duyệt', { exact: true })
+        .check();
     const uploadStarted = Date.now();
     await page.getByRole('button', { name: 'Lưu và tải file lên', exact: true }).click();
     await expect(
@@ -194,16 +224,14 @@ test('lecturer uploads every corpus file through the real worker', async ({ brow
       status: worker.text,
       file_line: pages?.trim(),
     });
-    await page.screenshot({ path: `test-results/pilot-local/lecturer-${item.key}.png` });
+    await page.screenshot({ path: `test-results/pilot-local/author-${item.key}.png` });
     if (item.expect === 'SAFE') expect(safe, `${item.file}: ${worker.text}`).toBe(true);
     if (item.expect === 'FAILED') expect(safe, `${item.file}: ${worker.text}`).toBe(false);
     if (!safe) {
-      await expect(page.getByRole('button', { name: 'Công bố', exact: true })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Gửi duyệt', exact: true })).toBeDisabled();
       continue;
     }
-    await page.getByRole('button', { name: 'Công bố', exact: true }).click();
-    await page.getByRole('button', { name: 'Xác nhận công bố', exact: true }).click();
-    await expect(page.locator('.publication-actions')).toContainText('Đã công bố');
+    await submitAndApprove(browser, page, title);
     const draft = (
       await (
         await page.request.get(`/api/v1/material-drafts?search=${encodeURIComponent(title)}`)
@@ -380,16 +408,21 @@ test('student finds, reads, annotates and comes back in a new session', async ({
   await page.context().close();
 });
 
-test('lecturer creates the next version; old notes stay on the old version', async ({
+test('the author creates the next version; old notes stay on the old version', async ({
   browser,
 }) => {
   test.setTimeout(10 * 60_000);
-  const page = await login(browser, 'lecturer');
-  await page.goto('/workspace/lecturer/materials');
+  const page = await login(browser, 'author');
+  await page.goto('/workspace/student/materials');
   await page.getByRole('button', { name: `Mở bản nháp ${titles.vi}`, exact: true }).click();
   await page.getByRole('button', { name: 'Tạo phiên bản kế tiếp', exact: true }).click();
   await page.getByRole('button', { name: 'Xác nhận tạo phiên bản', exact: true }).click();
   await expect(page.getByText('Đã tạo phiên bản kế tiếp.', { exact: false })).toBeVisible();
+  // A new version starts without source or rights; the student declares them again.
+  await page.getByLabel('Nguồn tài liệu', { exact: true }).fill('Tự biên soạn — pilot minh họa');
+  await page
+    .getByLabel('Căn cứ quyền sử dụng', { exact: true })
+    .fill('Tác giả cho phép chia sẻ — pilot minh họa');
   await page
     .getByLabel('File tài liệu (PDF hoặc DOCX)', { exact: true })
     .setInputFiles(`${corpus}/rotated-mixed.pdf`);
@@ -399,9 +432,7 @@ test('lecturer creates the next version; old notes stay on the old version', asy
   });
   const worker = await waitForWorker(page);
   expect(worker.text).toMatch(/đã qua kiểm tra an toàn/);
-  await page.getByRole('button', { name: 'Công bố', exact: true }).click();
-  await page.getByRole('button', { name: 'Xác nhận công bố', exact: true }).click();
-  await expect(page.locator('.publication-actions')).toContainText('Đã công bố');
+  await submitAndApprove(browser, page, titles.vi);
   const next = (
     await (
       await page.request.get(`/api/v1/material-drafts?search=${encodeURIComponent(titles.vi)}`)

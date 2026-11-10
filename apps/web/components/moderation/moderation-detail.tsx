@@ -202,7 +202,6 @@ export function ModerationDetail({
         <>
           <h3>{row.title}</h3>
           <p className="field-hint">
-            {row.kind === 'LECTURER_MATERIAL' ? 'Học liệu giảng viên' : 'Sinh viên bổ sung'} ·{' '}
             {materialTypes[row.materialType]} · Người gửi: {row.submitter.name}
           </p>
           <p>

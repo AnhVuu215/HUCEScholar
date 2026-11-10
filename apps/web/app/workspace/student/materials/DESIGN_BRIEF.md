@@ -1,10 +1,10 @@
 # Học liệu của tôi
 
-Mode: Operate. Mở rộng shell và form production hiện có; không sửa DESIGN.md lịch sử. Giảng viên chuẩn bị metadata nháp theo môn được phân công, sinh viên dùng cùng cấu trúc ở /workspace/student/materials với nhãn tài liệu bổ sung.
+Mode: Operate. Mở rộng shell và form production hiện có; không sửa DESIGN.md lịch sử. Từ ROLE-01 (10/11/2026) chỉ sinh viên có trang này, ở /workspace/student/materials; không còn vai trò giảng viên hay phân công môn.
 
 THESIS: người biên soạn biết bản nào đang chuẩn bị, đã lưu gì, còn thiếu PDF hay đang chờ duyệt.
 OWN-WORLD: navy #001e42, blue #0056a6, Segoe UI, nền/line/focus từ globals.css; inline editor kế thừa user-editor, không mở thêm thế giới thị giác.
-STORY: giảng viên chọn PDF/DOCX ngay lúc tạo → tiêu đề/môn → lưu thông tin và upload → scan nguồn/chuyển PDF/scan PDF → xem trước → tự công bố. Không yêu cầu admin duyệt giảng viên; sinh viên vẫn metadata/PDF/gửi duyệt. Sau thu hồi phân công giữ metadata, chặn sửa/công bố nhưng vẫn được rút yêu cầu cũ của mình.
+STORY: sinh viên chọn PDF/DOCX ngay lúc tạo → tiêu đề/môn/nguồn/căn cứ quyền → lưu thông tin và upload → scan nguồn/chuyển PDF/scan PDF → xem trước → gửi duyệt; quản trị viên duyệt mới công bố (ROLE-01). Trước ROLE-01 giảng viên tự công bố; luồng đó đã bỏ.
 FIRST VIEWPORT: heading, phạm vi nháp/chờ duyệt trung thực, nút tạo và danh sách riêng có bộ lọc trạng thái; editor mở ngay trước danh sách. Bản đã lưu có PDF, gửi/rút và lịch sử. Bản terminal có xác nhận tạo kế tiếp; lịch sử phiên bản nằm sau lần duyệt, chọn bản để xem quyết định cũ.
 FORM: thuộc bề mặt Operate hiện có, không concept roll cho việc mở rộng. Hai cột field desktop, một cột mobile; bảng reflow thành hàng nhóm; lựa chọn môn đầy đủ và wrap. Môn thêm/gỡ được stage, chỉ lưu khi bấm Lưu bản nháp. Xung đột/lỗi giữ nội dung; đóng khi có sửa cần xác nhận inline. Form loading/error/retry, focus và nút 44px theo nền tảng.
 
@@ -18,4 +18,4 @@ PDF/DOCX17/10: một file selection ở DraftForm, gợi ý tên chỉ khi tiêu
 
 Nếu metadata ở tab khác đổi trong lúc poll, giữ revision ban đầu và hiện snapshot mới trong khối đối chiếu hiện có. Người dùng sửa/đối chiếu rồi xác nhận trước lưu với revision mới, hoặc chủ động dùng thông tin máy chủ. Không âm thầm nhận revision metadata mới rồi ghi nội dung cũ lên trên. File-only progress được cập nhật độc lập.
 
-UPLOAD-01 20/10: giảng viên và sinh viên dùng chung `useScanWatch`. Chỉ poll khi tab hiện; tab ẩn không gửi request và không tính vào ba phút, hiện lại thì kiểm tra ngay. Ba lần lỗi kết nối liên tiếp dừng chờ và báo mất kết nối, không phải lỗi file; 401/403/404 dừng và báo lý do. Thông báo chờ luôn nói file đã lưu, không cần tải lên lại, và giờ kiểm tra gần nhất.
+UPLOAD-01 20/10: trang dùng `useScanWatch` (trước ROLE-01 giảng viên dùng chung). Chỉ poll khi tab hiện; tab ẩn không gửi request và không tính vào ba phút, hiện lại thì kiểm tra ngay. Ba lần lỗi kết nối liên tiếp dừng chờ và báo mất kết nối, không phải lỗi file; 401/403/404 dừng và báo lý do. Thông báo chờ luôn nói file đã lưu, không cần tải lên lại, và giờ kiểm tra gần nhất.

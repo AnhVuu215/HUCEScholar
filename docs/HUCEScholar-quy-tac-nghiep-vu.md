@@ -1,6 +1,8 @@
 # HUCEScholar Quy tắc nghiệp vụ và luồng công bố
 
-Khởi tạo09/10/2026; cập nhật quyết định sản phẩm14/10/2026, phiên bản1.3. Phục vụ MVP.
+Khởi tạo09/10/2026; cập nhật quyết định sản phẩm10/11/2026, phiên bản1.4. Phục vụ MVP.
+
+Quyết định 10/11/2026 (ROLE-01) thay A01, A02, A04, ma trận quyền ba vai trò và BR17: hệ thống chỉ còn ADMIN và STUDENT. Sinh viên tải PDF/DOCX kèm nguồn và căn cứ quyền rồi gửi duyệt; admin duyệt mọi tài liệu trước khi công bố và soạn danh sách đọc (mỗi môn một danh sách). Bỏ tự công bố, phân công môn và bàn giao. Tài khoản giảng viên cũ thành sinh viên; phiên bản đã tự công bố giữ `LECTURER_SELF` làm lịch sử. Các quyết định 14/10 và 17/10 dưới đây là lịch sử. Xem [triển khai](implementation/2026-11-10-remove-lecturer-role.md).
 
 Quyết định14/10 thay A02: giảng viên upload tài liệu PDF không giới hạn nguồn HUCE, nguồn tham khảo tùy chọn, không bắt buộc khai báo căn cứ quyền và tự công bố khi file SAFE. Môn/phân công và ownership vẫn được kiểm tra. Luồng sinh viên không đổi. Proposal/Word và prototype cũ là tài liệu lịch sử, không ghi đè hiện vật đã bàn giao.
 
@@ -12,10 +14,10 @@ Người đề xuất đã chốt các phương án A01–A06 sau khi rà soát 
 
 | Mã | Chính sách MVP đã chốt |
 |---|---|
-| A01 | Admin cấp hoặc xác minh tài khoản. Từ 22/10/2026 (AUTH-04), sinh viên và giảng viên tự đăng ký qua liên kết gửi email, tự chọn role, không cần admin duyệt; ADMIN chỉ do admin cấp. Giảng viên tự đăng ký chỉ đăng học liệu cho môn admin đã phân công. Chưa SSO. |
-| A02 | Giảng viên tự công bố PDF SAFE của mình; không cần admin duyệt hoặc khai báo căn cứ quyền. Nguồn tham khảo tùy chọn. |
+| A01 | Admin cấp hoặc xác minh tài khoản. Từ 22/10/2026 (AUTH-04) sinh viên tự đăng ký qua liên kết gửi email, không cần admin duyệt; từ ROLE-01 không còn chọn role, mọi tài khoản tự đăng ký là STUDENT. ADMIN chỉ do admin cấp. Chưa SSO. |
+| A02 | Lịch sử (thay bởi ROLE-01): giảng viên tự công bố PDF SAFE của mình. Từ 10/11/2026 mọi tài liệu qua admin duyệt. |
 | A03 | Tài khoản đã xác minh xem được học liệu đã công bố theo quyền tài liệu; chưa giới hạn theo lớp hoặc môn đăng ký. |
-| A04 | Sinh viên gửi tài liệu bổ sung có duyệt; không sửa giáo trình giảng viên. |
+| A04 | Sinh viên gửi tài liệu PDF/DOCX có duyệt; chỉ sửa tài liệu của mình. |
 | A05 | Tải file gốc nếu được phép; ghi chú riêng, chưa xuất PDF kèm ghi chú hoặc offline. |
 | A06 | Thư viện mini lưu metadata và liên kết nguồn được phép. Chỉ lưu toàn văn khi có căn cứ quyền sử dụng. |
 
@@ -23,23 +25,21 @@ Người đề xuất đã chốt các phương án A01–A06 sau khi rà soát 
 
 Mọi quyền đều yêu cầu tài khoản hoạt động và kiểm tra tại backend. ADMIN không mặc nhiên vượt quyền phân phối tài liệu. Người chưa đăng nhập chỉ vào giới thiệu, đăng nhập và khôi phục mật khẩu; không mở danh mục học liệu.
 
-| Hành động | ADMIN | LECTURER | STUDENT |
-|---|---|---|---|
-| Tài khoản và role | Quản lý; giữ ít nhất một admin hoạt động | Không | Không |
-| Danh mục môn và phân công | Quản lý | Xem phân công của mình | Xem danh mục được phép |
-| Tạo và sửa giáo trình | Không biên soạn | Của mình và đúng phân công | Không |
-| Tự công bố học liệu giảng viên | Không | Bản của mình, SAFE, đúng phân công/revision | Không |
-| Gửi tài liệu bổ sung | Không | Dùng luồng học liệu giảng viên | Có; bài của mình |
-| Duyệt hoặc yêu cầu sửa | Có; đúng revision | Không | Không |
-| Ẩn hoặc khôi phục | Toàn tài liệu | Không | Không |
-| Bàn giao người quản lý | Có theo BR17 | Không | Không |
-| Đọc và tải | Theo quyền tài liệu | Theo quyền tài liệu | Theo quyền tài liệu |
-| Xem trước bản chưa công bố | Theo quyền kiểm duyệt; file SAFE | Bản của mình, đúng phân công; file SAFE | Bài của mình; file SAFE |
-| Ghi chú và thư viện cá nhân | Chỉ dữ liệu của mình | Chỉ dữ liệu của mình | Chỉ dữ liệu của mình |
-| Xem ghi chú của người khác | Không | Không | Không |
-| Quản lý sách hoặc báo cáo | Có | Gửi báo cáo theo quyền đọc | Gửi báo cáo theo quyền đọc |
+| Hành động | ADMIN | STUDENT |
+|---|---|---|
+| Tài khoản và role | Quản lý; chỉ cấp tài khoản sinh viên; giữ ít nhất một admin hoạt động | Không |
+| Danh mục môn | Quản lý | Xem danh mục được phép |
+| Tạo, sửa và gửi tài liệu (PDF/DOCX) | Không biên soạn | Có; tài liệu của mình, môn đang hoạt động |
+| Duyệt hoặc yêu cầu sửa | Có; đúng revision | Không |
+| Ẩn hoặc khôi phục | Toàn tài liệu | Không |
+| Soạn danh sách đọc | Có; mỗi môn một danh sách | Không; chỉ đọc danh sách đã công bố |
+| Đọc và tải | Theo quyền tài liệu | Theo quyền tài liệu |
+| Xem trước bản chưa công bố | Theo quyền kiểm duyệt; file SAFE | Bài của mình; file SAFE |
+| Ghi chú và thư viện cá nhân | Chỉ dữ liệu của mình | Chỉ dữ liệu của mình |
+| Xem ghi chú của người khác | Không | Không |
+| Quản lý sách hoặc báo cáo | Có | Gửi báo cáo theo quyền đọc |
 
-Admin được biên tập danh mục sách, tài khoản, phân công và quyết định kiểm duyệt. Admin không sửa thay file hoặc metadata nội dung giáo trình; nếu có lỗi, yêu cầu người phụ trách chỉnh sửa rồi duyệt lại.
+Admin được biên tập danh mục sách, tài khoản, danh sách đọc và quyết định kiểm duyệt. Admin không sửa thay file hoặc metadata tài liệu sinh viên gửi; nếu có lỗi, yêu cầu người gửi chỉnh sửa rồi duyệt lại.
 
 ## 3. Ba trục trạng thái
 
@@ -88,11 +88,11 @@ HIDDEN và chống xung đột cũng áp dụng tự công bố. Yêu cầu gi�
 
 Phiên bản đã duyệt là bất biến. Bản mới không thay khóa ghi chú của bản cũ. Lịch sử phiên bản chỉ cấp quyền đọc với bản APPROVED còn an toàn, còn quyền sử dụng và tài liệu không bị ẩn; không lộ bản nháp hoặc bản bị từ chối.
 
-## 5. Bàn giao giảng viên và ẩn tài liệu
+## 5. Bàn giao (lịch sử) và ẩn tài liệu
 
 BR16: ADMIN quản trị và duyệt nội dung, không trực tiếp biên soạn giáo trình. Quyền sửa danh mục sách theo UC22 được giữ riêng.
 
-BR17: Bàn giao thực hiện trong UC06, chỉ áp dụng học liệu giảng viên. Admin chọn tài liệu, giảng viên nhận và nhập lý do. Người nhận phải hoạt động và được phân công tất cả môn gắn tài liệu. Backend kiểm tra revision, đổi chủ quản lý và rút mọi phiên bản SUBMITTED về DRAFT trong một giao dịch. Người nhận rà soát trước khi gửi lại.
+BR17 (lịch sử, bỏ ở ROLE-01; lịch sử bàn giao cũ chỉ còn để đọc): Bàn giao thực hiện trong UC06, chỉ áp dụng học liệu giảng viên. Admin chọn tài liệu, giảng viên nhận và nhập lý do. Người nhận phải hoạt động và được phân công tất cả môn gắn tài liệu. Backend kiểm tra revision, đổi chủ quản lý và rút mọi phiên bản SUBMITTED về DRAFT trong một giao dịch. Người nhận rà soát trước khi gửi lại.
 
 Giữ nguyên tác giả, người gửi và quyết định trong lịch sử; không thay file đã duyệt hoặc liên kết ghi chú. Giảng viên cũ mất quyền quản lý sau bàn giao. Thu hồi phân công đơn thuần chặn sửa/gửi/duyệt mới nhưng không tự chuyển chủ, xóa file hay gỡ bản đã công bố. Chưa có người nhận phù hợp thì giữ nguyên dữ liệu và chặn công bố mới.
 

@@ -12,7 +12,6 @@ type Version = {
 };
 export type ManagedMaterial = {
   id: string;
-  kind: 'LECTURER_MATERIAL' | 'STUDENT_SUPPLEMENT';
   visibility: 'VISIBLE' | 'HIDDEN';
   revision: number;
   manager: { id: string; name: string };
@@ -23,6 +22,7 @@ export type MaterialLifecycle = ManagedMaterial & {
   current: Version | null;
   courses: { id: string; code: string; name: string }[];
   history: {
+    /** Handovers recorded before ROLE-01; read-only history. */
     transfers: {
       id: string;
       fromUserId: string;
@@ -65,7 +65,6 @@ function overview(v: unknown): v is ManagedMaterial {
   return (
     isRecord(v) &&
     isNumericId(v.id) &&
-    ['LECTURER_MATERIAL', 'STUDENT_SUPPLEMENT'].includes(String(v.kind)) &&
     ['VISIBLE', 'HIDDEN'].includes(String(v.visibility)) &&
     integer(v.revision) &&
     Number(v.revision) > 0 &&
@@ -127,7 +126,7 @@ export async function managedMaterials(
   params: URLSearchParams,
   signal: AbortSignal,
 ): Promise<List> {
-  for (const key of ['kind', 'visibility']) if (!params.get(key)) params.delete(key);
+  if (!params.get('visibility')) params.delete('visibility');
   const data: unknown = await (await apiRequest(`/admin/materials?${params}`, { signal })).json();
   if (
     isRecord(data) &&
@@ -141,35 +140,9 @@ export async function managedMaterials(
 export async function materialLifecycle(id: string, page = 1, signal?: AbortSignal) {
   return readItem(await apiRequest(`/admin/materials/${id}?page=${page}&limit=10`, { signal }));
 }
-export async function transferRecipients(id: string, params: URLSearchParams, signal: AbortSignal) {
-  const data: unknown = await (
-    await apiRequest(`/admin/materials/${id}/recipients?${params}`, { signal })
-  ).json();
-  if (
-    isRecord(data) &&
-    Array.isArray(data.items) &&
-    data.items.every(
-      (v) =>
-        isRecord(v) &&
-        typeof v.name === 'string' &&
-        typeof v.id === 'string' &&
-        /^[1-9]\d*$/.test(v.id),
-    ) &&
-    integer(data.total)
-  )
-    return {
-      items: data.items.map((v) => ({
-        id: String(v.id),
-        code: String(v.id),
-        name: String(v.name),
-      })),
-      total: Number(data.total),
-    };
-  throw new Error('Invalid transfer recipients.');
-}
 export async function changeMaterial(
   current: MaterialLifecycle,
-  action: 'transfer' | 'visibility',
+  action: 'visibility',
   body: object,
 ) {
   return readItem(
@@ -181,18 +154,11 @@ export async function changeMaterial(
 }
 export function lifecycleError(e: unknown) {
   const codes: Record<string, string> = {
-    ASSIGNMENT_REQUIRED:
-      'Người nhận cần phân công hiện hành cho tất cả môn trong lịch sử tài liệu.',
-    COURSE_UNAVAILABLE:
-      'Có môn hoặc khoa đã ngừng hoạt động. Kiểm tra danh mục trước khi bàn giao.',
-    RECIPIENT_UNAVAILABLE: 'Người nhận không còn là giảng viên hoạt động đã xác minh.',
     MATERIAL_UNAVAILABLE:
       'Bản hiện hành chưa đủ điều kiện: đã duyệt, PDF an toàn và còn quyền sử dụng.',
     STALE_REVISION: 'Tài liệu đã thay đổi ở lượt khác.',
     VISIBILITY_UNCHANGED: 'Tài liệu đã ở trạng thái này.',
     RESOLUTION_REQUIRED: 'Xác nhận lý do ẩn đã được giải quyết trước khi khôi phục.',
-    TRANSFER_NOT_ALLOWED: 'Chỉ bàn giao học liệu giảng viên.',
-    SAME_MANAGER: 'Người nhận đang quản lý tài liệu.',
   };
   return e instanceof ApiError && e.code && codes[e.code] ? codes[e.code] : academicError(e);
 }

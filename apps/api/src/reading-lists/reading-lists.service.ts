@@ -52,17 +52,8 @@ export function dueInstant(dueOn: Date, time: Date | null) {
   const minutes = time ? time.getUTCHours() * 60 + time.getUTCMinutes() : END_OF_DAY;
   return new Date(dueOn.getTime() + minutes * 60_000 - COURSE_OFFSET_MS);
 }
-/** Published lists of a course whose owner is still active and assigned to that course. */
-export const shown = (courseId: bigint) =>
-  ({
-    published: true,
-    users: {
-      status: 'ACTIVE',
-      lecturer_assignments_lecturer_assignments_lecturer_idTousers: {
-        some: { course_id: courseId, revoked_at: null },
-      },
-    },
-  }) satisfies Prisma.reading_listsWhereInput;
+/** What readers see of a course's list: only once an admin has published it. */
+export const shown = { published: true } satisfies Prisma.reading_listsWhereInput;
 const listSelect = {
   id: true,
   course_id: true,
@@ -86,9 +77,9 @@ const listSelect = {
 type ListRow = Prisma.reading_listsGetPayload<{ select: typeof listSelect }>;
 
 /**
- * COURSE-01. Lecturers edit their own list for a course they are assigned to; any reader sees
- * published lists whose owner is still assigned. Items the viewer cannot read are shown as
- * unavailable without their title, so a list never reveals hidden material.
+ * COURSE-01. Each course has at most one reading list, edited by any active admin (ROLE-01); any
+ * reader sees it once published. Items the viewer cannot read are shown as unavailable without
+ * their title, so a list never reveals hidden material.
  */
 @Injectable()
 export class ReadingListsService {
@@ -110,16 +101,11 @@ export class ReadingListsService {
     if (!course) throw new NotFoundException('Không tìm thấy môn học.');
     return course;
   }
-  private async assigned(tx: Prisma.TransactionClient, actor: Profile, courseId: bigint) {
+  private async editor(tx: Prisma.TransactionClient, actor: Profile, courseId: bigint) {
     const user = await this.reader(tx, actor);
-    if (user.role !== 'LECTURER')
-      throw new ForbiddenException('Chỉ giảng viên được phân công soạn danh sách đọc.');
+    if (user.role !== 'ADMIN')
+      throw new ForbiddenException('Chỉ quản trị viên soạn danh sách đọc.');
     await this.activeCourse(tx, courseId);
-    const assignment = await tx.lecturer_assignments.count({
-      where: { lecturer_id: user.id, course_id: courseId, revoked_at: null },
-    });
-    if (!assignment)
-      throw fail('ASSIGNMENT_REQUIRED', 'Cần phân công hiện hành cho môn này để soạn danh sách.');
     return user;
   }
   /**
@@ -204,7 +190,7 @@ export class ReadingListsService {
         const user = await this.reader(tx, actor);
         const course = await this.activeCourse(tx, courseId);
         const lists = await tx.reading_lists.findMany({
-          where: { course_id: courseId, ...shown(courseId) },
+          where: { course_id: courseId, ...shown },
           select: listSelect,
           orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
         });
@@ -223,13 +209,13 @@ export class ReadingListsService {
     );
   }
 
-  async mine(actor: Profile, rawCourseId: string) {
+  async managed(actor: Profile, rawCourseId: string) {
     const courseId = academicId(rawCourseId);
     return this.db.$transaction(
       async (tx) => {
-        const user = await this.assigned(tx, actor, courseId);
+        const user = await this.editor(tx, actor, courseId);
         const list = await tx.reading_lists.findUnique({
-          where: { course_id_owner_id: { course_id: courseId, owner_id: user.id } },
+          where: { course_id: courseId },
           select: listSelect,
         });
         return { item: list ? await this.serialize(tx, list, user.id) : null };
@@ -241,11 +227,9 @@ export class ReadingListsService {
   async save(actor: Profile, rawCourseId: string, body: SaveReadingListDto) {
     const courseId = academicId(rawCourseId);
     return this.db.$transaction(async (tx) => {
-      const user = await this.assigned(tx, actor, courseId);
-      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:reading-list:${courseId}:${user.id}`}, 0))`;
-      const existing = await tx.reading_lists.findUnique({
-        where: { course_id_owner_id: { course_id: courseId, owner_id: user.id } },
-      });
+      const user = await this.editor(tx, actor, courseId);
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:reading-list:${courseId}`}, 0))`;
+      const existing = await tx.reading_lists.findUnique({ where: { course_id: courseId } });
       if ((existing?.revision ?? 0) !== body.revision)
         throw fail('STALE_REVISION', 'Danh sách đã thay đổi ở lượt khác. Tải lại trước khi lưu.');
       const versionIds = body.items.map((i) => academicId(i.versionId));
@@ -285,6 +269,7 @@ export class ReadingListsService {
         ? await tx.reading_lists.update({
             where: { id: existing.id },
             data: {
+              owner_id: user.id,
               title: body.title,
               published: body.published,
               revision: { increment: 1 },
@@ -406,7 +391,7 @@ export class ReadingListsService {
         where: {
           version_id: versionId,
           document_versions: available(),
-          reading_lists: { course_id: courseId, ...shown(courseId) },
+          reading_lists: { course_id: courseId, ...shown },
         },
       });
       if (!listed) throw new NotFoundException('Không tìm thấy mục này trong danh sách đọc.');
@@ -448,7 +433,8 @@ export class ReadingListsService {
               where: {
                 document_versions: available(),
                 reading_lists: {
-                  OR: followed.map((f) => ({ course_id: f.courses.id, ...shown(f.courses.id) })),
+                  course_id: { in: followed.map((f) => f.courses.id) },
+                  ...shown,
                 },
               },
               select: {
@@ -535,7 +521,8 @@ export class ReadingListsService {
                 due_on: { gte: from, lt: to },
                 document_versions: available(),
                 reading_lists: {
-                  OR: followed.map((f) => ({ course_id: f.course_id, ...shown(f.course_id) })),
+                  course_id: { in: followed.map((f) => f.course_id) },
+                  ...shown,
                 },
               },
               select: {

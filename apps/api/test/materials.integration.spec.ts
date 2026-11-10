@@ -66,8 +66,8 @@ describe('private material drafts', () => {
     const hash = await argon2.hash(password);
     for (const [name, role] of [
       ['admin', 'ADMIN'],
-      ['lecturer', 'LECTURER'],
-      ['receiver', 'LECTURER'],
+      ['admin2', 'ADMIN'],
+      ['author', 'STUDENT'],
       ['student', 'STUDENT'],
       ['other', 'STUDENT'],
     ]) {
@@ -92,15 +92,6 @@ describe('private material drafts', () => {
             [`${prefix}-${i}`, `Môn ${i}`, faculty],
           )
         ).rows[0].id,
-      );
-    await db.query(
-      'INSERT INTO hucescholar.lecturer_assignments(lecturer_id,course_id,assigned_by) VALUES($1,$2,$3)',
-      [users.lecturer, courses[0], users.admin],
-    );
-    for (const course of courses)
-      await db.query(
-        'INSERT INTO hucescholar.lecturer_assignments(lecturer_id,course_id,assigned_by) VALUES($1,$2,$3)',
-        [users.receiver, course, users.admin],
       );
     const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = module.createNestApplication();
@@ -251,10 +242,6 @@ describe('private material drafts', () => {
       await db.query('DELETE FROM hucescholar.audit_events WHERE actor_id=ANY($1::bigint[])', [
         ids,
       ]);
-      await db.query(
-        'DELETE FROM hucescholar.lecturer_assignments WHERE lecturer_id=ANY($1::bigint[])',
-        [ids],
-      );
       await db.query('DELETE FROM hucescholar.courses WHERE faculty_id=$1', [faculty]);
       await db.query('DELETE FROM hucescholar.faculties WHERE id=$1', [faculty]);
       await db.query('DELETE FROM hucescholar.auth_sessions WHERE user_id=ANY($1::bigint[])', [
@@ -285,7 +272,7 @@ describe('private material drafts', () => {
       .set('X-CSRF-Token', csrf)
       .send(data);
   }
-  async function create(name = 'lecturer', fields: object = {}) {
+  async function create(name = 'author', fields: object = {}) {
     const result = await write(name, { ...body(), ...fields });
     expect(result.status).toBe(201);
     return result.body.item;
@@ -697,11 +684,11 @@ describe('private material drafts', () => {
       .mockRejectedValue(new Error('INVALID_DOCX'));
     try {
       await app.get(SourceConversionProcessor).process(item.source.id);
-      const failed = (await notices('lecturer')).items.filter(
+      const failed = (await notices('author')).items.filter(
         (n: { documentId: string }) => n.documentId === item.id,
       );
       expect(failed).toMatchObject([{ kind: 'SOURCE_FAILED', detail: 'INVALID_DOCX' }]);
-      const current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      const current = (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item;
       // INVALID_DOCX is final; force a retryable state to check a second cycle notifies too.
       await db.query(
         "UPDATE hucescholar.document_source_uploads SET conversion_status='QUEUED', error_code=NULL, attempt_count=3 WHERE id=$1",
@@ -709,7 +696,7 @@ describe('private material drafts', () => {
       );
       expect(current.source.conversionState).toBe('FAILED');
       await app.get(SourceConversionProcessor).reconcile();
-      const both = (await notices('lecturer')).items.filter(
+      const both = (await notices('author')).items.filter(
         (n: { documentId: string }) => n.documentId === item.id,
       );
       expect(both.map((n: { kind: string; detail: string }) => n.detail).sort()).toEqual([
@@ -724,12 +711,12 @@ describe('private material drafts', () => {
   async function listWrite(name: string, courseId: string, data: object) {
     const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
     return agents[name]
-      .put(`/api/v1/courses/${courseId}/reading-lists/mine`)
+      .put(`/api/v1/courses/${courseId}/reading-lists/manage`)
       .set('Origin', origin)
       .set('X-CSRF-Token', csrf)
       .send(data);
   }
-  it('reading lists: assigned lecturers pin exact versions; readers see only published, readable items', async () => {
+  it('reading lists: admins pin exact versions; readers see only published, readable items', async () => {
     const first = await readingFixture();
     const second = await readingFixture();
     const course = courses[0];
@@ -739,27 +726,29 @@ describe('private material drafts', () => {
     ];
     const draft = { title: 'Danh sách học kỳ 1', published: false, revision: 0, items };
     expect((await listWrite('student', course, draft)).status).toBe(403);
-    expect((await listWrite('lecturer', courses[1], draft)).body.code).toBe('ASSIGNMENT_REQUIRED');
-    await agents.lecturer
-      .put(`/api/v1/courses/${course}/reading-lists/mine`)
+    expect(
+      (await agents.student.get(`/api/v1/courses/${course}/reading-lists/manage`)).status,
+    ).toBe(403);
+    await agents.admin
+      .put(`/api/v1/courses/${course}/reading-lists/manage`)
       .send(draft)
       .expect(403);
-    expect(
-      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body,
-    ).toEqual({
-      item: null,
-    });
-    const created = await listWrite('lecturer', course, draft);
+    expect((await agents.admin.get(`/api/v1/courses/${course}/reading-lists/manage`)).body).toEqual(
+      {
+        item: null,
+      },
+    );
+    const created = await listWrite('admin', course, draft);
     expect(created.status).toBe(200);
     expect(created.body.item).toMatchObject({ revision: 1, published: false, title: draft.title });
-    const mine = (o: { owner: { id: string } }) => o.owner.id === users.lecturer;
+    const mine = (o: { owner: { id: string } }) => o.owner.id === users.admin;
     const listed = async () =>
       (await agents.student.get(`/api/v1/courses/${course}/reading-lists`).expect(200)).body;
     expect((await listed()).items.filter(mine)).toEqual([]);
-    expect((await listWrite('lecturer', course, { ...draft, revision: 0 })).body.code).toBe(
+    expect((await listWrite('admin', course, { ...draft, revision: 0 })).body.code).toBe(
       'STALE_REVISION',
     );
-    const shown = await listWrite('lecturer', course, { ...draft, published: true, revision: 1 });
+    const shown = await listWrite('admin', course, { ...draft, published: true, revision: 1 });
     expect(shown.status).toBe(200);
     let list = (await listed()).items.find(mine);
     expect(list.items).toMatchObject([
@@ -774,11 +763,11 @@ describe('private material drafts', () => {
     ]);
     // Duplicates, drafts and other courses' material cannot be pinned.
     expect(
-      (await listWrite('lecturer', course, { ...draft, revision: 2, items: [items[0], items[0]] }))
+      (await listWrite('admin', course, { ...draft, revision: 2, items: [items[0], items[0]] }))
         .body.code,
     ).toBe('DUPLICATE_ITEM');
     const unpublished = await create('student');
-    const unavailable = await listWrite('lecturer', course, {
+    const unavailable = await listWrite('admin', course, {
       ...draft,
       revision: 2,
       items: [
@@ -812,23 +801,11 @@ describe('private material drafts', () => {
     await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
       second.id,
     ]);
-    // A revoked assignment withdraws the list from readers without deleting it.
-    await db.query(
-      'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2 WHERE lecturer_id=$1 AND course_id=$3 AND revoked_at IS NULL',
-      [users.lecturer, users.admin, course],
-    );
-    try {
-      expect((await listed()).items.filter(mine)).toEqual([]);
-      expect(
-        (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.code,
-      ).toBe('ASSIGNMENT_REQUIRED');
-    } finally {
-      await db.query(
-        'UPDATE hucescholar.lecturer_assignments SET revoked_at=NULL,revoked_by=NULL WHERE lecturer_id=$1 AND course_id=$2',
-        [users.lecturer, course],
-      );
-    }
-    expect((await listed()).items.filter(mine)).toHaveLength(1);
+    // One list per course: any admin edits the same list, and readers still see one.
+    const other = await listWrite('admin2', course, { ...draft, published: true, revision: 2 });
+    expect(other.status).toBe(200);
+    expect(other.body.item).toMatchObject({ revision: 3, owner: { id: users.admin2 } });
+    expect((await listed()).items).toHaveLength(1);
   });
   it('CAL-07: due times, change notices to followers and reminders before unread due dates', async () => {
     const first = await readingFixture();
@@ -857,10 +834,10 @@ describe('private material drafts', () => {
       expect((await follow('student', { following: true, remindMinutes })).status).toBe(400);
 
     const revision = async () =>
-      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+      (await agents.admin.get(`/api/v1/courses/${course}/reading-lists/manage`)).body.item
         ?.revision ?? 0;
     const save = async (published: boolean, items: object[]) =>
-      listWrite('lecturer', course, {
+      listWrite('admin', course, {
         title: 'Danh sách có giờ',
         published,
         revision: await revision(),
@@ -916,7 +893,7 @@ describe('private material drafts', () => {
     ];
     expect((await changed('student')).sort()).toEqual(expected.sort());
     expect((await changed('other')).sort()).toEqual(expected.sort());
-    expect(await changed('lecturer')).toEqual([]);
+    expect(await changed('admin')).toEqual([]);
     // Saving the same dates again announces nothing new.
     await save(true, [
       item(first.versionId, '2027-08-10', '09:00'),
@@ -977,7 +954,7 @@ describe('private material drafts', () => {
     const second = await readingFixture();
     const course = courses[0];
     const mineList = async () =>
-      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item;
+      (await agents.admin.get(`/api/v1/courses/${course}/reading-lists/manage`)).body.item;
     const revision = (await mineList())?.revision ?? 0;
     const items = [
       { section: 'Tuần 1', versionId: first.versionId, note: '', dueOn: '2026-11-03' },
@@ -987,13 +964,13 @@ describe('private material drafts', () => {
     for (const dueOn of ['2026-02-30', '1999-12-31', '3/11/2026'])
       expect(
         (
-          await listWrite('lecturer', course, {
+          await listWrite('admin', course, {
             ...list,
             items: [{ ...items[0], dueOn }],
           })
         ).status,
       ).toBe(400);
-    const saved = await listWrite('lecturer', course, list);
+    const saved = await listWrite('admin', course, list);
     expect(saved.status).toBe(200);
     expect(saved.body.item.items.map((i: { dueOn: string }) => i.dueOn)).toEqual([
       '2026-11-03',
@@ -1002,13 +979,13 @@ describe('private material drafts', () => {
     // Absent dueOn keeps working for older clients and clears the date.
     const { dueOn: _omit, ...plain } = items[1];
     void _omit;
-    const cleared = await listWrite('lecturer', course, {
+    const cleared = await listWrite('admin', course, {
       ...list,
       revision: revision + 1,
       items: [items[0], plain],
     });
     expect(cleared.body.item.items[1].dueOn).toBeNull();
-    await listWrite('lecturer', course, { ...list, revision: revision + 2 });
+    await listWrite('admin', course, { ...list, revision: revision + 2 });
 
     const deadlines = '/api/v1/calendar/reading-deadlines';
     const range = (from = '2026-11-01', to = '2026-12-01') =>
@@ -1081,9 +1058,9 @@ describe('private material drafts', () => {
     expect(await titles()).toEqual(['2026-11-03', '2026-11-10']);
     // `to` is exclusive.
     expect(await titles('2026-11-03', '2026-11-10')).toEqual(['2026-11-03']);
-    // Following is per reader: the lecturer has not followed this course.
+    // Following is per reader: the admin has not followed this course.
     expect(
-      (await agents.lecturer.get(deadlines).query({ from: '2026-11-01', to: '2026-12-01' })).body
+      (await agents.admin.get(deadlines).query({ from: '2026-11-01', to: '2026-12-01' })).body
         .items,
     ).toEqual([]);
     // Hidden material drops out without revealing its title, and returns when shown again.
@@ -1092,22 +1069,10 @@ describe('private material drafts', () => {
     await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [
       second.id,
     ]);
-    // A draft list or a revoked assignment withdraws its deadlines.
-    await listWrite('lecturer', course, { ...list, published: false, revision: revision + 3 });
+    // A draft list withdraws its deadlines.
+    await listWrite('admin', course, { ...list, published: false, revision: revision + 3 });
     expect(await titles()).toEqual([]);
-    await listWrite('lecturer', course, { ...list, revision: revision + 4 });
-    await db.query(
-      'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2 WHERE lecturer_id=$1 AND course_id=$3 AND revoked_at IS NULL',
-      [users.lecturer, users.admin, course],
-    );
-    try {
-      expect(await titles()).toEqual([]);
-    } finally {
-      await db.query(
-        'UPDATE hucescholar.lecturer_assignments SET revoked_at=NULL,revoked_by=NULL WHERE lecturer_id=$1 AND course_id=$2',
-        [users.lecturer, course],
-      );
-    }
+    await listWrite('admin', course, { ...list, revision: revision + 4 });
     expect(await titles()).toEqual(['2026-11-03', '2026-11-10']);
     // Bad ranges and unknown courses.
     for (const [from, to] of [
@@ -1134,7 +1099,7 @@ describe('private material drafts', () => {
     const stray = await readingFixture();
     const course = courses[0];
     const revision =
-      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+      (await agents.admin.get(`/api/v1/courses/${course}/reading-lists/manage`)).body.item
         ?.revision ?? 0;
     const list = {
       title: 'Danh sách theo dõi đọc',
@@ -1142,7 +1107,7 @@ describe('private material drafts', () => {
       revision,
       items: [first, second].map((f) => ({ section: '', versionId: f.versionId, note: '' })),
     };
-    const saved = await listWrite('lecturer', course, list);
+    const saved = await listWrite('admin', course, list);
     expect(saved.status).toBe(200);
     const mark = async (name: string, versionId: string, read: unknown, id = course) => {
       const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
@@ -1165,13 +1130,13 @@ describe('private material drafts', () => {
       versionId: first.versionId,
       read: true,
     });
-    // Idempotent, and private: the lecturer and other readers do not see it.
+    // Idempotent, and private: the admin and other readers do not see it.
     expect((await mark('student', first.versionId, true)).status).toBe(200);
     expect(await reads('student')).toEqual([true, false]);
     expect(await reads('other')).toEqual([false, false]);
-    expect(await reads('lecturer')).toEqual([false, false]);
-    // The mark follows the version, so it survives the lecturer reordering the list.
-    const reordered = await listWrite('lecturer', course, {
+    expect(await reads('admin')).toEqual([false, false]);
+    // The mark follows the version, so it survives an admin reordering the list.
+    const reordered = await listWrite('admin', course, {
       ...list,
       revision: saved.body.item.revision,
       items: [...list.items].reverse(),
@@ -1203,7 +1168,7 @@ describe('private material drafts', () => {
     expect((await mark('student', first.versionId, false)).body.read).toBe(false);
     expect(await reads('student')).toEqual([false, false]);
     // A draft list no longer accepts marks.
-    await listWrite('lecturer', course, {
+    await listWrite('admin', course, {
       ...list,
       published: false,
       revision: reordered.body.item.revision,
@@ -1218,7 +1183,7 @@ describe('private material drafts', () => {
     ];
     const course = courses[0];
     const revision =
-      (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+      (await agents.admin.get(`/api/v1/courses/${course}/reading-lists/manage`)).body.item
         ?.revision ?? 0;
     const list = {
       title: 'Danh sách trang đầu',
@@ -1230,7 +1195,7 @@ describe('private material drafts', () => {
         { section: '', versionId: third.versionId, note: '' },
       ],
     };
-    expect((await listWrite('lecturer', course, list)).status).toBe(200);
+    expect((await listWrite('admin', course, list)).status).toBe(200);
     const put = async (name: string, path: string, data: object) => {
       const csrf = (await agents[name].get('/api/v1/auth/csrf')).body.csrfToken;
       return agents[name]
@@ -1271,12 +1236,12 @@ describe('private material drafts', () => {
     await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [first.id]);
     expect(await progress()).toMatchObject({ total: 2, read: 1, next: null });
     await db.query("UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=$1", [first.id]);
-    // Marks and follows are private: the lecturer does not follow, so sees nothing here.
-    expect(await progress('lecturer')).toBeUndefined();
+    // Marks and follows are private: the admin does not follow, so sees nothing here.
+    expect(await progress('admin')).toBeUndefined();
     // A draft list withdraws everything; the course stays listed with nothing to read.
-    await listWrite('lecturer', course, { ...list, published: false, revision: revision + 1 });
+    await listWrite('admin', course, { ...list, published: false, revision: revision + 1 });
     expect(await progress()).toMatchObject({ total: 0, read: 0, next: null });
-    await listWrite('lecturer', course, { ...list, revision: revision + 2 });
+    await listWrite('admin', course, { ...list, revision: revision + 2 });
     await db.query('UPDATE hucescholar.courses SET is_active=false WHERE id=$1', [course]);
     try {
       expect(await progress()).toBeUndefined();
@@ -1290,7 +1255,7 @@ describe('private material drafts', () => {
   it('home: followed courses come nearest unread due date first, then those with nothing due', async () => {
     const first = await readingFixture();
     // The second course's material is filed under it while still a draft (courses freeze on
-    // submission), and listed there by a lecturer assigned to it.
+    // submission), and listed there by an admin.
     const second = await safeDraft('student', 3);
     await db.query('INSERT INTO hucescholar.version_courses(version_id,course_id) VALUES($1,$2)', [
       second.versionId,
@@ -1304,14 +1269,14 @@ describe('private material drafts', () => {
     expect((await review(pending.rows[0].id, decision())).status).toBe(201);
     const write = async (name: string, course: string, item: object) => {
       const revision =
-        (await agents[name].get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+        (await agents[name].get(`/api/v1/courses/${course}/reading-lists/manage`)).body.item
           ?.revision ?? 0;
       const items = [{ section: '', note: '', ...item }];
       const data = { title: 'Danh sách sắp xếp', published: true, revision, items };
       expect((await listWrite(name, course, data)).status).toBe(200);
     };
-    await write('lecturer', courses[0], { versionId: first.versionId, dueOn: '2026-11-03' });
-    await write('receiver', courses[1], { versionId: second.versionId, dueOn: '2026-11-01' });
+    await write('admin', courses[0], { versionId: first.versionId, dueOn: '2026-11-03' });
+    await write('admin2', courses[1], { versionId: second.versionId, dueOn: '2026-11-01' });
     const put = async (course: string, path: string, data: object) => {
       const csrf = (await agents.student.get('/api/v1/auth/csrf')).body.csrfToken;
       return agents.student
@@ -2468,9 +2433,9 @@ describe('private material drafts', () => {
       const course = courses[0];
       const reading = await readingFixture();
       const revision =
-        (await agents.lecturer.get(`/api/v1/courses/${course}/reading-lists/mine`)).body.item
+        (await agents.admin.get(`/api/v1/courses/${course}/reading-lists/manage`)).body.item
           ?.revision ?? 0;
-      await listWrite('lecturer', course, {
+      await listWrite('admin', course, {
         title: 'Danh sách xuất lịch',
         published: true,
         revision,
@@ -2879,17 +2844,16 @@ describe('private material drafts', () => {
   it('requires a session, author role and CSRF', async () => {
     await request(app.getHttpServer()).get('/api/v1/material-drafts').expect(401);
     await agents.admin.get('/api/v1/material-drafts').expect(403);
-    await agents.lecturer
+    await agents.author
       .post('/api/v1/material-drafts')
       .set('Origin', origin)
       .send(body())
       .expect(403);
   });
-  it('persists a private draft and derives lecturer kind without a fake file', async () => {
+  it('persists a private draft without a fake file', async () => {
     const item = await create();
     expect(item).toMatchObject({
       title: 'Bản nháp minh họa',
-      kind: 'LECTURER_MATERIAL',
       reviewStatus: 'DRAFT',
       fileState: 'MISSING',
       revision: 1,
@@ -2902,26 +2866,25 @@ describe('private material drafts', () => {
         [item.id],
       )
     ).rows[0];
-    expect(stored).toEqual({ manager_id: users.lecturer, current_version_id: null, file_id: null });
-    expect(JSON.stringify(item)).not.toMatch(/object_key|password|token_hash/);
+    expect(stored).toEqual({ manager_id: users.author, current_version_id: null, file_id: null });
+    expect(JSON.stringify(item)).not.toMatch(/object_key|password|token_hash|"kind"/);
     expect(
       (
         await db.query(
           "SELECT count(*)::int n FROM hucescholar.audit_events WHERE actor_id=$1 AND event_type='MATERIAL_DRAFT_CREATED'",
-          [users.lecturer],
+          [users.author],
         )
       ).rows[0].n,
     ).toBeGreaterThan(0);
   });
-  it('keeps student contributions separate and hides other owners including admin', async () => {
+  it("keeps each student's drafts separate and hides other owners including admin", async () => {
     const item = await create('student');
-    expect(item.kind).toBe('STUDENT_SUPPLEMENT');
     await agents.other.get(`/api/v1/material-drafts/${item.id}`).expect(404);
     await write('other', { ...body(), revision: item.revision }, item.id).then((r) =>
       expect(r.status).toBe(404),
     );
     await agents.admin.get(`/api/v1/material-drafts/${item.id}`).expect(403);
-    const list = await agents.lecturer.get('/api/v1/material-drafts').expect(200);
+    const list = await agents.author.get('/api/v1/material-drafts').expect(200);
     expect(list.body.items.some((row: { id: string }) => row.id === item.id)).toBe(false);
   });
   it('validates reserved fields, mandatory metadata and course IDs', async () => {
@@ -2943,12 +2906,15 @@ describe('private material drafts', () => {
     await agents.student.get('/api/v1/material-drafts?managerId=1').expect(400);
     await agents.student.get('/api/v1/material-drafts/no-id').expect(400);
   });
-  it('filters course choices by active faculty/course and current assignments', async () => {
-    const own = await agents.lecturer.get('/api/v1/material-drafts/courses').expect(200);
-    expect(own.body.items.map((c: { id: string }) => c.id)).toContain(courses[0]);
-    expect(own.body.items.map((c: { id: string }) => c.id)).not.toContain(courses[1]);
-    expect((await write('lecturer', { ...body(), courseIds: courses })).status).toBe(409);
+  it('filters course choices by active faculty and course', async () => {
+    const choices = async () =>
+      (
+        await agents.author.get(`/api/v1/material-drafts/courses?search=${prefix}`).expect(200)
+      ).body.items.map((c: { id: string }) => c.id);
+    expect(await choices()).toEqual(courses);
+    expect((await write('author', { ...body(), courseIds: courses })).status).toBe(201);
     await db.query('UPDATE hucescholar.courses SET is_active=false WHERE id=$1', [courses[1]]);
+    expect(await choices()).toEqual([courses[0]]);
     expect((await write('student', { ...body(), courseIds: [courses[1]] })).status).toBe(409);
     await db.query('UPDATE hucescholar.courses SET is_active=true WHERE id=$1', [courses[1]]);
     await db.query('UPDATE hucescholar.faculties SET is_active=false WHERE id=$1', [faculty]);
@@ -3041,139 +3007,39 @@ describe('private material drafts', () => {
     );
     return result.body.item;
   }
-  it('lecturer self-publication accepts optional source metadata without relaxing student validation', async () => {
+  it('ROLE-01: every draft needs source and rights, and only admin review publishes it', async () => {
     const fields = { ...body(), sourceReference: undefined, rightsBasis: undefined };
-    const created = await write('lecturer', fields);
-    expect(created.status).toBe(201);
-    expect(created.body.item).toMatchObject({ sourceReference: '', rightsBasis: '' });
-    expect((await write('lecturer', { ...fields, revision: 1 }, created.body.item.id)).status).toBe(
-      200,
-    );
-    expect((await write('student', fields)).status).toBe(400);
+    expect((await write('author', fields)).status).toBe(400);
     expect((await write('student', { ...body(), rightsBasis: '' })).status).toBe(400);
-  });
-  it('lecturer self-publication publishes a SAFE snapshot atomically without an admin request', async () => {
-    const item = await safeDraft('lecturer');
-    await db.query(
-      "UPDATE hucescholar.document_versions SET source_reference='',rights_basis='' WHERE id=$1",
-      [item.versionId],
-    );
-    const result = await publication('lecturer', item.id, 'publish', { revision: 2 });
-    expect(result.status).toBe(201);
-    expect(result.body.item).toMatchObject({
-      reviewStatus: 'APPROVED',
-      publicationMethod: 'LECTURER_SELF',
-      revision: 3,
-      editable: false,
-    });
-    expect(
-      (
-        await db.query('SELECT current_version_id FROM hucescholar.documents WHERE id=$1', [
-          item.id,
-        ])
-      ).rows[0].current_version_id,
-    ).toBe(item.versionId);
-    expect(
-      (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}/requests`)).body.total,
-    ).toBe(0);
-    expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
-      200,
-    );
-    expect((await publication('lecturer', item.id, 'publish', { revision: 2 })).status).toBe(409);
-    expect((await write('lecturer', { ...body(), revision: 3 }, item.id)).status).toBe(409);
-    const audit = await db.query(
-      "SELECT actor_id FROM hucescholar.audit_events WHERE entity_id=$1 AND event_type='MATERIAL_SELF_PUBLISHED'",
-      [item.id],
-    );
-    expect(audit.rows).toEqual([{ actor_id: users.lecturer }]);
-  });
-  it('lecturer self-publication enforces role, ownership, CSRF and file state', async () => {
-    const item = await create('lecturer');
-    for (const name of ['student', 'admin'])
-      expect((await publication(name, item.id, 'publish', { revision: 1 })).status).toBe(403);
-    expect((await publication('receiver', item.id, 'publish', { revision: 1 })).status).toBe(404);
-    await agents.lecturer
-      .post(`/api/v1/material-drafts/${item.id}/publish`)
-      .send({ revision: 1 })
-      .expect(403);
-    expect((await publication('lecturer', item.id, 'publish', { revision: 1 })).body.code).toBe(
-      'FILE_NOT_SAFE',
-    );
-    const attached = await upload('lecturer', item.id, 1);
-    expect(attached.status).toBe(201);
-    for (const state of ['CHECKING', 'FAILED']) {
-      await db.query(
-        'UPDATE hucescholar.files SET scan_status=$1 WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$2)',
-        [state, item.versionId],
-      );
-      expect((await publication('lecturer', item.id, 'publish', { revision: 2 })).body.code).toBe(
-        'FILE_NOT_SAFE',
-      );
-    }
+    const item = await safeDraft('author');
+    expect((await publication('author', item.id, 'publish', { revision: 2 })).status).toBe(404);
     expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
       404,
     );
   });
-  it('lecturer self-publication serializes double publish and preserves hidden state on restore', async () => {
-    const item = await safeDraft('lecturer');
+  it('ROLE-01: a version a lecturer self-published before the change still restores without source fields', async () => {
+    const item = await safeDraft('author');
+    // Legacy data as the migration keeps it: approved without a request, no source or rights.
     await db.query(
-      "UPDATE hucescholar.document_versions SET source_reference='',rights_basis='' WHERE id=$1",
+      "UPDATE hucescholar.document_versions SET source_reference='',rights_basis='',review_status='APPROVED',publication_method='LECTURER_SELF' WHERE id=$1",
       [item.versionId],
     );
-    await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [item.id]);
-    const responses = await Promise.all(
-      [1, 2].map(() => publication('lecturer', item.id, 'publish', { revision: 2 })),
-    );
-    expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
-    expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
-      404,
+    await db.query(
+      "UPDATE hucescholar.documents SET current_version_id=$2,visibility='HIDDEN' WHERE id=$1",
+      [item.id, item.versionId],
     );
     const restored = await lifecycleWrite(item.id, 'visibility', {
       revision: await documentRevision(item.id),
       visibility: 'VISIBLE',
-      reason: 'Restore synthetic self-publication',
+      reason: 'Restore legacy self-publication',
       resolved: true,
     });
     expect(restored.status).toBe(201);
-    expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
-      200,
-    );
-    const next = await publication('lecturer', item.id, 'versions', { revision: 3 });
-    expect(next.status).toBe(201);
-    expect(next.body.item).toMatchObject({
-      versionNo: 2,
-      reviewStatus: 'DRAFT',
-      publicationMethod: 'ADMIN_REVIEW',
-    });
-    expect((await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).status).toBe(
-      200,
-    );
-  });
-  it('lecturer self-publication rechecks revoked assignments and rejects stale input', async () => {
-    const item = await safeDraft('lecturer');
-    await db.query(
-      'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2,reason=$3 WHERE lecturer_id=$1 AND revoked_at IS NULL',
-      [users.lecturer, users.admin, 'Synthetic revocation'],
-    );
-    try {
-      expect((await publication('lecturer', item.id, 'publish', { revision: 2 })).body.code).toBe(
-        'ASSIGNMENT_REQUIRED',
-      );
-    } finally {
-      await db.query(
-        'UPDATE hucescholar.lecturer_assignments SET revoked_at=NULL,revoked_by=NULL,reason=NULL WHERE lecturer_id=$1',
-        [users.lecturer],
-      );
-    }
-    expect((await publication('lecturer', item.id, 'publish', { revision: 1 })).body.code).toBe(
-      'STALE_REVISION',
-    );
     expect(
-      (await publication('lecturer', item.id, 'publish', { revision: 2, rightsConfirmed: true }))
-        .status,
-    ).toBe(400);
+      (await agents.student.get(`/api/v1/library/versions/${item.versionId}`)).body.item,
+    ).toMatchObject({ publicationMethod: 'LECTURER_SELF' });
   });
-  it.each(['student', 'lecturer'])(
+  it.each(['student', 'author'])(
     '%s submits a frozen snapshot, withdraws with history and submits again',
     async (name) => {
       const item = await safeDraft(name);
@@ -3413,11 +3279,9 @@ describe('private material drafts', () => {
     const draft = await safeDraft();
     const choices = await agents.student.get('/api/v1/library/courses').expect(200);
     expect(choices.body.items.some((c: { id: string }) => c.id === courses[0])).toBe(true);
-    for (const role of ['admin', 'student', 'lecturer']) {
+    for (const role of ['admin', 'student', 'author']) {
       const list = await agents[role]
-        .get(
-          `/api/v1/library?courseId=${courses[0]}&kind=STUDENT_SUPPLEMENT&materialType=EXERCISE&search=minh&limit=100`,
-        )
+        .get(`/api/v1/library?courseId=${courses[0]}&materialType=EXERCISE&search=minh&limit=100`)
         .expect(200);
       expect(
         list.body.items.some((v: { versionId: string }) => v.versionId === item.versionId),
@@ -3599,7 +3463,7 @@ describe('private material drafts', () => {
     expect((await reportWrite('student', path, { ...data, category: 'WRONG_COURSE' })).status).toBe(
       201,
     );
-    expect((await reportWrite('lecturer', path, data)).status).toBe(201);
+    expect((await reportWrite('author', path, data)).status).toBe(201);
     for (const invalid of [
       { ...data, category: 'SPAM' },
       { ...data, description: '   ' },
@@ -3759,7 +3623,7 @@ describe('private material drafts', () => {
       )
     ).rows[0];
     expect((await review(pending.id, { ...decision(), submittedRevision: 4 })).status).toBe(201);
-    const download = await agents.lecturer
+    const download = await agents.author
       .get(`/api/v1/library/versions/${allowed.versionId}/download`)
       .expect(200);
     expect(download.headers['content-disposition']).toContain('attachment;');
@@ -4127,7 +3991,7 @@ describe('private material drafts', () => {
       warn.mockRestore();
     }
   });
-  it.each(['student', 'lecturer', 'admin'])(
+  it.each(['student', 'author', 'admin'])(
     'personal library is private and save/remove is idempotent for %s',
     async (role) => {
       const item = await readingFixture();
@@ -4291,176 +4155,33 @@ describe('private material drafts', () => {
   const documentRevision = async (id: string) =>
     (await db.query('SELECT revision FROM hucescholar.documents WHERE id=$1', [id])).rows[0]
       .revision;
-  it('lifecycle admin lists all materials and transfers a pending lecturer document atomically', async () => {
-    const item = await submitted('lecturer');
+  it('lifecycle admin lists all materials and no longer hands documents over (ROLE-01)', async () => {
+    const item = await submitted('author');
     const detail = await agents.admin.get(`/api/v1/admin/materials/${item.id}`).expect(200);
     expect(detail.body.item).toMatchObject({
       id: item.id,
-      manager: { id: users.lecturer },
+      manager: { id: users.author },
       latest: { reviewStatus: 'SUBMITTED' },
+      history: { transfers: [], totalTransfers: 0 },
     });
-    const options = await agents.admin
-      .get(`/api/v1/admin/materials/${item.id}/recipients`)
-      .expect(200);
-    expect(options.body.items.map((r: { id: string }) => r.id)).toContain(users.receiver);
-    expect(options.body.items.map((r: { id: string }) => r.id)).not.toContain(users.lecturer);
-    const result = await lifecycleWrite(item.id, 'transfer', {
-      revision: detail.body.item.revision,
-      recipientId: users.receiver,
-      reason: 'Bàn giao tổng hợp',
-    });
-    expect(result.status).toBe(201);
-    expect(result.body.item.manager.id).toBe(users.receiver);
-    expect(result.body.item.latest.reviewStatus).toBe('DRAFT');
-    const requestRow = (
-      await db.query('SELECT * FROM hucescholar.publication_requests WHERE id=$1', [item.requestId])
-    ).rows[0];
-    expect(requestRow).toMatchObject({
-      status: 'WITHDRAWN',
-      submitted_by: users.lecturer,
-      resolved_by: users.admin,
-      reason: 'Bàn giao tổng hợp',
-    });
-    await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`).expect(404);
-    expect(
-      (await agents.receiver.get(`/api/v1/material-drafts/${item.id}`).expect(200)).body.item
-        .editable,
-    ).toBe(true);
-    const history = await agents.admin.get(`/api/v1/admin/materials/${item.id}`).expect(200);
-    expect(history.body.item.history.transfers[0]).toMatchObject({
-      fromUserId: users.lecturer,
-      toUserId: users.receiver,
-      reason: 'Bàn giao tổng hợp',
-    });
-    const list = await agents.admin
-      .get(
-        `/api/v1/admin/materials?search=${encodeURIComponent(item.title)}&kind=LECTURER_MATERIAL`,
-      )
-      .expect(200);
-    expect(list.body.items.some((r: { id: string }) => r.id === item.id)).toBe(true);
-  });
-  it('lifecycle transfer validates role, all historic courses, revision and CSRF without changing a student document', async () => {
-    const student = await submitted();
+    expect(detail.body.item).not.toHaveProperty('kind');
+    await agents.student.get('/api/v1/admin/materials').expect(403);
+    await agents.author.get(`/api/v1/admin/materials/${item.id}`).expect(403);
+    await agents.admin.get(`/api/v1/admin/materials/${item.id}/recipients`).expect(404);
     expect(
       (
-        await lifecycleWrite(student.id, 'transfer', {
-          revision: await documentRevision(student.id),
-          recipientId: users.receiver,
-          reason: 'Wrong kind',
+        await lifecycleWrite(item.id, 'transfer', {
+          revision: detail.body.item.revision,
+          recipientId: users.student,
+          reason: 'Không còn bàn giao',
         })
       ).status,
-    ).toBe(409);
-    const item = await submitted('lecturer');
-    const revision = await documentRevision(item.id);
-    const body = { revision, recipientId: users.receiver, reason: 'Transfer' };
-    await agents.student.get('/api/v1/admin/materials').expect(403);
-    await agents.lecturer.get(`/api/v1/admin/materials/${item.id}`).expect(403);
-    await agents.admin.post(`/api/v1/admin/materials/${item.id}/transfer`).send(body).expect(403);
-    expect((await lifecycleWrite(item.id, 'transfer', { ...body, reason: '  ' })).status).toBe(400);
-    expect(
-      (await lifecycleWrite(item.id, 'transfer', { ...body, managerId: users.student })).status,
-    ).toBe(400);
-    expect(
-      (await lifecycleWrite(item.id, 'transfer', { ...body, recipientId: users.student })).status,
-    ).toBe(409);
-    expect(
-      (await lifecycleWrite(item.id, 'transfer', { ...body, recipientId: users.lecturer })).status,
-    ).toBe(409);
-    // Receiver lacks historic course 0; the new draft only uses course 1.
-    const rejected = await submitted('lecturer');
-    expect((await review(rejected.requestId, decision('REJECTED'))).status).toBe(201);
-    await db.query(
-      "INSERT INTO hucescholar.document_versions(document_id,version_no,created_by,title,material_type,source_reference,rights_basis) VALUES($1,2,$2,'Historic course fixture','TEXTBOOK','Source','Rights')",
-      [rejected.id, users.lecturer],
-    );
-    // The terminal course links are immutable; add the extra course to the new draft.
-    const second = (
-      await db.query(
-        'SELECT id FROM hucescholar.document_versions WHERE document_id=$1 AND version_no=2',
-        [rejected.id],
-      )
-    ).rows[0].id;
-    await db.query('INSERT INTO hucescholar.version_courses(version_id,course_id) VALUES($1,$2)', [
-      second,
-      courses[1],
-    ]);
-    await db.query(
-      'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2 WHERE lecturer_id=$1 AND course_id=$3 AND revoked_at IS NULL',
-      [users.receiver, users.admin, courses[0]],
-    );
-    try {
-      expect(
-        (await agents.admin.get(`/api/v1/admin/materials/${rejected.id}/recipients`).expect(200))
-          .body.items,
-      ).toEqual([]);
-      expect(
-        (
-          await lifecycleWrite(rejected.id, 'transfer', {
-            ...body,
-            revision: await documentRevision(rejected.id),
-          })
-        ).body.code,
-      ).toBe('ASSIGNMENT_REQUIRED');
-    } finally {
-      await db.query(
-        'UPDATE hucescholar.lecturer_assignments SET revoked_at=null,revoked_by=null WHERE lecturer_id=$1 AND course_id=$2',
-        [users.receiver, courses[0]],
-      );
-    }
-    const outcomes = await Promise.all([
-      lifecycleWrite(item.id, 'transfer', body),
-      lifecycleWrite(item.id, 'transfer', body),
-    ]);
-    expect(outcomes.map((r) => r.status).sort()).toEqual([201, 409]);
-  });
-  it('lifecycle transfer and moderation resolve one pending request and audit failure rolls everything back', async () => {
-    const item = await submitted('lecturer');
-    const revision = await documentRevision(item.id);
-    const outcomes = await Promise.all([
-      lifecycleWrite(item.id, 'transfer', {
-        revision,
-        recipientId: users.receiver,
-        reason: 'Concurrent handover',
-      }),
-      review(item.requestId, decision()),
-    ]);
-    expect(outcomes.map((r) => r.status).sort()).toEqual([201, 409]);
-    const rollback = await submitted('lecturer');
-    const spy = jest
-      .spyOn(app.get(MaterialsService), 'audit')
-      .mockRejectedValueOnce(new Error('Synthetic transfer audit failure'));
-    try {
-      expect(
-        (
-          await lifecycleWrite(rollback.id, 'transfer', {
-            revision: await documentRevision(rollback.id),
-            recipientId: users.receiver,
-            reason: 'Rollback',
-          })
-        ).status,
-      ).toBe(500);
-      expect(
-        (await db.query('SELECT manager_id FROM hucescholar.documents WHERE id=$1', [rollback.id]))
-          .rows[0].manager_id,
-      ).toBe(users.lecturer);
-      expect(
-        (
-          await db.query('SELECT status FROM hucescholar.publication_requests WHERE id=$1', [
-            rollback.requestId,
-          ])
-        ).rows[0].status,
-      ).toBe('PENDING');
-      expect(
-        (
-          await db.query(
-            'SELECT count(*) FROM hucescholar.ownership_transfers WHERE document_id=$1',
-            [rollback.id],
-          )
-        ).rows[0].count,
-      ).toBe('0');
-    } finally {
-      spy.mockRestore();
-    }
+    ).toBe(404);
+    const list = await agents.admin
+      .get(`/api/v1/admin/materials?search=${encodeURIComponent(item.title)}`)
+      .expect(200);
+    expect(list.body.items.some((r: { id: string }) => r.id === item.id)).toBe(true);
+    await agents.admin.get('/api/v1/admin/materials?kind=STUDENT_SUPPLEMENT').expect(400);
   });
   it('lifecycle hide blocks every read and restore retains notes and progress with event history', async () => {
     const item = await readingFixture();
@@ -4728,30 +4449,22 @@ describe('private material drafts', () => {
       ).rows[0].count,
     ).toBe('2');
   });
-  it('lifecycle next version checks lecturer assignments and rolls back on audit failure', async () => {
-    const item = await submitted('lecturer');
+  it('lifecycle next version checks active courses and rolls back on audit failure', async () => {
+    const item = await submitted('author');
     expect((await review(item.requestId, decision())).status).toBe(201);
-    await db.query(
-      'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2 WHERE lecturer_id=$1 AND revoked_at IS NULL',
-      [users.lecturer, users.admin],
-    );
+    await db.query('UPDATE hucescholar.courses SET is_active=false WHERE id=$1', [courses[0]]);
     try {
-      expect((await publication('lecturer', item.id, 'versions', { revision: 4 })).body.code).toBe(
-        'ASSIGNMENT_REQUIRED',
+      expect((await publication('author', item.id, 'versions', { revision: 4 })).body.code).toBe(
+        'COURSE_UNAVAILABLE',
       );
     } finally {
-      await db.query(
-        'UPDATE hucescholar.lecturer_assignments SET revoked_at=null,revoked_by=null WHERE lecturer_id=$1',
-        [users.lecturer],
-      );
+      await db.query('UPDATE hucescholar.courses SET is_active=true WHERE id=$1', [courses[0]]);
     }
     const spy = jest
       .spyOn(app.get(MaterialsService), 'audit')
       .mockRejectedValueOnce(new Error('Synthetic lifecycle audit failure'));
     try {
-      expect((await publication('lecturer', item.id, 'versions', { revision: 4 })).status).toBe(
-        500,
-      );
+      expect((await publication('author', item.id, 'versions', { revision: 4 })).status).toBe(500);
       expect(
         (
           await db.query(
@@ -5676,7 +5389,7 @@ describe('private material drafts', () => {
       expect(
         (await readingWrite('student', `${path}/highlights`, { ...data, ...changed })).status,
       ).toBe(409);
-    for (const role of ['admin', 'lecturer', 'other']) {
+    for (const role of ['admin', 'author', 'other']) {
       expect(
         (await agents[role].get(`${path}/highlights?pageNumber=1`).expect(200)).body.items,
       ).toEqual([]);
@@ -5876,7 +5589,7 @@ describe('private material drafts', () => {
       revision: 1,
       kind: 'PAGE_NOTE',
     });
-    for (const role of ['admin', 'lecturer', 'other']) {
+    for (const role of ['admin', 'author', 'other']) {
       const list = await agents[role].get(`${path}/notes?pageNumber=2`).expect(200);
       expect(list.body.items).toEqual([]);
       expect(
@@ -5894,7 +5607,7 @@ describe('private material drafts', () => {
           .status,
       ).toBe(404);
     }
-    for (const role of ['admin', 'lecturer']) {
+    for (const role of ['admin', 'author']) {
       const own = await readingWrite(role, `${path}/notes`, {
         pageNumber: 1,
         content: `${role} own note`,
@@ -6225,7 +5938,7 @@ describe('private material drafts', () => {
     ).toBe('retained expired note');
   });
   it('moderation shows why a submitted PDF failed its check', async () => {
-    const item = await submitted('lecturer');
+    const item = await submitted('author');
     // Synthetic verdict; a SAFE file only changes state through the scan worker in production.
     await db.query(
       "UPDATE hucescholar.files SET scan_status='FAILED', check_error='INVALID_PDF' WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)",
@@ -6237,7 +5950,7 @@ describe('private material drafts', () => {
     expect(detail.body.item).toMatchObject({ fileState: 'FAILED', fileError: 'INVALID_PDF' });
   });
   it('admin reviews a submitted snapshot and publishes atomically without opening HIDDEN', async () => {
-    const item = await submitted('lecturer');
+    const item = await submitted('author');
     await db.query("UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=$1", [item.id]);
     const list = await agents.admin
       .get('/api/v1/admin/publication-requests?status=PENDING&limit=1')
@@ -6272,7 +5985,7 @@ describe('private material drafts', () => {
       ).rows[0],
     ).toMatchObject({ current_version_id: item.versionId, visibility: 'HIDDEN' });
     expect(
-      (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item.reviewStatus,
+      (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item.reviewStatus,
     ).toBe('APPROVED');
     await expect(
       db.query("UPDATE hucescholar.document_versions SET title='Changed' WHERE id=$1", [
@@ -6326,7 +6039,7 @@ describe('private material drafts', () => {
   });
   it('admin endpoints enforce role, CSRF, validation and snapshot revision', async () => {
     const item = await submitted();
-    for (const name of ['student', 'lecturer']) {
+    for (const name of ['student', 'author']) {
       await agents[name].get('/api/v1/admin/publication-requests').expect(403);
       await agents[name]
         .get(`/api/v1/admin/publication-requests/${item.requestId}/pdf`)
@@ -6349,8 +6062,8 @@ describe('private material drafts', () => {
     await agents.admin.get('/api/v1/admin/publication-requests?status=bogus').expect(400);
     await agents.admin.get('/api/v1/admin/publication-requests/nope').expect(400);
   });
-  it('rechecks unsafe files, expired rights, inactive courses and revoked assignments at approval', async () => {
-    const item = await submitted('lecturer');
+  it('rechecks unsafe files, expired rights and inactive courses at approval', async () => {
+    const item = await submitted('author');
     await db.query(
       "UPDATE hucescholar.files SET scan_status='FAILED' WHERE id=(SELECT file_id FROM hucescholar.document_versions WHERE id=$1)",
       [item.versionId],
@@ -6435,7 +6148,7 @@ describe('private material drafts', () => {
   });
   async function wordUpload(
     item: { id: string; revision: number },
-    name = 'lecturer',
+    name = 'author',
     requestId = randomUUID(),
     bytes?: Buffer,
   ) {
@@ -6450,6 +6163,19 @@ describe('private material drafts', () => {
       .set('If-Match', `"${item.revision}"`)
       .set('X-Upload-Id', requestId)
       .send(bytes ?? (await readFile(join(__dirname, 'fixtures/docx/vietnamese.docx'))));
+  }
+  /** Publishes the latest draft the only way there is now: submit, then an admin approves. */
+  async function approve(name: string, id: string, revision: number) {
+    const sent = await publication(name, id, 'submit', { revision });
+    if (sent.status !== 201) return sent;
+    const pending = await db.query(
+      "SELECT id FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
+      [sent.body.item.versionId],
+    );
+    return review(pending.rows[0].id, {
+      ...decision(),
+      submittedRevision: sent.body.item.revision,
+    });
   }
   async function pendingWord() {
     const item = await create();
@@ -6474,12 +6200,12 @@ describe('private material drafts', () => {
       pdf.mockRestore();
     };
   }
-  it('DOCX is lecturer-only, private and idempotent, without leaking object keys', async () => {
+  it('DOCX is open to every student, private and idempotent, without leaking object keys', async () => {
     const student = await create('student');
-    expect((await wordUpload(student, 'student')).status).toBe(403);
+    expect((await wordUpload(student, 'other')).status).toBe(404);
     const item = await create(),
       uploadId = randomUUID();
-    const first = await wordUpload(item, 'lecturer', uploadId);
+    const first = await wordUpload(item, 'author', uploadId);
     expect(first.status).toBe(202);
     expect(first.body.item).toMatchObject({
       fileState: 'MISSING',
@@ -6487,15 +6213,15 @@ describe('private material drafts', () => {
       source: { scanState: 'CHECKING', conversionState: 'QUEUED' },
     });
     expect(JSON.stringify(first.body)).not.toMatch(/object_key|sha256|processing_token/);
-    const replay = await wordUpload(item, 'lecturer', uploadId);
+    const replay = await wordUpload(item, 'author', uploadId);
     expect(replay.status).toBe(202);
     expect(replay.body.item.revision).toBe(first.body.item.revision);
     expect(
-      (await wordUpload(item, 'lecturer', uploadId, Buffer.from('PK\x03\x04different'))).status,
+      (await wordUpload(item, 'author', uploadId, Buffer.from('PK\x03\x04different'))).status,
     ).toBe(409);
     expect(
-      (await publication('lecturer', item.id, 'publish', { revision: first.body.item.revision }))
-        .body.code,
+      (await publication('author', item.id, 'submit', { revision: first.body.item.revision })).body
+        .code,
     ).toBe('FILE_NOT_SAFE');
   });
   it('DOCX rendition keeps edited metadata and supports exact original download after publication', async () => {
@@ -6503,7 +6229,7 @@ describe('private material drafts', () => {
       restore = fakeWordTools();
     try {
       await write(
-        'lecturer',
+        'author',
         {
           ...body(),
           title: 'Metadata edited during conversion',
@@ -6513,17 +6239,15 @@ describe('private material drafts', () => {
         item.id,
       );
       await app.get(SourceConversionProcessor).process(item.source.id);
-      const current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      const current = (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item;
       expect(current).toMatchObject({
         title: 'Metadata edited during conversion',
         fileState: 'SAFE',
         source: { conversionState: 'READY', scanState: 'SAFE' },
       });
-      await agents.lecturer.get(`/api/v1/material-drafts/${item.id}/preview`).expect(200);
-      await agents.receiver.get(`/api/v1/material-drafts/${item.id}/preview`).expect(404);
-      expect(
-        (await publication('lecturer', item.id, 'publish', { revision: current.revision })).status,
-      ).toBe(201);
+      await agents.author.get(`/api/v1/material-drafts/${item.id}/preview`).expect(200);
+      await agents.other.get(`/api/v1/material-drafts/${item.id}/preview`).expect(404);
+      expect((await approve('author', item.id, current.revision)).status).toBe(201);
       const original = await agents.student
         .get(`/api/v1/library/versions/${current.versionId}/source-download`)
         .buffer(true)
@@ -6543,8 +6267,8 @@ describe('private material drafts', () => {
       ).toContain('application/pdf');
       await app.get(SourceConversionProcessor).process(item.source.id);
       expect(
-        (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item.revision,
-      ).toBe(current.revision + 1);
+        (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item.revision,
+      ).toBe(current.revision + 2);
     } finally {
       restore();
     }
@@ -6567,10 +6291,10 @@ describe('private material drafts', () => {
       await barrier;
       await app.get(SourceConversionProcessor).process(item.source.id);
       expect(convert).toHaveBeenCalledTimes(1);
-      expect((await upload('lecturer', item.id, item.revision)).status).toBe(201);
+      expect((await upload('author', item.id, item.revision)).status).toBe(201);
       release();
       await work;
-      const current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      const current = (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item;
       expect(current.source).toBeNull();
       expect(current.pdf.name).toContain('.pdf');
       expect(
@@ -6609,10 +6333,10 @@ describe('private material drafts', () => {
         [item.source.id],
       );
       await app.get(SourceConversionProcessor).process(item.source.id);
-      const ready = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      const ready = (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item;
       release();
       await old;
-      expect((await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item).toEqual(
+      expect((await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item).toEqual(
         ready,
       );
     } finally {
@@ -6635,7 +6359,7 @@ describe('private material drafts', () => {
         });
       try {
         await expect(app.get(SourceConversionProcessor).process(item.source.id)).rejects.toThrow();
-        const current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+        const current = (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item;
         expect(current.source).toMatchObject({
           conversionState: 'QUEUED',
           errorCode: 'PROCESSOR_UNAVAILABLE',
@@ -6656,14 +6380,14 @@ describe('private material drafts', () => {
       for (let i = 0; i < 2; i++)
         await expect(app.get(SourceConversionProcessor).process(item.source.id)).rejects.toThrow();
       await app.get(SourceConversionProcessor).process(item.source.id);
-      let current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      let current = (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item;
       expect(current.source).toMatchObject({
         conversionState: 'FAILED',
         errorCode: 'PROCESSOR_UNAVAILABLE',
       });
       expect(
         (
-          await publication('lecturer', item.id, 'source/retry', {
+          await publication('author', item.id, 'source/retry', {
             revision: current.revision,
             sourceUploadId: item.source.id,
           })
@@ -6671,11 +6395,11 @@ describe('private material drafts', () => {
       ).toBe(202);
       convert.mockRejectedValue(new Error('INVALID_DOCX'));
       await app.get(SourceConversionProcessor).process(item.source.id);
-      current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      current = (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item;
       expect(current.source.conversionState).toBe('FAILED');
       expect(
         (
-          await publication('lecturer', item.id, 'source/retry', {
+          await publication('author', item.id, 'source/retry', {
             revision: current.revision,
             sourceUploadId: item.source.id,
           })
@@ -6708,13 +6432,13 @@ describe('private material drafts', () => {
       });
     const remove = jest.spyOn(app.get(PrivateStore), 'removeSource');
     try {
-      expect((await wordUpload(item, 'lecturer', requestId)).status).toBe(503);
+      expect((await wordUpload(item, 'author', requestId)).status).toBe(503);
       expect(remove).not.toHaveBeenCalled();
     } finally {
       transaction.mockRestore();
       remove.mockRestore();
     }
-    const replay = await wordUpload(item, 'lecturer', requestId);
+    const replay = await wordUpload(item, 'author', requestId);
     expect(replay.status).toBe(202);
     expect(
       (
@@ -6746,43 +6470,23 @@ describe('private material drafts', () => {
       restore();
     }
     expect(
-      (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item.source
+      (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item.source
         .conversionState,
     ).toBe('READY');
-    await agents.lecturer.get(`/api/v1/material-drafts/${item.id}/preview`).expect(200);
+    await agents.author.get(`/api/v1/material-drafts/${item.id}/preview`).expect(200);
   });
-  it('DOCX processing rechecks revoked assignments and ownership transfers', async () => {
-    const revoked = await pendingWord(),
-      transferred = await pendingWord(),
+  it('DOCX processing rechecks that the draft courses are still active', async () => {
+    const item = await pendingWord(),
       restore = fakeWordTools();
+    await db.query('UPDATE hucescholar.courses SET is_active=false WHERE id=$1', [courses[0]]);
     try {
+      await app.get(SourceConversionProcessor).process(item.source.id);
       expect(
-        (
-          await lifecycleWrite(transferred.id, 'transfer', {
-            revision: await documentRevision(transferred.id),
-            recipientId: users.receiver,
-            reason: 'Synthetic pending source transfer',
-          })
-        ).status,
-      ).toBe(201);
-      await app.get(SourceConversionProcessor).process(transferred.source.id);
-      expect(
-        (await agents.receiver.get(`/api/v1/material-drafts/${transferred.id}`)).body.item,
-      ).toMatchObject({ fileState: 'MISSING', source: { conversionState: 'CANCELLED' } });
-      await db.query(
-        'UPDATE hucescholar.lecturer_assignments SET revoked_at=now(),revoked_by=$2 WHERE lecturer_id=$1 AND revoked_at IS NULL',
-        [users.lecturer, users.admin],
-      );
-      await app.get(SourceConversionProcessor).process(revoked.source.id);
-      expect(
-        (await agents.lecturer.get(`/api/v1/material-drafts/${revoked.id}`)).body.item,
+        (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item,
       ).toMatchObject({ fileState: 'MISSING', source: { conversionState: 'CANCELLED' } });
     } finally {
       restore();
-      await db.query(
-        'UPDATE hucescholar.lecturer_assignments SET revoked_at=null,revoked_by=null WHERE lecturer_id=$1 AND course_id=$2',
-        [users.lecturer, courses[0]],
-      );
+      await db.query('UPDATE hucescholar.courses SET is_active=true WHERE id=$1', [courses[0]]);
     }
   });
   it('DOCX download permission blocks both Word and PDF, and hidden sources cannot be downloaded', async () => {
@@ -6790,10 +6494,8 @@ describe('private material drafts', () => {
       restore = fakeWordTools();
     try {
       await app.get(SourceConversionProcessor).process(item.source.id);
-      let current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
-      expect(
-        (await publication('lecturer', item.id, 'publish', { revision: current.revision })).status,
-      ).toBe(201);
+      let current = (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      expect((await approve('author', item.id, current.revision)).status).toBe(201);
       await agents.student
         .get(`/api/v1/library/versions/${item.versionId}/source-download`)
         .expect(403);
@@ -6803,8 +6505,8 @@ describe('private material drafts', () => {
       await agents.student
         .get(`/api/v1/library/versions/${item.versionId}/source-download`)
         .expect(404);
-      current = (await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`)).body.item;
-      const next = await publication('lecturer', item.id, 'versions', {
+      current = (await agents.author.get(`/api/v1/material-drafts/${item.id}`)).body.item;
+      const next = await publication('author', item.id, 'versions', {
         revision: current.revision,
       });
       expect(next.status).toBe(201);
@@ -6813,62 +6515,6 @@ describe('private material drafts', () => {
     } finally {
       restore();
     }
-  });
-  it('retains metadata after revocation but blocks edits even by dropping old courses', async () => {
-    const item = await create();
-    const submitted = await safeDraft('lecturer');
-    expect((await publication('lecturer', submitted.id, 'submit', { revision: 2 })).status).toBe(
-      201,
-    );
-    const assignment = (
-      await db.query(
-        'SELECT id FROM hucescholar.lecturer_assignments WHERE lecturer_id=$1 AND revoked_at IS NULL',
-        [users.lecturer],
-      )
-    ).rows[0].id;
-    const csrf = (await agents.admin.get('/api/v1/auth/csrf')).body.csrfToken;
-    const [edit, revoke] = await Promise.all([
-      write('lecturer', { ...body(), title: 'Concurrent edit', revision: 1 }, item.id),
-      agents.admin
-        .patch(`/api/v1/admin/assignments/${assignment}/revoke`)
-        .set('Origin', origin)
-        .set('X-CSRF-Token', csrf)
-        .send({ reason: 'Test revocation' }),
-    ]);
-    expect(revoke.status).toBe(200);
-    const pending = (
-      await db.query(
-        "SELECT id FROM hucescholar.publication_requests WHERE version_id=$1 AND status='PENDING'",
-        [submitted.versionId],
-      )
-    ).rows[0];
-    expect((await review(pending.id, decision())).body.code).toBe('ASSIGNMENT_REQUIRED');
-    expect([200, 409]).toContain(edit.status);
-    const current = await agents.lecturer.get(`/api/v1/material-drafts/${item.id}`).expect(200);
-    expect(current.body.item.editable).toBe(false);
-    expect(
-      (
-        await write(
-          'lecturer',
-          { ...body(), courseIds: [courses[1]], revision: current.body.item.revision },
-          item.id,
-        )
-      ).status,
-    ).toBe(409);
-    expect((await agents.lecturer.get('/api/v1/material-drafts/courses')).body.total).toBe(0);
-    const withdrawn = await publication('lecturer', submitted.id, 'withdraw', {
-      revision: 3,
-      reason: 'Phân công đã thu hồi',
-    });
-    expect(withdrawn.status).toBe(201);
-    expect(withdrawn.body.item).toMatchObject({
-      reviewStatus: 'DRAFT',
-      editable: false,
-      editBlock: 'ASSIGNMENT_REQUIRED',
-    });
-    expect((await publication('lecturer', submitted.id, 'submit', { revision: 4 })).body.code).toBe(
-      'ASSIGNMENT_REQUIRED',
-    );
   });
 
   // ---- CANVAS-01 "Vở ghi" ------------------------------------------------------------------
@@ -6947,7 +6593,7 @@ describe('private material drafts', () => {
     expect(pages).toHaveLength(1);
     expect(item).toMatchObject({ pageCount: 1, cover: 'mint', course: { id: courses[0] } });
     const page = `/api/v1/notebooks/${item.id}/pages/${pages[0].id}`;
-    for (const name of ['other', 'admin', 'lecturer']) {
+    for (const name of ['other', 'admin', 'author']) {
       await agents[name].get(`/api/v1/notebooks/${item.id}`).expect(404);
       await agents[name].get(page).expect(404);
       expect((await savePage(name, item.id, pages[0].id, 1, { v: 1, items: [] })).status).toBe(404);
@@ -7275,14 +6921,14 @@ describe('private material drafts', () => {
   it('CANVAS-01 refuses images past the 1 GB quota', async () => {
     await db.query(
       "INSERT INTO hucescholar.notebook_assets(request_id,user_id,object_key,byte_size,thumb_size,width,height,sha256,source) SELECT gen_random_uuid(),$1,'notebook/'||gen_random_uuid()||'.webp',10485760,10485760,1,1,repeat('0',64),'UPLOAD' FROM generate_series(1,52)",
-      [users.lecturer],
+      [users.author],
     );
     try {
-      const refused = await uploadImage('lecturer', await smallPng());
+      const refused = await uploadImage('author', await smallPng());
       expect(refused.status).toBe(413);
       expect(refused.body.code).toBe('NOTEBOOK_QUOTA');
     } finally {
-      await db.query('DELETE FROM hucescholar.notebook_assets WHERE user_id=$1', [users.lecturer]);
+      await db.query('DELETE FROM hucescholar.notebook_assets WHERE user_id=$1', [users.author]);
     }
   });
 

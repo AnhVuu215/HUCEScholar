@@ -25,7 +25,8 @@ test('admin provisions, edits, locks and unlocks a real account', async ({ page,
   await page.getByRole('button', { name: 'Cấp tài khoản', exact: true }).click();
   await page.getByLabel('Họ và tên', { exact: true }).fill('Sinh viên thử nghiệm');
   await page.getByLabel('Email đăng nhập', { exact: true }).fill(email);
-  await page.getByLabel('Vai trò tài khoản', { exact: true }).selectOption('STUDENT');
+  // ROLE-01: admins only issue student accounts, so there is no role to pick.
+  await expect(page.getByLabel('Vai trò tài khoản', { exact: true })).toHaveCount(0);
   await page.getByLabel('Mật khẩu khởi tạo', { exact: true }).fill(password!);
   await page.getByLabel('Tôi đã đối chiếu người dùng với danh sách hợp lệ.').check();
   await page.getByRole('button', { name: 'Tạo tài khoản', exact: true }).click();
@@ -99,8 +100,8 @@ test('admin provisions, edits, locks and unlocks a real account', async ({ page,
   await studentContext.close();
 });
 
-test('lecturer and student cannot open admin account management', async ({ page }) => {
-  for (const role of ['lecturer', 'student']) {
+test('a student cannot open admin account management', async ({ page }) => {
+  for (const role of ['student']) {
     await login(page, role);
     await page.goto('/workspace/admin/users');
     await expect(page.getByRole('heading', { name: 'Không có quyền truy cập' })).toBeVisible();

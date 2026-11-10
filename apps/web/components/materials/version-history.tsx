@@ -71,7 +71,9 @@ export function VersionHistory({ current }: { current: MaterialDraft }) {
                   Cập nhật {new Date(v.updatedAt).toLocaleString('vi-VN')}
                 </p>
                 {v.publicationMethod === 'LECTURER_SELF' ? (
-                  <p className="field-hint">Cách công bố: giảng viên tự công bố.</p>
+                  <p className="field-hint">
+                    Cách công bố: giảng viên tự công bố (trước khi bỏ vai trò giảng viên).
+                  </p>
                 ) : null}
                 <button
                   type="button"

@@ -17,12 +17,14 @@ test('guide switches role by keyboard and explains the current reader honestly',
   page,
 }) => {
   await page.goto('/#huong-dan');
-  const lecturer = page.getByRole('button', { name: 'Giảng viên', exact: true });
-  await lecturer.focus();
-  await lecturer.press('Enter');
-  await expect(lecturer).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('region', { name: 'Hướng dẫn Giảng viên' })).toContainText(
-    'môn được phân công',
+  // ROLE-01: the guide has two roles, administrator and student.
+  await expect(page.getByRole('button', { name: 'Giảng viên', exact: true })).toHaveCount(0);
+  const admin = page.getByRole('button', { name: 'Quản trị viên', exact: true });
+  await admin.focus();
+  await admin.press('Enter');
+  await expect(admin).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('region', { name: 'Hướng dẫn Quản trị viên' })).toContainText(
+    'Kiểm duyệt học liệu',
   );
   await page.getByRole('button', { name: 'Sinh viên', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Hướng dẫn Sinh viên' })).toContainText(

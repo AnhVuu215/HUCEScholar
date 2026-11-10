@@ -185,15 +185,6 @@ export class AcademicService {
               message: 'Ngừng ngành và môn thuộc khoa trước.',
             });
         }
-        if (
-          kind === 'courses' &&
-          !body.active &&
-          (await tx.lecturer_assignments.count({ where: { course_id: id, revoked_at: null } }))
-        )
-          throw new ConflictException({
-            code: 'ACTIVE_ASSIGNMENTS',
-            message: 'Thu hồi phân công hiện hành trước khi ngừng môn.',
-          });
         const rows = await tx.$queryRaw<CatalogItem[]>(
           Prisma.sql`UPDATE ${Prisma.raw(resources[kind].table)} SET code=${body.code}, name=${body.name}, is_active=${body.active}, revision=revision+1 WHERE id=${id} RETURNING ${columns(kind)}`,
         );

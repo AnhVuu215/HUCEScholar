@@ -18,7 +18,6 @@ import { LoginRateLimiter } from './login-rate-limiter';
 import { Mailer } from './mailer';
 
 export const SIGNUP_TOKEN_TTL_MS = 24 * 60 * 60_000;
-export type SignupRole = 'STUDENT' | 'LECTURER';
 const invalid = () =>
   new BadRequestException({
     code: 'SIGNUP_TOKEN_INVALID',
@@ -33,7 +32,7 @@ const taken = () =>
 /**
  * AUTH-04. Sign-up is email-first: step 1 mails a one-time link and always gets the same answer,
  * with lookup and delivery after the response, so neither tells whether the address has an
- * account. Step 2 (from the link) chooses name, role and password and creates an ACTIVE account,
+ * account. Step 2 (from the link) chooses name and password and creates an ACTIVE student account,
  * so only the mailbox owner ever sets the password. Admin accounts are never self-registered.
  */
 @Injectable()
@@ -115,11 +114,7 @@ export class SignupService {
     });
   }
 
-  async complete(
-    token: string,
-    data: { displayName: string; role: SignupRole; password: string },
-    ip: string,
-  ) {
+  async complete(token: string, data: { displayName: string; password: string }, ip: string) {
     // Per address and per link: one visitor's attempts never block another's.
     await this.limiter.checkSignup(ip, `complete:${token}`);
     if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw invalid();
@@ -140,7 +135,7 @@ export class SignupService {
             email,
             display_name: data.displayName,
             password_hash: hash,
-            role: data.role,
+            role: 'STUDENT',
             status: 'ACTIVE',
             verified_at: new Date(),
             must_change_password: false,

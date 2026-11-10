@@ -1,5 +1,7 @@
 # Phân công giảng viên
 
+> Lịch sử: trang này đã bỏ ở ROLE-01 (10/11/2026) cùng vai trò giảng viên; brief giữ lại làm hồ sơ thiết kế, không còn route tương ứng.
+
 Mode: Operate. Mở rộng hệ thống Admin đã có; giữ shell, palette, font, spacing và responsive table. Trang giảng viên dùng cùng danh sách chỉ đọc, API tự scope theo người đăng nhập.
 
 Nội dung chính là tìm/lọc/phân trang phân công hiện hành và lịch sử. Form inline cấp phân công có hai picker tìm kiếm/phân trang, không cắt dữ liệu bằng danh sách tĩnh. Thu hồi nêu rõ danh tính, môn, tác động và lý do bắt buộc; lịch sử giữ thời điểm và lý do. Không thêm dashboard, icon hoặc nút học liệu chưa làm. Loading/error/empty/success bằng chữ, retry rõ ràng; lỗi giữ dữ liệu nhập, focus vào lỗi và trở lại nút tạo khi đóng.

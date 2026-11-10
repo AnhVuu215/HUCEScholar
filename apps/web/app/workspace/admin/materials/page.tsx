@@ -8,7 +8,7 @@ export default function MaterialsPage() {
     <RoleWorkspace
       role="ADMIN"
       title="Quản lý học liệu"
-      description="Bàn giao giảng viên và quản lý hiển thị toàn tài liệu."
+      description="Quản lý hiển thị toàn tài liệu và xem lịch sử quản lý."
       activeSection="lifecycle"
     >
       <LifecycleManagement />

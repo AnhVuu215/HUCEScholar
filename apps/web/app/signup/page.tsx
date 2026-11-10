@@ -21,9 +21,9 @@ export default function Page() {
           <h2>
             Tự tạo tài khoản
             <br />
-            sinh viên hoặc giảng viên.
+            sinh viên.
           </h2>
-          <p>Bạn xác nhận email trước, rồi mới chọn vai trò và đặt mật khẩu.</p>
+          <p>Bạn xác nhận email trước, rồi mới đặt tên hiển thị và mật khẩu.</p>
         </div>
         <p className="auth-foot">
           Dự án độc lập dành cho cộng đồng HUCE.

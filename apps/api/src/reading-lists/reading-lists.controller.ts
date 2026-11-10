@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest } from '../auth/auth.types';
-import { SessionGuard } from '../auth/session.guard';
+import { Roles, RolesGuard, SessionGuard } from '../auth/session.guard';
 import {
   FollowReadingListsDto,
   ReadingDeadlinesDto,
@@ -16,10 +16,16 @@ export class ReadingListsController {
   @Get() published(@Req() req: AuthenticatedRequest, @Param('courseId') courseId: string) {
     return this.lists.published(req.user, courseId);
   }
-  @Get('mine') mine(@Req() req: AuthenticatedRequest, @Param('courseId') courseId: string) {
-    return this.lists.mine(req.user, courseId);
+  @Get('manage')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  managed(@Req() req: AuthenticatedRequest, @Param('courseId') courseId: string) {
+    return this.lists.managed(req.user, courseId);
   }
-  @Put('mine') save(
+  @Put('manage')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  save(
     @Req() req: AuthenticatedRequest,
     @Param('courseId') courseId: string,
     @Body() body: SaveReadingListDto,

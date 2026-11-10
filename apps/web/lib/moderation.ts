@@ -25,7 +25,6 @@ export interface ReviewItem {
   versionNo: number;
   versionRevision: number;
   reviewStatus: keyof typeof reviewStatuses;
-  kind: 'LECTURER_MATERIAL' | 'STUDENT_SUPPLEMENT';
   visibility: 'VISIBLE' | 'HIDDEN';
   currentVersionId: string | null;
   title: string;
@@ -65,7 +64,6 @@ function valid(value: unknown): value is ReviewItem {
     Object.hasOwn(requestStatuses, String(r.status)) &&
     Object.hasOwn(reviewStatuses, String(r.reviewStatus)) &&
     Object.hasOwn(materialTypes, String(r.materialType)) &&
-    ['LECTURER_MATERIAL', 'STUDENT_SUPPLEMENT'].includes(String(r.kind)) &&
     ['VISIBLE', 'HIDDEN'].includes(String(r.visibility)) &&
     ['SAFE', 'CHECKING', 'FAILED', 'MISSING'].includes(String(r.fileState)) &&
     (r.fileError == null || typeof r.fileError === 'string') &&
@@ -151,7 +149,6 @@ export function reviewError(error: unknown) {
     FILE_NOT_SAFE: 'PDF không còn an toàn. Chưa thể duyệt; tải trạng thái yêu cầu để kiểm tra.',
     RIGHTS_EXPIRED: 'Căn cứ quyền đã hết hạn. Yêu cầu người phụ trách bổ sung trước khi duyệt.',
     MANAGER_UNAVAILABLE: 'Chủ tài liệu không còn đủ điều kiện công bố.',
-    ASSIGNMENT_REQUIRED: 'Giảng viên không còn đủ phân công cho tất cả môn liên quan.',
     COURSE_UNAVAILABLE: 'Môn hoặc khoa đã ngừng hoạt động.',
     RIGHTS_CONFIRMATION_REQUIRED: 'Xác nhận đã kiểm tra nội dung và căn cứ quyền trước khi duyệt.',
     METADATA_REQUIRED: 'Học liệu chưa đủ thông tin, nguồn, căn cứ quyền hoặc môn.',

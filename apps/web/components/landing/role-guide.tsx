@@ -4,39 +4,29 @@ import { useState } from 'react';
 
 const guides = {
   'Sinh viên': [
-    ['Nhận tài khoản', 'Sử dụng tài khoản sinh viên đã được quản trị viên cấp và xác minh.'],
+    ['Nhận tài khoản', 'Tự đăng ký bằng email hoặc dùng tài khoản sinh viên do quản trị viên cấp.'],
     [
       'Tìm và đọc học liệu',
       'Mở Kho học liệu, tìm theo tiêu đề hoặc tác giả và lọc theo môn. Chọn Đọc tài liệu để mở PDF.',
     ],
     [
       'Ghi chú và học tiếp',
-      'Ghi chú riêng theo trang hoặc tô sáng đoạn chữ. Thư viện của tôi giữ tài liệu đã lưu và đọc gần đây. Muốn đóng góp tài liệu bổ sung, mở Học liệu của tôi.',
-    ],
-  ],
-  'Giảng viên': [
-    [
-      'Kiểm tra phân công',
-      'Đăng nhập bằng tài khoản giảng viên, xem danh sách môn được phân công trong không gian của bạn.',
+      'Ghi chú riêng theo trang hoặc tô sáng đoạn chữ. Thư viện của tôi giữ tài liệu đã lưu và đọc gần đây.',
     ],
     [
-      'Chuẩn bị học liệu',
-      'Tạo bản nháp cho môn được phân công. Không bắt buộc tài liệu HUCE; nguồn tham khảo là tùy chọn.',
-    ],
-    [
-      'Upload và công bố',
-      'Lưu bản nháp rồi tải PDF lên. Khi file quét đạt, chọn Công bố; giảng viên không cần admin duyệt.',
+      'Đóng góp tài liệu',
+      'Mở Học liệu của tôi, tải PDF hoặc Word lên kèm nguồn và căn cứ quyền, rồi gửi duyệt. Tài liệu xuất hiện trong kho sau khi quản trị viên duyệt.',
     ],
   ],
   'Quản trị viên': [
-    ['Cấp tài khoản', 'Cấp tài khoản sinh viên và giảng viên sau khi đối chiếu thông tin hợp lệ.'],
+    ['Cấp tài khoản', 'Cấp tài khoản sinh viên sau khi đối chiếu thông tin hợp lệ.'],
     [
       'Tổ chức danh mục',
       'Quản lý khoa, ngành, môn học và các liên kết để học liệu được tổ chức đúng chỗ.',
     ],
     [
-      'Phân công giảng viên',
-      'Gắn giảng viên với môn học phụ trách. Giảng viên tự công bố; tài liệu sinh viên bổ sung vẫn qua Kiểm duyệt học liệu.',
+      'Duyệt và sắp xếp',
+      'Duyệt tài liệu sinh viên gửi ở Kiểm duyệt học liệu, rồi soạn danh sách đọc cho từng môn.',
     ],
   ],
 } as const;

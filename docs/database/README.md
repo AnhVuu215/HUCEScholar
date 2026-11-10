@@ -1,5 +1,7 @@
 # HUCEScholar Database Design
 
+Cập nhật triển khai10/11/2026 (ROLE-01): migration `202611100001_remove_lecturer_role` bỏ role LECTURER (tài khoản cũ thành STUDENT, `ck_user_role` chỉ nhận ADMIN/STUDENT), xóa `documents.kind` và bảng `lecturer_assignments`, và đổi danh sách đọc thành mỗi môn một danh sách (`ux_reading_list_course`). Database test còn 40 bảng, 75 FK, 133 CHECK và 19 partial index. SQL/ERD/Word bên dưới vẫn là baseline lịch sử ba vai trò. [Chi tiết](../implementation/2026-11-10-remove-lecturer-role.md).
+
 Cập nhật triển khai14/10/2026: migration `202610140001_lecturer_self_publication` thêm `document_versions.publication_method` mặc định ADMIN_REVIEW, nhận LECTURER_SELF chỉ khi APPROVED. Không thay trạng thái scan/visibility, không tạo yêu cầu duyệt giả. Giữ23bảng,47FK,7partial index và trigger bất biến; tổngCHECK63. Các hiện vật SQL/ERD/Word bên dưới vẫn là baseline lịch sử; schema Prisma và bảy migration là nguồn triển khai hiện tại. [Chi tiết tự công bố](../implementation/2026-10-14-lecturer-self-publication.md).
 
 Thiết kế dữ liệu ngày 10/10/2026, dựa trên proposal, use case và quy tắc nghiệp vụ phiên bản 1.1.

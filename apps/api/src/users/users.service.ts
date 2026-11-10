@@ -139,7 +139,8 @@ export class UsersService {
           data: {
             email: body.email,
             display_name: body.displayName,
-            role: body.role,
+            // Admins only issue student accounts; ADMIN comes from the bootstrap script.
+            role: 'STUDENT',
             password_hash: hash,
             must_change_password: true,
             status: 'ACTIVE',
