@@ -1,5 +1,6 @@
 import { isRecord, isNumericId } from './guards';
 import { ApiError, apiRequest, csrfToken } from './auth';
+import { downloadedFile, type NotesExportFormat } from './annotations';
 
 export type StudyCard = {
   id: string;
@@ -228,4 +229,52 @@ export async function practiceCards(scope: StudyCardScope, signal: AbortSignal) 
   )
     return body as unknown as { items: StudyCard[]; total: number };
   throw new Error('Invalid practice cards.');
+}
+/** STUDY-04: saved answers on one day of scheduled review. */
+export type StudyTally = { date: string; known: number; again: number };
+export type StudyStats = {
+  today: string;
+  /** First day of the chart; days without reviews are left out of `days`. */
+  from: string;
+  days: StudyTally[];
+  totals: { known: number; again: number };
+  /** Consecutive days with at least one review, ending today or yesterday. */
+  streak: number;
+  reviewedToday: boolean;
+  /** Readable cards per box; box 0 is a card never reviewed. */
+  boxes: { box: number; cards: number }[];
+};
+const tally = (v: unknown) =>
+  isRecord(v) &&
+  typeof v.date === 'string' &&
+  Number.isSafeInteger(v.known) &&
+  Number.isSafeInteger(v.again);
+/** STUDY-04: the owner's review history and where their cards stand, across every card. */
+export async function studyStats(signal: AbortSignal) {
+  const body: unknown = await (await apiRequest('/study-cards/stats', { signal })).json();
+  if (
+    isRecord(body) &&
+    typeof body.today === 'string' &&
+    typeof body.from === 'string' &&
+    Array.isArray(body.days) &&
+    body.days.every(tally) &&
+    isRecord(body.totals) &&
+    Number.isSafeInteger(body.totals.known) &&
+    Number.isSafeInteger(body.totals.again) &&
+    Number.isSafeInteger(body.streak) &&
+    typeof body.reviewedToday === 'boolean' &&
+    Array.isArray(body.boxes) &&
+    body.boxes.every(
+      (b) => isRecord(b) && Number.isSafeInteger(b.box) && Number.isSafeInteger(b.cards),
+    )
+  )
+    return body as unknown as StudyStats;
+  throw new Error('Invalid study stats.');
+}
+/** STUDY-04: the readable cards in the filter as a file; the API re-checks access. */
+export async function exportStudyCards(scope: StudyCardScope, format: NotesExportFormat) {
+  const params = scopeParams(scope);
+  params.set('format', format);
+  const response = await apiRequest(`/study-cards/export?${params}`, {}, 20_000);
+  return downloadedFile(response, 'the-on-tap', format);
 }

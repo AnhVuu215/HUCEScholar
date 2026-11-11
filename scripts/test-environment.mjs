@@ -161,6 +161,8 @@ try {
     ['study2-student', 'STUDENT'],
     ['study3-admin', 'ADMIN'],
     ['study3-student', 'STUDENT'],
+    ['study4-admin', 'ADMIN'],
+    ['study4-student', 'STUDENT'],
     ['search4-admin', 'ADMIN'],
     ['search4-student', 'STUDENT'],
     ['cal1-admin', 'ADMIN'],

@@ -27,6 +27,8 @@ export class ReaderPreferencesDto {
   @IsBoolean() annotationPanelOpen!: boolean;
   /** CAL-07: account-wide switch for reminder emails; absent keeps the stored choice. */
   @IsOptional() @IsBoolean() reminderEmail?: boolean;
+  /** STUDY-04: morning notice about due study cards; absent keeps the stored choice. */
+  @IsOptional() @IsIn(['OFF', 'BELL', 'EMAIL']) studyReminder?: 'OFF' | 'BELL' | 'EMAIL';
 }
 export class PreferencesUpdateDto {
   @IsDefined()

@@ -16,6 +16,7 @@ export const notificationKinds = [
   'CALENDAR_REMINDER',
   'READING_DEADLINE_SOON',
   'READING_DEADLINE_CHANGED',
+  'STUDY_CARDS_DUE',
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 export type AppNotification = {
@@ -51,7 +52,9 @@ function valid(v: unknown): v is AppNotification {
         isNumericId(v.calendarItemId) &&
         typeof v.eventAt === 'string' &&
         !Number.isNaN(Date.parse(v.eventAt))
-      : isNumericId(v.documentId) && isNumericId(v.versionId)) &&
+      : v.kind === 'STUDY_CARDS_DUE'
+        ? v.documentId === null && v.versionId === null && v.calendarItemId === null
+        : isNumericId(v.documentId) && isNumericId(v.versionId)) &&
     (notificationKinds as readonly string[]).includes(String(v.kind)) &&
     typeof v.title === 'string' &&
     (v.detail === null || typeof v.detail === 'string') &&
@@ -131,6 +134,8 @@ export function notificationMessage(n: AppNotification) {
         : n.detail === 'DUE_ADDED'
           ? `Quản trị viên đặt hạn đọc cho ${title}: ${deadlineWhen(n.eventAt!)}.`
           : `Hạn đọc của ${title} đổi sang ${deadlineWhen(n.eventAt!)}.`;
+    case 'STUDY_CARDS_DUE':
+      return `Hôm nay có ${n.detail ?? 'một số'} thẻ ôn tập đến hạn.`;
     case 'CALENDAR_REMINDER': {
       const at = new Date(n.eventAt!);
       const when = `${formatTime(at)} ${formatLongDay(at)}`;
@@ -155,6 +160,7 @@ function deadlineWhen(eventAt: string) {
 export function notificationHref(n: AppNotification, role: Role) {
   if (n.kind === 'CALENDAR_REMINDER')
     return `/workspace/calendar?at=${encodeURIComponent(n.eventAt!)}`;
+  if (n.kind === 'STUDY_CARDS_DUE') return '/workspace/study?on=due';
   if (n.kind.startsWith('REPORT_') || n.kind.startsWith('READING_') || role === 'ADMIN')
     return `/workspace/library/versions/${n.versionId}`;
   return `/workspace/${role.toLowerCase()}/materials?draft=${n.documentId}`;

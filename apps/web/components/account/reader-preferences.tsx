@@ -7,6 +7,7 @@ import {
   updatePreferences,
   defaultReaderPreferences,
   readerZooms,
+  studyReminders,
   type PreferencesSnapshot,
   type ReaderPreferences,
 } from '../../lib/account';
@@ -36,7 +37,8 @@ function PreferencesEditor({ userId }: { userId: string }) {
     (draft.highlightColor !== saved.preferences.highlightColor ||
       draft.defaultZoom !== saved.preferences.defaultZoom ||
       draft.annotationPanelOpen !== saved.preferences.annotationPanelOpen ||
-      draft.reminderEmail !== saved.preferences.reminderEmail),
+      draft.reminderEmail !== saved.preferences.reminderEmail ||
+      draft.studyReminder !== saved.preferences.studyReminder),
   );
   useNotesLeaveGuard(dirty, pending, 'Bạn có cài đặt đọc chưa lưu. Rời trang và bỏ thay đổi?');
   useEffect(() => {
@@ -184,6 +186,25 @@ function PreferencesEditor({ userId }: { userId: string }) {
             />
             Cho phép gửi email nhắc lịch (mục nào bật “Gửi cả email”)
           </label>
+          <div className="form-field">
+            <SelectField
+              id="preferences-study-reminder"
+              label="Nhắc thẻ ôn tập đến hạn"
+              value={draft.studyReminder}
+              disabled={pending}
+              options={Object.entries(studyReminders).map(([value, label]) => ({ value, label }))}
+              onChange={(value) => {
+                setDraft((current) => ({
+                  ...current,
+                  studyReminder: value as ReaderPreferences['studyReminder'],
+                }));
+                setNotice('');
+              }}
+            />
+            <p className="field-hint">
+              Một lần mỗi sáng sau 7 giờ, chỉ khi hôm đó có thẻ đến hạn. Mặc định không nhắc.
+            </p>
+          </div>
           {blocked && (
             <>
               <p className="field-hint">

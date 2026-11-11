@@ -494,6 +494,7 @@ describe('self-service account with real sessions and PostgreSQL', () => {
     defaultZoom: 'fit-width',
     annotationPanelOpen: false,
     reminderEmail: true,
+    studyReminder: 'OFF',
   };
   it('preferences GET returns account-bound defaults without writing a row', async () => {
     const agent = await login();
