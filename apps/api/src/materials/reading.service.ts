@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type annotations, type reading_progress } from '../generated/prisma/client';
-import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { LibraryService } from './library.service';
 import { isDeepStrictEqual } from 'node:util';
@@ -23,6 +22,8 @@ import {
   SaveProgressDto,
   UpdateNoteDto,
 } from './reading.dto';
+import { parseId } from '../common/ids';
+import { lockKey } from '../common/locks';
 const pinAnchor = (p: NotePosition) => ({
   coordinateSpace: 'normalized-pdf-v1',
   point: [Math.round(p.x * 1e6) / 1e6, Math.round(p.y * 1e6) / 1e6],
@@ -83,13 +84,12 @@ export class ReadingService {
       copyRestricted: boolean,
     ) => Promise<T>,
   ) {
-    const owner = academicId(actor.id),
-      version = academicId(rawId);
+    const owner = parseId(actor.id),
+      version = parseId(rawId);
     return this.db.$transaction(async (tx) => {
       // Serialize personal mutations (including first inserts) without exclusively
       // locking users, which would invert moderation's document -> manager lock order.
-      if (writing)
-        await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:reading:${owner}`}, 0))`;
+      if (writing) await lockKey(tx, `reading:${owner}`);
       const row = await this.library.access(tx, actor, version);
       const file = row.files!;
       return action(tx, owner, version, file.page_count, file.has_text_layer, file.copy_restricted);
@@ -111,7 +111,7 @@ export class ReadingService {
             (page as number) >= 1 &&
             (page as number) <= (pages ?? 0) &&
             typeof id === 'string'
-              ? { page: page as number, id: academicId(id) }
+              ? { page: page as number, id: parseId(id) }
               : null,
           )
         : undefined;
@@ -134,7 +134,7 @@ export class ReadingService {
     });
   }
   private list(actor: Profile, id: string, query: NotesQueryDto, kind: string) {
-    const cursor = query.cursor ? academicId(query.cursor) : undefined;
+    const cursor = query.cursor ? parseId(query.cursor) : undefined;
     return this.run(actor, id, false, async (tx, user_id, version_id, pages) => {
       pageWithin(query.pageNumber, pages);
       const rows = await tx.annotations.findMany({
@@ -234,7 +234,7 @@ export class ReadingService {
     return note;
   }
   update(actor: Profile, id: string, noteId: string, dto: UpdateNoteDto) {
-    const target = academicId(noteId);
+    const target = parseId(noteId);
     return this.run(actor, id, true, async (tx, owner, version) => {
       await this.owned(tx, owner, version, target, dto.revision);
       return {
@@ -255,7 +255,7 @@ export class ReadingService {
     });
   }
   updateHighlight(actor: Profile, id: string, noteId: string, dto: UpdateHighlightDto) {
-    const target = academicId(noteId);
+    const target = parseId(noteId);
     return this.run(actor, id, true, async (tx, owner, version) => {
       await this.owned(tx, owner, version, target, dto.revision, 'TEXT_HIGHLIGHT');
       return {
@@ -274,7 +274,7 @@ export class ReadingService {
     });
   }
   remove(actor: Profile, id: string, noteId: string, dto: ReadingRevisionDto, kind = 'PAGE_NOTE') {
-    const target = academicId(noteId);
+    const target = parseId(noteId);
     return this.run(actor, id, true, async (tx, owner, version) => {
       await this.owned(tx, owner, version, target, dto.revision, kind);
       await tx.annotations.delete({ where: { id: target } });
@@ -285,7 +285,7 @@ export class ReadingService {
    * Content revision is untouched: marking from the notebook must not stale an open draft.
    */
   setReviewLater(actor: Profile, id: string, noteId: string, dto: ReviewLaterDto) {
-    const target = academicId(noteId);
+    const target = parseId(noteId);
     return this.run(actor, id, true, async (tx, user_id, version_id) => {
       const { count } = await tx.annotations.updateMany({
         where: { id: target, user_id, version_id },
