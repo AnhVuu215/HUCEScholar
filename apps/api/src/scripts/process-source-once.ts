@@ -1,8 +1,8 @@
 // Opt-in real-tool verification helper. Refuse application databases and Redis sessions.
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { MaterialDraftCoreModule } from '../materials/material-draft-core.module';
-import { SourceConversionProcessor } from '../materials/source-conversion.processor';
+import { MaterialDraftCoreModule } from '../drafts/material-draft-core.module';
+import { SourceConversionProcessor } from '../drafts/source-conversion.processor';
 import { DatabaseService } from '../database/database.module';
 async function main() {
   if (

@@ -18,7 +18,7 @@ import {
 } from '../files/private-store';
 import { LibraryListDto } from './library.dto';
 import { DOCX_MIME } from '../files/receive-docx';
-import { MaterialsService } from './materials.service';
+import { MaterialsService } from '../drafts/materials.service';
 import { foldedPhrase, foldedTerms, matchSnippet } from './search-fold';
 import { parseId } from '../common/ids';
 import { requireActiveUser } from '../common/active-user';

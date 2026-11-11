@@ -9,7 +9,7 @@ import {
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type annotations, type reading_progress } from '../generated/prisma/client';
 import { Profile } from '../auth/auth.types';
-import { LibraryService } from './library.service';
+import { LibraryService } from '../library/library.service';
 import { isDeepStrictEqual } from 'node:util';
 import { CreateHighlightDto, UpdateHighlightDto } from './highlight.dto';
 import { exportAnnotations, MAX_EXPORT_ANNOTATIONS, type ExportFormat } from './annotation-export';

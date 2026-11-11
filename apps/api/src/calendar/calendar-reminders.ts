@@ -3,10 +3,10 @@ import { AUTH_CONFIG, AuthConfiguration } from '../auth/auth.config';
 import { Mailer } from '../auth/mailer';
 import { DatabaseService } from '../database/database.module';
 import { DAY, occurrenceStarts, rowSeries, type Series } from './calendar-repeat';
-import { available } from '../materials/library.service';
+import { available } from '../library/library.service';
 import { notify } from '../notifications/notify';
 import { dueInstant, shown } from '../reading-lists/reading-lists.service';
-import { StudyReminders } from '../materials/study-reminders';
+import { StudyReminders } from '../study/study-reminders';
 
 /**
  * CAL-03. A reminder is due once `start - minutes` has passed. The worker looks back this far, so a

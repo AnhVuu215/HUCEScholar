@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AUTH_CONFIG, AuthConfiguration } from '../auth/auth.config';
 import { Mailer } from '../auth/mailer';
 import { DatabaseService } from '../database/database.module';
-import { available } from './library.service';
+import { available } from '../library/library.service';
 import { dayValue, localDay } from './study-schedule';
 
 /** STUDY-04: the morning notice goes out from this hour, Vietnam time. */

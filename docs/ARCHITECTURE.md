@@ -59,7 +59,12 @@ Lỗi nghiệp vụ trả về `{ code, message }` (ví dụ `409 STALE_REVISION
 | `account/` | Hồ sơ và cài đặt của chính người dùng |
 | `users/` | Admin quản lý tài khoản |
 | `academic/` | Danh mục khoa, ngành, môn |
-| `materials/` | Mọi thứ quanh tài liệu (xem bảng dưới) |
+| `drafts/` | Tài liệu của sinh viên: bản nháp, upload PDF/Word, gửi/rút duyệt, phiên bản kế tiếp. `material-draft-core.module.ts` là phần dùng chung với file worker (kiểm tra chủ sở hữu, chuyển Word sang PDF) |
+| `library/` | Kho học liệu: danh mục, tìm kiếm không dấu, đọc/tải PDF theo quyền. `available()` là điều kiện "người đọc mở được" mà nhiều module khác dùng |
+| `moderation/` | Admin duyệt phiên bản đã gửi; ẩn/khôi phục toàn tài liệu (`lifecycle.*`) |
+| `reports/` | Người đọc báo cáo tài liệu; admin xử lý, có thể ẩn tài liệu |
+| `reading/` | Dữ liệu đọc riêng: ghi chú trang, tô sáng, tiến độ, thư viện cá nhân, tìm và xuất ghi chú |
+| `study/` | Thẻ ôn tập: lịch ôn, thống kê, xuất thẻ, nhắc buổi sáng |
 | `files/` | Nhận upload, kho file riêng tư, hàng đợi quét/chuyển đổi, đọc chữ PDF |
 | `reading-lists/` | Danh sách đọc theo môn, hạn đọc, theo dõi môn, dấu "đã đọc" |
 | `calendar/` | Lịch học riêng, lặp lịch, nhắc lịch, nhập/xuất iCalendar |
@@ -67,19 +72,9 @@ Lỗi nghiệp vụ trả về `{ code, message }` (ví dụ `409 STALE_REVISION
 | `notifications/` | Thông báo trong ứng dụng; `notify.ts` ghi thông báo trong transaction của người gọi |
 | `ops/` | Request id, kiểm tra sẵn sàng (`/health/ready`) |
 | `database/` | PrismaClient dùng chung |
+| `common/` | Helper dùng chung: `parseId`, `requireActiveUser`, `lockCatalog`/`lockKey`, `conflict` |
 
-`materials/` hiện chứa nhiều nhóm việc. Đọc theo tiền tố tên file:
-
-| Tiền tố | Nhóm việc |
-|---|---|
-| `materials.*`, `draft-pdf.*`, `source-*` | Bản nháp của sinh viên, upload PDF/Word, gửi/rút duyệt, phiên bản kế tiếp |
-| `moderation.*` | Admin duyệt, yêu cầu sửa, từ chối |
-| `lifecycle.*` | Admin ẩn/khôi phục toàn tài liệu |
-| `library.*`, `search-fold.ts` | Kho học liệu, tìm kiếm, đọc/tải PDF theo quyền (`available()` là điều kiện đọc được) |
-| `reading.*`, `highlight.*`, `annotation-*` | Ghi chú trang, tô sáng, tìm và xuất ghi chú |
-| `personal-library.*` | Tài liệu đã lưu, đọc gần đây |
-| `reports.*` | Báo cáo tài liệu và xử lý |
-| `study-*` | Thẻ ôn tập, lịch ôn, thống kê, xuất thẻ, nhắc buổi sáng |
+Mỗi thư mục là một module NestJS (`*.module.ts`) gồm controller, service và DTO. Các module tài liệu phụ thuộc theo một chiều, không vòng: lõi `drafts/material-draft-core` ← `library` ← `drafts`, `reading`, `study`, `reports`; lõi ← `moderation` ← `reports`.
 
 ### Web (`apps/web`)
 
@@ -120,8 +115,8 @@ File không bao giờ nằm trong webroot. Người đọc chỉ nhận file qua
 |---|---|
 | Chống ghi đè | Bản ghi sửa được có cột `revision`. Client gửi revision đang thấy; khác thì `409 STALE_REVISION`, giao diện giữ nội dung đang nhập và cho tải bản mới để đối chiếu. |
 | Thử lại an toàn | Thao tác tạo mới có `requestId` (UUID); gửi lại cùng id không tạo bản thứ hai. |
-| Đồng thời | Khóa hàng (`FOR UPDATE`/`FOR SHARE`) hoặc `pg_advisory_xact_lock` trong transaction. |
-| Kiểm tra quyền | Luôn ở API, ở mỗi request; tài liệu không còn đọc được thì trả 404 như không tồn tại. |
+| Đồng thời | Khóa hàng (`FOR UPDATE`/`FOR SHARE`) hoặc khóa advisory theo tên (`lockKey`, `lockCatalog` trong `common/locks.ts`) trong transaction. |
+| Kiểm tra quyền | Luôn ở API, ở mỗi request. Trong transaction ghi, gọi `requireActiveUser` để kiểm tra lại tài khoản. Tài liệu không còn đọc được thì trả 404 như không tồn tại. |
 | Audit và thông báo | Ghi trong cùng transaction với thay đổi trạng thái. |
 | Ngày giờ | Ngày học tập (hạn đọc, lịch ôn) tính theo giờ Việt Nam. |
 | Lỗi | API trả `code` ổn định; web đổi sang câu tiếng Việt, không hiện thông tin kỹ thuật. |
@@ -148,9 +143,7 @@ File không bao giờ nằm trong webroot. Người đọc chỉ nhận file qua
 
 ## 9. Nợ kỹ thuật đã biết
 
-Đánh giá ngày 11/11/2026; sửa dần theo từng PR nhỏ, không đổi hành vi:
+Đánh giá ngày 11/11/2026; sửa dần theo từng PR nhỏ, không đổi hành vi. Đã xong: helper dùng chung `common/` (PR #80) và tách module `materials` cũ thành `drafts`, `library`, `moderation`, `reports`, `reading`, `study`. Còn lại:
 
-- `materials/` gánh quá nhiều nhóm việc; dự định tách thành các module drafts, moderation, library, reading, study, reports.
-- Một số đoạn hạ tầng lặp lại ở nhiều service: kiểm tra tài khoản còn hoạt động, hàm tạo lỗi, khóa advisory với key viết tay, hàm `academicId` nằm trong `academic.service`.
 - Web tự viết lại cùng một kiểu tải dữ liệu (`useEffect` + `AbortController`) và gắn CSRF ở nhiều chỗ.
 - Một số file lớn: `calendar.service.ts`, `notebooks.service.ts`, `note-editor.tsx`, `calendar-board.tsx`, `apps/api/test/materials.integration.spec.ts`.

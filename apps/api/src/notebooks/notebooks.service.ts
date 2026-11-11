@@ -9,8 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { Profile } from '../auth/auth.types';
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type notebook_pages, type notebooks } from '../generated/prisma/client';
-import { available } from '../materials/library.service';
-import { foldVietnamese } from '../materials/search-fold';
+import { available } from '../library/library.service';
+import { foldVietnamese } from '../library/search-fold';
 import { cleanPage, type PageContent, type PageItem, type PageSize } from './notebook-content';
 import {
   AddQuotesDto,

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { Roles, RolesGuard, SessionGuard } from '../auth/session.guard';
-import { DraftListDto } from './materials.dto';
+import { DraftListDto } from '../drafts/materials.dto';
 import { LifecycleListDto, MaterialVisibilityDto } from './lifecycle.dto';
 import { LifecycleService } from './lifecycle.service';
 @Controller('admin/materials')

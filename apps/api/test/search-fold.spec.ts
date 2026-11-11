@@ -3,7 +3,7 @@ import {
   foldedTerms,
   foldVietnamese,
   MAX_SEARCH_TERMS,
-} from '../src/materials/search-fold';
+} from '../src/library/search-fold';
 
 describe('Vietnamese search folding', () => {
   it('removes tones, vowel marks, đ and case', () => {

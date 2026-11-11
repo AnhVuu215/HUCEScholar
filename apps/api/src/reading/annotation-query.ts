@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { Prisma } from '../generated/prisma/client';
 import { AnnotationSearchDto } from './annotation-search.dto';
-import { foldVietnamese } from './search-fold';
+import { foldVietnamese } from '../library/search-fold';
 
 const searched = [Prisma.sql`content`, Prisma.sql`(anchor->>'quote')`];
 

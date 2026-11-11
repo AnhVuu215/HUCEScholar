@@ -2,8 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
 import { Profile } from '../auth/auth.types';
-import { LibraryService } from './library.service';
-import { LifecycleService } from './lifecycle.service';
+import { LibraryService } from '../library/library.service';
+import { LifecycleService } from '../moderation/lifecycle.service';
 import { notify } from '../notifications/notify';
 import { CreateReportDto, ReportActionDto, ReportListDto } from './reports.dto';
 import { parseId } from '../common/ids';
