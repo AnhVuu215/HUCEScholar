@@ -8,7 +8,6 @@ import {
 import { AUTH_CONFIG, AuthConfiguration } from '../auth/auth.config';
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type calendar_items } from '../generated/prisma/client';
-import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { available } from '../materials/library.service';
 import { calendarIcs, type IcsDeadline } from './calendar-ics';
@@ -45,6 +44,8 @@ import {
   allDayRemindMinutes,
   remindMinutes,
 } from './calendar.dto';
+import { parseId } from '../common/ids';
+import { lockKey } from '../common/locks';
 
 const DAY = 86_400_000;
 const MAX_RANGE_DAYS = 62;
@@ -122,9 +123,9 @@ function normalize(body: CalendarFieldsDto) {
     ends_at: endsAt,
     all_day: body.allDay,
     color: body.color,
-    version_id: body.versionId === null ? null : academicId(body.versionId),
+    version_id: body.versionId === null ? null : parseId(body.versionId),
     page_number: body.pageNumber,
-    notebook_id: body.notebookId ? academicId(body.notebookId) : null,
+    notebook_id: body.notebookId ? parseId(body.notebookId) : null,
     repeat_freq: repeat?.freq ?? null,
     repeat_days: repeat && repeat.freq === 'WEEKLY' ? repeat.days : null,
     repeat_until: repeat?.until ?? null,
@@ -250,7 +251,7 @@ export class CalendarService {
     });
   }
   private lock(tx: Prisma.TransactionClient, user_id: bigint) {
-    return tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:calendar:${user_id}`}, 0))`;
+    return lockKey(tx, `calendar:${user_id}`);
   }
   /** CANVAS-01: a new or changed notebook link must be one of the owner's notebooks. */
   private async checkNotebook(
@@ -276,7 +277,7 @@ export class CalendarService {
   }
 
   async range(actor: Profile, query: CalendarRangeDto) {
-    const user_id = academicId(actor.id);
+    const user_id = parseId(actor.id);
     const from = new Date(query.from),
       to = new Date(query.to);
     if (to <= from || to.getTime() - from.getTime() > MAX_RANGE_DAYS * DAY)
@@ -352,7 +353,7 @@ export class CalendarService {
    * iCalendar file. Undated and done tasks are left out; notes and linked pages only on request.
    */
   async exportIcs(actor: Profile, query: CalendarExportDto) {
-    const user_id = academicId(actor.id);
+    const user_id = parseId(actor.id);
     if ((query.from === undefined) !== (query.to === undefined))
       throw invalid('Chọn cả ngày đầu và ngày cuối, hoặc bỏ cả hai.');
     const first = query.from ? parseDate(query.from) : null;
@@ -490,7 +491,7 @@ export class CalendarService {
    * per owner, so a second import of the same file adds nothing; what does not fit is reported.
    */
   async importIcs(actor: Profile, text: string, utcOffset: number) {
-    const user_id = academicId(actor.id);
+    const user_id = parseId(actor.id);
     const parsed = parseIcs(text, utcOffset);
     const skipped = [...parsed.skipped];
     const notes: { title: string; reason: string }[] = [];
@@ -558,7 +559,7 @@ export class CalendarService {
    * tasks: newest first, each done occurrence of a repeating task as its own row.
    */
   async tasks(actor: Profile, query: CalendarTasksDto) {
-    const user_id = academicId(actor.id);
+    const user_id = parseId(actor.id);
     return this.db.$transaction(
       async (tx) => {
         const single = await tx.calendar_items.findMany({
@@ -642,7 +643,7 @@ export class CalendarService {
     );
   }
   async create(actor: Profile, body: CreateCalendarItemDto) {
-    const user_id = academicId(actor.id);
+    const user_id = parseId(actor.id);
     const fields = normalize(body);
     return this.db.$transaction(async (tx) => {
       await this.lock(tx, user_id);
@@ -666,9 +667,9 @@ export class CalendarService {
     });
   }
   private async owned(tx: Prisma.TransactionClient, actor: Profile, rawId: string) {
-    const user_id = academicId(actor.id);
+    const user_id = parseId(actor.id);
     await this.lock(tx, user_id);
-    const row = await tx.calendar_items.findFirst({ where: { id: academicId(rawId), user_id } });
+    const row = await tx.calendar_items.findFirst({ where: { id: parseId(rawId), user_id } });
     if (!row) throw new NotFoundException('Không tìm thấy mục lịch.');
     return row;
   }

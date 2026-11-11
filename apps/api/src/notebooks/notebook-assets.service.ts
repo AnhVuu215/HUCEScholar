@@ -12,7 +12,6 @@ import {
 import { randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { Readable } from 'node:stream';
-import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { DatabaseService } from '../database/database.module';
 import type { notebook_assets } from '../generated/prisma/client';
@@ -21,6 +20,8 @@ import { ScanQueue } from '../files/scan-queue';
 import { encodeImage, MAX_IMAGE_BYTES } from './image-encode';
 import { fetchImage, isBlockedAddress } from './image-fetch';
 import { readCapped } from './read-capped';
+import { parseId } from '../common/ids';
+import { lockKey } from '../common/locks';
 
 /** Images (full size and thumbnail) a user may keep across all notebooks. */
 export const ASSET_QUOTA_BYTES = 1024 * 1024 * 1024;
@@ -90,7 +91,7 @@ export class NotebookAssetsService {
     bytes: Buffer,
     source: { kind: 'UPLOAD' } | { kind: 'URL'; host: string },
   ) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     const image = await encodeImage(bytes);
     const key = `notebook/${randomUUID()}.webp`;
     let stored = false;
@@ -99,7 +100,7 @@ export class NotebookAssetsService {
       await this.store.putImage(thumbKey(key), image.thumb);
       stored = true;
       const row = await this.db.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:notebook:${userId}`}, 0))`;
+        await lockKey(tx, `notebook:${userId}`);
         const again = await tx.notebook_assets.findUnique({
           where: { user_id_request_id: { user_id: userId, request_id: requestId } },
         });
@@ -170,7 +171,7 @@ export class NotebookAssetsService {
         code: 'IMAGE_UNSUPPORTED',
         message: 'Chỉ nhận ảnh PNG, JPG, WebP, GIF hoặc AVIF.',
       });
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     const known = await this.existing(userId, requestId);
     if (known) {
       body.resume();
@@ -189,7 +190,7 @@ export class NotebookAssetsService {
 
   /** "Kéo ảnh từ Google": the API fetches the URL under the SSRF rules in image-fetch.ts. */
   async fromUrl(actor: Profile, requestId: string, url: string) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     const known = await this.existing(userId, requestId);
     if (known) return { item: assetItem(known) };
     return this.busy(actor, async () => {
@@ -202,7 +203,7 @@ export class NotebookAssetsService {
   }
 
   async status(actor: Profile, ids: string) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     const rows = await this.db.notebook_assets.findMany({
       where: { id: { in: ids.split(',').map((id) => BigInt(id)) }, user_id: userId },
     });
@@ -210,7 +211,7 @@ export class NotebookAssetsService {
   }
 
   async usage(actor: Profile) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     const [used, notebooks] = await Promise.all([
       this.db.notebook_assets.aggregate({
         where: { user_id: userId },
@@ -230,7 +231,7 @@ export class NotebookAssetsService {
   /** The image bytes, only for its owner and only once the file check passed. */
   async open(actor: Profile, rawId: string, thumb: boolean) {
     const row = await this.db.notebook_assets.findFirst({
-      where: { id: academicId(rawId), user_id: academicId(actor.id) },
+      where: { id: parseId(rawId), user_id: parseId(actor.id) },
     });
     if (!row)
       throw new NotFoundException({ code: 'ASSET_NOT_FOUND', message: 'Không tìm thấy ảnh.' });

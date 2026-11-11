@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,6 +12,9 @@ import {
   UpdateCatalogDto,
   CourseProgramsDto,
 } from './academic.dto';
+import { parseId } from '../common/ids';
+import { lockCatalog } from '../common/locks';
+import { requireActiveUser } from '../common/active-user';
 
 // Identifiers below are static application constants, never interpolated request values.
 const resources = {
@@ -30,11 +32,6 @@ export type CatalogItem = {
   facultyId?: string;
   facultyName?: string;
 };
-export function academicId(value: string): bigint {
-  if (!/^[1-9]\d{0,18}$/.test(value) || BigInt(value) > 9223372036854775807n)
-    throw new BadRequestException('Mã định danh không hợp lệ.');
-  return BigInt(value);
-}
 export function catalogKind(value: string): CatalogKind {
   if (!Object.hasOwn(resources, value))
     throw new BadRequestException('Loại danh mục không hợp lệ.');
@@ -53,16 +50,10 @@ export const staleCatalog = () =>
 export class AcademicService {
   constructor(private readonly db: DatabaseService) {}
   async beginWrite(tx: Prisma.TransactionClient, actor: string) {
-    const id = academicId(actor);
-    await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${id} FOR SHARE`;
-    const user = await tx.users.findUnique({
-      where: { id },
-      select: { role: true, status: true, verified_at: true },
-    });
-    if (!user || user.role !== 'ADMIN' || user.status !== 'ACTIVE' || !user.verified_at)
-      throw new ForbiddenException('Không còn quyền quản trị.');
+    const id = parseId(actor);
+    await requireActiveUser(tx, id, 'Không còn quyền quản trị.', 'ADMIN');
     // Low-volume administrative writes share one lock to keep cross-catalog invariants atomic.
-    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(68467, 1)`;
+    await lockCatalog(tx);
     return id;
   }
   async audit(
@@ -82,7 +73,7 @@ export class AcademicService {
     const predicates: Prisma.Sql[] = [Prisma.sql`true`];
     if (query.facultyId) {
       if (kind === 'faculties') throw new BadRequestException('Khoa không có khoa cha.');
-      predicates.push(Prisma.sql`faculty_id=${academicId(query.facultyId)}`);
+      predicates.push(Prisma.sql`faculty_id=${parseId(query.facultyId)}`);
     }
     if (query.search)
       predicates.push(
@@ -105,7 +96,7 @@ export class AcademicService {
   }
   async get(rawKind: string, rawId: string) {
     const kind = catalogKind(rawKind);
-    const id = academicId(rawId);
+    const id = parseId(rawId);
     return this.db.$transaction(
       async (tx) => ({
         item: {
@@ -147,9 +138,9 @@ export class AcademicService {
     try {
       const item = await this.db.$transaction(async (tx) => {
         const actorId = await this.beginWrite(tx, actor);
-        if (body.facultyId) await this.activeFaculty(tx, academicId(body.facultyId));
+        if (body.facultyId) await this.activeFaculty(tx, parseId(body.facultyId));
         const rows = await tx.$queryRaw<CatalogItem[]>(
-          Prisma.sql`INSERT INTO ${Prisma.raw(resources[kind].table)} (code,name ${body.facultyId ? Prisma.sql`,faculty_id` : Prisma.empty}) VALUES (${body.code},${body.name} ${body.facultyId ? Prisma.sql`,${academicId(body.facultyId)}` : Prisma.empty}) RETURNING ${columns(kind)}`,
+          Prisma.sql`INSERT INTO ${Prisma.raw(resources[kind].table)} (code,name ${body.facultyId ? Prisma.sql`,faculty_id` : Prisma.empty}) VALUES (${body.code},${body.name} ${body.facultyId ? Prisma.sql`,${parseId(body.facultyId)}` : Prisma.empty}) RETURNING ${columns(kind)}`,
         );
         await this.audit(
           tx,
@@ -167,7 +158,7 @@ export class AcademicService {
   }
   async update(actor: string, rawKind: string, rawId: string, body: UpdateCatalogDto) {
     const kind = catalogKind(rawKind);
-    const id = academicId(rawId);
+    const id = parseId(rawId);
     try {
       const item = await this.db.$transaction(async (tx) => {
         const actorId = await this.beginWrite(tx, actor);
@@ -215,8 +206,8 @@ export class AcademicService {
     >`SELECT p.id::text, p.code, p.name, p.is_active AS active, p.revision, p.faculty_id::text AS "facultyId" FROM hucescholar.programs p JOIN hucescholar.program_courses pc ON pc.program_id=p.id WHERE pc.course_id=${courseId} ORDER BY p.code,p.id`;
   }
   async setPrograms(actor: string, rawId: string, body: CourseProgramsDto) {
-    const id = academicId(rawId);
-    const wanted = body.programIds.map(academicId);
+    const id = parseId(rawId);
+    const wanted = body.programIds.map(parseId);
     return this.db.$transaction(async (tx) => {
       const actorId = await this.beginWrite(tx, actor);
       const course = await this.read(tx, 'courses', id, true);

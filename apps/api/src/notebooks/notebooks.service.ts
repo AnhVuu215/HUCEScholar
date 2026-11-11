@@ -6,7 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type notebook_pages, type notebooks } from '../generated/prisma/client';
@@ -24,6 +23,8 @@ import {
   UpdateNotebookDto,
   UpdatePageDto,
 } from './notebooks.dto';
+import { parseId } from '../common/ids';
+import { lockKey } from '../common/locks';
 
 export const MAX_NOTEBOOKS = 200;
 export const MAX_PAGES = 500;
@@ -100,11 +101,11 @@ export class NotebooksService {
   constructor(private readonly db: DatabaseService) {}
 
   private async lockUser(tx: Prisma.TransactionClient, userId: bigint) {
-    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:notebook:${userId}`}, 0))`;
+    await lockKey(tx, `notebook:${userId}`);
   }
   /** The owner's notebook, locked for the transaction; trashed ones only when asked for. */
   private async owned(tx: Prisma.TransactionClient, userId: bigint, rawId: string, trash = false) {
-    const id = academicId(rawId);
+    const id = parseId(rawId);
     const rows = await tx.$queryRaw<{ id: bigint }[]>`
       SELECT id FROM hucescholar.notebooks
       WHERE id = ${id} AND user_id = ${userId}
@@ -118,7 +119,7 @@ export class NotebooksService {
   }
   private async course(tx: Prisma.TransactionClient, raw: string | null) {
     if (raw === null) return null;
-    const course = await tx.courses.findUnique({ where: { id: academicId(raw) } });
+    const course = await tx.courses.findUnique({ where: { id: parseId(raw) } });
     if (!course)
       throw new BadRequestException({
         code: 'NOTEBOOK_INVALID',
@@ -163,7 +164,7 @@ export class NotebooksService {
   }
 
   async list(actor: Profile, query: NotebookListDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     const trash = query.trash === '1';
     const words = (query.q ?? '').normalize('NFC').split(/\s+/).filter(Boolean).slice(0, 8);
     let matching: bigint[] | null = null;
@@ -192,7 +193,7 @@ export class NotebooksService {
           where: {
             user_id: userId,
             deleted_at: trash ? { not: null } : null,
-            ...(query.courseId ? { course_id: academicId(query.courseId) } : {}),
+            ...(query.courseId ? { course_id: parseId(query.courseId) } : {}),
             ...(matching ? { id: { in: matching } } : {}),
           },
           include: { courses: { select: { id: true, code: true, name: true } } },
@@ -217,7 +218,7 @@ export class NotebooksService {
   }
 
   async create(actor: Profile, body: CreateNotebookDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       await this.lockUser(tx, userId);
       const existing = await tx.notebooks.findUnique({
@@ -260,10 +261,10 @@ export class NotebooksService {
   }
 
   async get(actor: Profile, rawId: string) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(
       async (tx) => {
-        const id = academicId(rawId);
+        const id = parseId(rawId);
         const row = await tx.notebooks.findFirst({
           where: { id, user_id: userId, deleted_at: null },
         });
@@ -275,7 +276,7 @@ export class NotebooksService {
   }
 
   async update(actor: Profile, rawId: string, body: UpdateNotebookDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       const row = await this.owned(tx, userId, rawId);
       if (row.revision !== body.revision) throw staleNotebook();
@@ -298,7 +299,7 @@ export class NotebooksService {
 
   /** Moves a notebook to the trash; the worker deletes it for good after 30 days. */
   async trash(actor: Profile, rawId: string, body: NotebookRevisionDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     await this.db.$transaction(async (tx) => {
       const row = await this.owned(tx, userId, rawId);
       if (row.revision !== body.revision) throw staleNotebook();
@@ -309,7 +310,7 @@ export class NotebooksService {
     });
   }
   async restore(actor: Profile, rawId: string) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       const row = await this.owned(tx, userId, rawId, true);
       await tx.notebooks.update({
@@ -321,7 +322,7 @@ export class NotebooksService {
   }
   /** "Xóa vĩnh viễn" from the trash. Images no page uses any more are removed by the worker. */
   async purge(actor: Profile, rawId: string) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     await this.db.$transaction(async (tx) => {
       const row = await this.owned(tx, userId, rawId, true);
       await tx.notebooks.delete({ where: { id: row.id } });
@@ -329,7 +330,7 @@ export class NotebooksService {
   }
 
   async duplicate(actor: Profile, rawId: string, body: DuplicateNotebookDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       await this.lockUser(tx, userId);
       const existing = await tx.notebooks.findUnique({
@@ -377,7 +378,7 @@ export class NotebooksService {
 
   private async page(tx: Prisma.TransactionClient, notebookId: bigint, rawPageId: string) {
     const page = await tx.notebook_pages.findFirst({
-      where: { id: academicId(rawPageId), notebook_id: notebookId },
+      where: { id: parseId(rawPageId), notebook_id: notebookId },
     });
     if (!page) throw pageNotFound();
     return page;
@@ -439,11 +440,11 @@ export class NotebooksService {
   }
 
   async getPage(actor: Profile, rawId: string, rawPageId: string) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(
       async (tx) => {
         const row = await tx.notebooks.findFirst({
-          where: { id: academicId(rawId), user_id: userId, deleted_at: null },
+          where: { id: parseId(rawId), user_id: userId, deleted_at: null },
         });
         if (!row) throw notFound();
         return this.pageView(tx, userId, await this.page(tx, row.id, rawPageId));
@@ -473,7 +474,7 @@ export class NotebooksService {
   }
 
   async createPage(actor: Profile, rawId: string, body: CreatePageDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       const notebook = await this.owned(tx, userId, rawId);
       const existing = await tx.notebook_pages.findUnique({
@@ -520,7 +521,7 @@ export class NotebooksService {
       });
     }
     const clean = cleanPage(parsed);
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       const notebook = await this.owned(tx, userId, rawId);
       const page = await this.page(tx, notebook.id, rawPageId);
@@ -568,7 +569,7 @@ export class NotebooksService {
   }
 
   async updatePage(actor: Profile, rawId: string, rawPageId: string, body: UpdatePageDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       const notebook = await this.owned(tx, userId, rawId);
       const page = await this.page(tx, notebook.id, rawPageId);
@@ -594,7 +595,7 @@ export class NotebooksService {
   }
 
   async deletePage(actor: Profile, rawId: string, rawPageId: string, body: NotebookRevisionDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       const notebook = await this.owned(tx, userId, rawId);
       const page = await this.page(tx, notebook.id, rawPageId);
@@ -620,7 +621,7 @@ export class NotebooksService {
   }
 
   async reorder(actor: Profile, rawId: string, body: ReorderPagesDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       const notebook = await this.owned(tx, userId, rawId);
       const pages = await tx.notebook_pages.findMany({
@@ -646,7 +647,7 @@ export class NotebooksService {
    * new pages at the end of the notebook, stacked top to bottom.
    */
   async addQuotes(actor: Profile, rawId: string, body: AddQuotesDto) {
-    const userId = academicId(actor.id);
+    const userId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       const notebook = await this.owned(tx, userId, rawId);
       const existing = await tx.notebook_pages.findUnique({

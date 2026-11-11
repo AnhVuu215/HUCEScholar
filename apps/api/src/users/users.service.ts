@@ -16,6 +16,7 @@ import {
   UpdateUserDto,
   UserStatusDto,
 } from './users.dto';
+import { requireActiveUser } from '../common/active-user';
 
 const fields = {
   id: true,
@@ -95,13 +96,12 @@ export class UsersService {
 
   private async requireAdmin(tx: Prisma.TransactionClient, actorId: bigint) {
     // Hold the actor's role/status stable through the write, even if an external tool changes it.
-    await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
-    const actor = await tx.users.findUnique({
-      where: { id: actorId },
-      select: { role: true, status: true, verified_at: true },
-    });
-    if (!actor || actor.role !== 'ADMIN' || actor.status !== 'ACTIVE' || !actor.verified_at)
-      throw new ForbiddenException('Tài khoản quản trị không còn quyền thực hiện thao tác.');
+    await requireActiveUser(
+      tx,
+      actorId,
+      'Tài khoản quản trị không còn quyền thực hiện thao tác.',
+      'ADMIN',
+    );
   }
 
   private async editable(tx: Prisma.TransactionClient, id: bigint, revision: number) {

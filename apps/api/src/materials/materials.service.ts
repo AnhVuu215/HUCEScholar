@@ -1,13 +1,6 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
-import { academicId } from '../academic/academic.service';
 import { Prisma } from '../generated/prisma/client';
 import {
   DraftFieldsDto,
@@ -18,6 +11,10 @@ import {
   WithdrawMaterialDto,
   UpdateDraftDto,
 } from './materials.dto';
+import { parseId } from '../common/ids';
+import { lockCatalog } from '../common/locks';
+import { conflict } from '../common/errors';
+import { requireActiveUser } from '../common/active-user';
 
 const selection = {
   id: true,
@@ -73,7 +70,6 @@ const selection = {
   },
 } satisfies Prisma.document_versionsSelect;
 type DraftRow = Prisma.document_versionsGetPayload<{ select: typeof selection }>;
-const conflict = (code: string, message: string) => new ConflictException({ code, message });
 
 @Injectable()
 export class MaterialsService {
@@ -84,25 +80,13 @@ export class MaterialsService {
     });
   }
   private owner(actor: Profile) {
-    return { manager_id: academicId(actor.id) };
+    return { manager_id: parseId(actor.id) };
   }
   private async begin(tx: Prisma.TransactionClient, actor: Profile) {
-    const id = academicId(actor.id);
-    await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${id} FOR SHARE`;
-    const user = await tx.users.findUnique({
-      where: { id },
-      select: { role: true, status: true, verified_at: true },
-    });
-    if (
-      !user ||
-      user.role !== actor.role ||
-      user.role !== 'STUDENT' ||
-      user.status !== 'ACTIVE' ||
-      !user.verified_at
-    )
-      throw new ForbiddenException('Không còn quyền biên soạn.');
+    const id = parseId(actor.id);
+    await requireActiveUser(tx, id, 'Không còn quyền biên soạn.', 'STUDENT');
     // Same catalog lock as moderation and course changes.
-    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(68467, 1)`;
+    await lockCatalog(tx);
     return id;
   }
   async checkCourses(tx: Prisma.TransactionClient, ids: bigint[]) {
@@ -191,7 +175,7 @@ export class MaterialsService {
     return row;
   }
   async get(actor: Profile, rawId: string) {
-    const id = academicId(rawId);
+    const id = parseId(rawId);
     return this.db.$transaction(
       async (tx) => ({
         item: this.serialize([await this.read(tx, actor, id)])[0],
@@ -205,7 +189,7 @@ export class MaterialsService {
     const latest = Prisma.sql`FROM (
       SELECT DISTINCT ON (v.document_id) v.id, v.title, v.review_status, v.updated_at
       FROM hucescholar.document_versions v JOIN hucescholar.documents d ON d.id=v.document_id
-      WHERE d.manager_id=${academicId(actor.id)}
+      WHERE d.manager_id=${parseId(actor.id)}
       ORDER BY v.document_id, v.version_no DESC
     ) latest WHERE TRUE
       ${query.search ? Prisma.sql`AND latest.title ILIKE ${`%${query.search}%`}` : Prisma.empty}
@@ -233,7 +217,7 @@ export class MaterialsService {
     );
   }
   async versions(actor: Profile, rawId: string, query: DraftListDto) {
-    const document_id = academicId(rawId);
+    const document_id = parseId(rawId);
     return this.db.$transaction(
       async (tx) => {
         await this.read(tx, actor, document_id);
@@ -325,7 +309,7 @@ export class MaterialsService {
     );
   }
   async create(actor: Profile, body: DraftFieldsDto) {
-    const ids = body.courseIds.map(academicId);
+    const ids = body.courseIds.map(parseId);
     return this.db.$transaction(async (tx) => {
       const actorId = await this.begin(tx, actor);
       await this.checkCourses(tx, ids);
@@ -346,8 +330,8 @@ export class MaterialsService {
     });
   }
   async update(actor: Profile, rawId: string, body: UpdateDraftDto) {
-    const id = academicId(rawId);
-    const ids = body.courseIds.map(academicId);
+    const id = parseId(rawId);
+    const ids = body.courseIds.map(parseId);
     return this.db.$transaction(async (tx) => {
       const actorId = await this.begin(tx, actor);
       await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${id} AND manager_id=${actorId} FOR UPDATE`;
@@ -393,7 +377,7 @@ export class MaterialsService {
     rawId: string,
     revision?: number,
   ) {
-    const id = academicId(rawId);
+    const id = parseId(rawId);
     const actorId = await this.begin(tx, actor);
     await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${id} AND manager_id=${actorId} FOR UPDATE`;
     const row = await this.read(tx, actor, id);
@@ -501,11 +485,11 @@ export class MaterialsService {
     });
   }
   async history(actor: Profile, rawId: string, query: MaterialHistoryDto) {
-    const id = academicId(rawId);
+    const id = parseId(rawId);
     return this.db.$transaction(
       async (tx) => {
         const row = await this.read(tx, actor, id);
-        const versionId = query.versionId ? academicId(query.versionId) : row.id;
+        const versionId = query.versionId ? parseId(query.versionId) : row.id;
         if (
           query.versionId &&
           !(await tx.document_versions.findFirst({

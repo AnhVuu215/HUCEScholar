@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type study_cards } from '../generated/prisma/client';
-import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { available, LibraryService } from './library.service';
 import {
@@ -21,6 +20,8 @@ import {
 } from './study-cards.dto';
 import { addDays, dayText, dayValue, localDay, MAX_REVIEW_BOX, nextReview } from './study-schedule';
 import { exportStudyCards, MAX_EXPORT_CARDS, type ExportCardDocument } from './study-card-export';
+import { parseId } from '../common/ids';
+import { lockKey } from '../common/locks';
 
 /** A practice round loads at most this many cards, newest first. */
 export const MAX_PRACTICE_CARDS = 200;
@@ -63,11 +64,11 @@ export class StudyCardsService {
     private readonly library: LibraryService,
   ) {}
   async create(actor: Profile, rawVersionId: string, body: CreateStudyCardDto) {
-    const user_id = academicId(actor.id),
-      version_id = academicId(rawVersionId),
-      annotationId = academicId(body.annotationId);
+    const user_id = parseId(actor.id),
+      version_id = parseId(rawVersionId),
+      annotationId = parseId(body.annotationId);
     return this.db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:reading:${user_id}`}, 0))`;
+      await lockKey(tx, `reading:${user_id}`);
       await this.library.access(tx, actor, version_id);
       const existing = await tx.study_cards.findUnique({
         where: { user_id_request_id: { user_id, request_id: body.requestId } },
@@ -113,12 +114,12 @@ export class StudyCardsService {
   /** Cards in the filter, and those of them whose version the owner can still read. */
   private scope(actor: Profile, query: StudyCardScopeDto) {
     const scope: Prisma.study_cardsWhereInput = {
-      user_id: academicId(actor.id),
-      ...(query.versionId ? { version_id: academicId(query.versionId) } : {}),
+      user_id: parseId(actor.id),
+      ...(query.versionId ? { version_id: parseId(query.versionId) } : {}),
       ...(query.courseId
         ? {
             document_versions: {
-              version_courses: { some: { course_id: academicId(query.courseId) } },
+              version_courses: { some: { course_id: parseId(query.courseId) } },
             },
           }
         : {}),
@@ -300,7 +301,7 @@ export class StudyCardsService {
    * stand in the schedule. History covers every review, including those of deleted cards.
    */
   async stats(actor: Profile) {
-    const user_id = academicId(actor.id);
+    const user_id = parseId(actor.id);
     const today = localDay(new Date());
     const from = addDays(today, 1 - STATS_DAYS);
     const { readable } = this.scope(actor, {});
@@ -401,13 +402,13 @@ export class StudyCardsService {
         const filters: string[] = [];
         if (query.courseId) {
           const course = await tx.courses.findUnique({
-            where: { id: academicId(query.courseId) },
+            where: { id: parseId(query.courseId) },
             select: { code: true, name: true },
           });
           if (course) filters.push(`môn ${course.code} · ${course.name}`);
         }
         if (query.versionId) {
-          const versionId = academicId(query.versionId);
+          const versionId = parseId(query.versionId);
           // A version the owner cannot read is not named, even in their own file.
           const doc = documents.get(versionId);
           filters.push(doc ? `tài liệu ${doc.title}` : 'một tài liệu');
@@ -438,9 +439,9 @@ export class StudyCardsService {
     });
   }
   private async owned(tx: Prisma.TransactionClient, actor: Profile, rawId: string) {
-    const user_id = academicId(actor.id);
-    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:reading:${user_id}`}, 0))`;
-    const card = await tx.study_cards.findFirst({ where: { id: academicId(rawId), user_id } });
+    const user_id = parseId(actor.id);
+    await lockKey(tx, `reading:${user_id}`);
+    const card = await tx.study_cards.findFirst({ where: { id: parseId(rawId), user_id } });
     if (!card) throw new NotFoundException('Không tìm thấy thẻ ôn tập.');
     await this.library.access(tx, actor, card.version_id);
     return card;
