@@ -9,13 +9,16 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { SessionGuard } from '../auth/session.guard';
 import {
   CreateStudyCardDto,
   ReviewStudyCardDto,
+  StudyCardExportDto,
   StudyCardListDto,
   StudyCardRevisionDto,
   StudyCardScopeDto,
@@ -46,6 +49,28 @@ export class StudyCardsController {
     @Query() query: StudyCardScopeDto,
   ) {
     return this.cards.practice(req.user, query);
+  }
+  @Get('study-cards/stats') stats(@Req() req: AuthenticatedRequest) {
+    return this.cards.stats(req.user);
+  }
+  @Get('study-cards/export') async export(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: StudyCardExportDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const body = await this.cards.export(req.user, query);
+    const markdown = query.format === 'markdown';
+    res.setHeader(
+      'Content-Type',
+      markdown ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="the-on-tap.${markdown ? 'md' : 'txt'}"`,
+    );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-store');
+    return body;
   }
   @Get('study-cards/due') due(@Req() req: AuthenticatedRequest, @Query() query: StudyCardScopeDto) {
     return this.cards.due(req.user, query);

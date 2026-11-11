@@ -6,6 +6,7 @@ import { DAY, occurrenceStarts, rowSeries, type Series } from './calendar-repeat
 import { available } from '../materials/library.service';
 import { notify } from '../notifications/notify';
 import { dueInstant, shown } from '../reading-lists/reading-lists.service';
+import { StudyReminders } from '../materials/study-reminders';
 
 /**
  * CAL-03. A reminder is due once `start - minutes` has passed. The worker looks back this far, so a
@@ -236,5 +237,8 @@ export class CalendarReminders {
   }
 }
 
-@Module({ providers: [CalendarReminders, Mailer], exports: [CalendarReminders] })
+@Module({
+  providers: [CalendarReminders, StudyReminders, Mailer],
+  exports: [CalendarReminders, StudyReminders],
+})
 export class CalendarRemindersModule {}

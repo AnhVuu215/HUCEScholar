@@ -244,10 +244,13 @@ export function NotesExport({
   download,
   tooLarge,
   label = 'Tải ghi chú của bạn',
+  noun = 'ghi chú',
 }: {
   download: (format: NotesExportFormat) => Promise<{ blob: Blob; name: string }>;
   tooLarge: string;
   label?: string;
+  /** What the file holds, in the status messages. */
+  noun?: string;
 }) {
   const [pending, setPending] = useState<NotesExportFormat | null>(null);
   const [message, setMessage] = useState('');
@@ -262,14 +265,14 @@ export function NotesExport({
       link.download = file.name;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 0);
-      setMessage('Đã tạo file ghi chú.');
+      setMessage(`Đã tạo file ${noun}.`);
     } catch (failure) {
       setMessage(
         failure instanceof ApiError && failure.code === 'EXPORT_TOO_LARGE'
           ? tooLarge
           : failure instanceof ApiError
             ? personalError(failure)
-            : 'Chưa tải được file ghi chú. Kiểm tra kết nối rồi thử lại.',
+            : `Chưa tải được file ${noun}. Kiểm tra kết nối rồi thử lại.`,
       );
     } finally {
       setPending(null);

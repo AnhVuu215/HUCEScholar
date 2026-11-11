@@ -1059,6 +1059,21 @@
 }
 
 /* STUDY-02: deck filters and practice rounds. */
+.study-history {
+  margin-block: 8px;
+}
+.study-history summary {
+  cursor: pointer;
+}
+.study-history-table {
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.study-history-table th,
+.study-history-table td {
+  padding: 4px 16px 4px 0;
+  text-align: left;
+}
 .study-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));

@@ -12,7 +12,8 @@ export type NotificationKind =
   | 'REPORT_DISMISSED'
   | 'CALENDAR_REMINDER'
   | 'READING_DEADLINE_SOON'
-  | 'READING_DEADLINE_CHANGED';
+  | 'READING_DEADLINE_CHANGED'
+  | 'STUDY_CARDS_DUE';
 
 /**
  * Records one notice in the caller's transaction, so it commits or rolls back with the state

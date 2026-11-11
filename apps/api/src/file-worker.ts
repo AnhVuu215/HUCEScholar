@@ -20,6 +20,7 @@ import {
 import { PdfScanner } from './files/pdf-scanner';
 import { PdfTextIndexer } from './files/pdf-text-indexer';
 import { CalendarReminders, CalendarRemindersModule } from './calendar/calendar-reminders';
+import { StudyReminders } from './materials/study-reminders';
 import {
   NotebookImagesModule,
   NotebookImagesProcessor,
@@ -88,12 +89,15 @@ async function bootstrap() {
   const interval = setInterval(() => void reconcile(), 30_000);
   // CAL-03: due calendar reminders become in-app notices (and email when the owner asked).
   const reminders = app.get(CalendarReminders);
+  // STUDY-04: the morning notice about due study cards rides on the same tick.
+  const studyReminders = app.get(StudyReminders);
   let reminding = false;
   const remind = async () => {
     if (reminding) return;
     reminding = true;
     try {
       await reminders.dispatch();
+      await studyReminders.dispatch();
     } catch {
       Logger.warn('Calendar reminders interrupted; will retry.', 'FileWorker');
     } finally {

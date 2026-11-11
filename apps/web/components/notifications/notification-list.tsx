@@ -153,9 +153,11 @@ export function NotificationList() {
                   >
                     {n.kind === 'CALENDAR_REMINDER'
                       ? 'Mở lịch'
-                      : n.kind.startsWith('REPORT_') || n.kind.startsWith('READING_')
-                        ? 'Mở tài liệu'
-                        : 'Mở bản nháp'}
+                      : n.kind === 'STUDY_CARDS_DUE'
+                        ? 'Ôn thẻ đến hạn'
+                        : n.kind.startsWith('REPORT_') || n.kind.startsWith('READING_')
+                          ? 'Mở tài liệu'
+                          : 'Mở bản nháp'}
                   </Link>
                   {!n.read && (
                     <button

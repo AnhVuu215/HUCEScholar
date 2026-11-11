@@ -49,6 +49,9 @@ export class AccountService {
             ...(update.preferences.reminderEmail === undefined
               ? {}
               : { reminder_email: update.preferences.reminderEmail }),
+            ...(update.preferences.studyReminder === undefined
+              ? {}
+              : { study_reminder: update.preferences.studyReminder }),
             updated_at: new Date(),
           };
           row = row
@@ -74,12 +77,14 @@ export class AccountService {
                 defaultZoom: row.default_zoom,
                 annotationPanelOpen: row.annotation_panel_open,
                 reminderEmail: row.reminder_email,
+                studyReminder: row.study_reminder,
               }
             : {
                 highlightColor: '#FFF59D',
                 defaultZoom: 'fit-width',
                 annotationPanelOpen: false,
                 reminderEmail: true,
+                studyReminder: 'OFF',
               },
           revision: row?.revision ?? 0,
         };
