@@ -9,7 +9,6 @@ import { once } from 'node:events';
 import type { Response } from 'express';
 import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
-import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import {
   PrivateStore,
@@ -21,6 +20,8 @@ import { LibraryListDto } from './library.dto';
 import { DOCX_MIME } from '../files/receive-docx';
 import { MaterialsService } from './materials.service';
 import { foldedPhrase, foldedTerms, matchSnippet } from './search-fold';
+import { parseId } from '../common/ids';
+import { requireActiveUser } from '../common/active-user';
 
 const selection = {
   id: true,
@@ -293,7 +294,7 @@ export class LibraryService {
           },
           ...(query.materialType ? { material_type: query.materialType } : {}),
           ...(query.courseId
-            ? { version_courses: { some: { course_id: academicId(query.courseId) } } }
+            ? { version_courses: { some: { course_id: parseId(query.courseId) } } }
             : {}),
           ...(matches ? { id: { in: matches } } : {}),
         },
@@ -336,7 +337,7 @@ export class LibraryService {
   async get(rawId: string) {
     return this.db.$transaction(
       async (tx) => ({
-        item: (await this.withCurrent(tx, [await this.readable(tx, academicId(rawId))]))[0],
+        item: (await this.withCurrent(tx, [await this.readable(tx, parseId(rawId))]))[0],
       }),
       { isolationLevel: 'RepeatableRead' },
     );
@@ -356,7 +357,7 @@ export class LibraryService {
     response: Response,
     original = false,
   ) {
-    const id = academicId(rawId);
+    const id = parseId(rawId);
     // Document-first locks serialize new grants with hide/version decisions; checked bytes already granted cannot be recalled.
     const file = await this.db.$transaction(async (tx) => {
       const row = await this.access(tx, actor, id);
@@ -446,11 +447,8 @@ export class LibraryService {
 
   // Keep actor locks shared: moderation also shares the manager after locking its document.
   async access(tx: Prisma.TransactionClient, actor: Profile, id: bigint) {
-    const actorId = academicId(actor.id);
-    await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
-    const user = await tx.users.findUnique({ where: { id: actorId } });
-    if (!user || user.status !== 'ACTIVE' || !user.verified_at)
-      throw new ForbiddenException('Tài khoản không còn quyền đọc.');
+    const actorId = parseId(actor.id);
+    await requireActiveUser(tx, actorId, 'Tài khoản không còn quyền đọc.');
     const target = await tx.document_versions.findUnique({
       where: { id },
       select: { document_id: true, file_id: true },

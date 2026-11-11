@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
-import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { NotificationListDto } from './notifications.dto';
+import { parseId } from '../common/ids';
 
 const select = {
   id: true,
@@ -22,7 +22,7 @@ const select = {
 export class NotificationsService {
   constructor(private readonly db: DatabaseService) {}
   async list(actor: Profile, query: NotificationListDto) {
-    const user_id = academicId(actor.id);
+    const user_id = parseId(actor.id);
     const where = { user_id, ...(query.filter === 'unread' ? { read_at: null } : {}) };
     const [rows, total, unread] = await this.db.$transaction(
       [
@@ -61,13 +61,13 @@ export class NotificationsService {
   async unread(actor: Profile) {
     return {
       unread: await this.db.notifications.count({
-        where: { user_id: academicId(actor.id), read_at: null },
+        where: { user_id: parseId(actor.id), read_at: null },
       }),
     };
   }
   async read(actor: Profile, rawId: string) {
-    const user_id = academicId(actor.id);
-    const id = academicId(rawId);
+    const user_id = parseId(actor.id);
+    const id = parseId(rawId);
     // Marking twice is harmless; a notice owned by someone else is indistinguishable from none.
     const exists = await this.db.notifications.count({ where: { id, user_id } });
     if (!exists) throw new NotFoundException('Không tìm thấy thông báo.');
@@ -79,7 +79,7 @@ export class NotificationsService {
   }
   async readAll(actor: Profile) {
     await this.db.notifications.updateMany({
-      where: { user_id: academicId(actor.id), read_at: null },
+      where: { user_id: parseId(actor.id), read_at: null },
       data: { read_at: new Date() },
     });
     return { unread: 0 };

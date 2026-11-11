@@ -1,13 +1,11 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
-import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { formatDate, parseDate } from '../calendar/calendar-repeat';
 import { available } from '../materials/library.service';
@@ -18,8 +16,11 @@ import {
   ReadMarkDto,
   SaveReadingListDto,
 } from './reading-lists.dto';
+import { parseId } from '../common/ids';
+import { lockKey } from '../common/locks';
+import { conflict } from '../common/errors';
+import { requireActiveUser } from '../common/active-user';
 
-const fail = (code: string, message: string) => new ConflictException({ code, message });
 const invalid = (message: string) =>
   new BadRequestException({ code: 'READING_LIST_INVALID', message });
 const DAY = 86_400_000;
@@ -86,12 +87,7 @@ export class ReadingListsService {
   constructor(private readonly db: DatabaseService) {}
 
   private async reader(tx: Prisma.TransactionClient, actor: Profile) {
-    const id = academicId(actor.id);
-    await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${id} FOR SHARE`;
-    const user = await tx.users.findUnique({ where: { id } });
-    if (!user || user.status !== 'ACTIVE' || !user.verified_at)
-      throw new ForbiddenException('Tài khoản không còn quyền đọc.');
-    return user;
+    return requireActiveUser(tx, parseId(actor.id), 'Tài khoản không còn quyền đọc.');
   }
   private async activeCourse(tx: Prisma.TransactionClient, courseId: bigint) {
     const course = await tx.courses.findFirst({
@@ -184,7 +180,7 @@ export class ReadingListsService {
   }
 
   async published(actor: Profile, rawCourseId: string) {
-    const courseId = academicId(rawCourseId);
+    const courseId = parseId(rawCourseId);
     return this.db.$transaction(
       async (tx) => {
         const user = await this.reader(tx, actor);
@@ -210,7 +206,7 @@ export class ReadingListsService {
   }
 
   async managed(actor: Profile, rawCourseId: string) {
-    const courseId = academicId(rawCourseId);
+    const courseId = parseId(rawCourseId);
     return this.db.$transaction(
       async (tx) => {
         const user = await this.editor(tx, actor, courseId);
@@ -225,19 +221,22 @@ export class ReadingListsService {
   }
 
   async save(actor: Profile, rawCourseId: string, body: SaveReadingListDto) {
-    const courseId = academicId(rawCourseId);
+    const courseId = parseId(rawCourseId);
     return this.db.$transaction(async (tx) => {
       const user = await this.editor(tx, actor, courseId);
-      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:reading-list:${courseId}`}, 0))`;
+      await lockKey(tx, `reading-list:${courseId}`);
       const existing = await tx.reading_lists.findUnique({ where: { course_id: courseId } });
       if ((existing?.revision ?? 0) !== body.revision)
-        throw fail('STALE_REVISION', 'Danh sách đã thay đổi ở lượt khác. Tải lại trước khi lưu.');
-      const versionIds = body.items.map((i) => academicId(i.versionId));
+        throw conflict(
+          'STALE_REVISION',
+          'Danh sách đã thay đổi ở lượt khác. Tải lại trước khi lưu.',
+        );
+      const versionIds = body.items.map((i) => parseId(i.versionId));
       const dues = body.items.map((i) => dueDate(i.dueOn));
       const times = body.items.map((i, index) => dueTime(i.dueTime, dues[index]));
       const distinct = [...new Set(versionIds)];
       if (distinct.length !== versionIds.length)
-        throw fail('DUPLICATE_ITEM', 'Mỗi phiên bản chỉ xuất hiện một lần trong danh sách.');
+        throw conflict('DUPLICATE_ITEM', 'Mỗi phiên bản chỉ xuất hiện một lần trong danh sách.');
       // Only material that belongs to this course and that its readers can open now.
       const valid = await tx.document_versions.count({
         where: {
@@ -249,7 +248,7 @@ export class ReadingListsService {
         },
       });
       if (valid !== distinct.length)
-        throw fail(
+        throw conflict(
           'ITEM_UNAVAILABLE',
           'Có tài liệu không thuộc môn này hoặc không còn đọc được. Tải lại rồi chọn lại.',
         );
@@ -355,7 +354,7 @@ export class ReadingListsService {
   }
   /** CAL-04b. A private opt-in to see this course's due dates on one's own calendar. */
   async follow(actor: Profile, rawCourseId: string, body: FollowReadingListsDto) {
-    const courseId = academicId(rawCourseId);
+    const courseId = parseId(rawCourseId);
     return this.db.$transaction(async (tx) => {
       const user = await this.reader(tx, actor);
       if (body.following) {
@@ -382,8 +381,8 @@ export class ReadingListsService {
    * endpoint never confirms a hidden version. Unmarking is allowed under the same check.
    */
   async markRead(actor: Profile, rawCourseId: string, rawVersionId: string, body: ReadMarkDto) {
-    const courseId = academicId(rawCourseId);
-    const versionId = academicId(rawVersionId);
+    const courseId = parseId(rawCourseId);
+    const versionId = parseId(rawVersionId);
     return this.db.$transaction(async (tx) => {
       const user = await this.reader(tx, actor);
       await this.activeCourse(tx, courseId);
