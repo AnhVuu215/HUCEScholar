@@ -1,5 +1,5 @@
 import { isNumericId } from './guards';
-import { ApiError, apiRequest, csrfToken } from './auth';
+import { ApiError, apiRequest, apiWrite, type WriteMethod } from './auth';
 /** READ-04: a pinned note's point, normalized 0..1 on the unrotated page with y upward. */
 export interface NotePosition {
   x: number;
@@ -53,14 +53,8 @@ function isPosition(v: unknown): v is NotePosition | null {
   return [p.x, p.y].every((n) => typeof n === 'number' && n >= 0 && n <= 1);
 }
 const base = (id: string) => `/library/versions/${encodeURIComponent(id)}`;
-async function write(id: string, path: string, method: string, data: object) {
-  const token = await csrfToken();
-  return apiRequest(base(id) + path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify(data),
-  });
-}
+const write = (id: string, path: string, method: WriteMethod, data: object) =>
+  apiWrite(base(id) + path, method, data);
 async function noteResponse(response: Response): Promise<PageNote> {
   const body: unknown = await response.json();
   if (!body || typeof body !== 'object' || !('item' in body) || !isNote(body.item))

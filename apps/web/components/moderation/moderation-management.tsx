@@ -1,44 +1,32 @@
 'use client';
-import { useEffect, useState, type FormEvent } from 'react';
-import { reviewList, reviewError, requestStatuses, type ReviewList } from '../../lib/moderation';
+import { useState, type FormEvent } from 'react';
+import { reviewList, reviewError, requestStatuses } from '../../lib/moderation';
+import { useApiResource } from '../../lib/use-api-resource';
 import { ModerationDetail } from './moderation-detail';
 export function ModerationManagement() {
   const [query, setQuery] = useState({ search: '', status: 'PENDING', page: 1 });
   const [search, setSearch] = useState(''),
     [status, setStatus] = useState('PENDING');
-  const [data, setData] = useState<ReviewList | null>(null),
-    [error, setError] = useState(''),
-    [attempt, setAttempt] = useState(0),
-    [selected, setSelected] = useState<string | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    void reviewList(
-      new URLSearchParams({
-        search: query.search,
-        status: query.status,
-        page: String(query.page),
-        limit: '20',
-      }),
-      controller.signal,
-    )
-      .then((result) => {
-        if (!controller.signal.aborted) setData(result);
-      })
-      .catch((failure) => {
-        if (!controller.signal.aborted) setError(reviewError(failure));
-      });
-    return () => controller.abort();
-  }, [query, attempt]);
-  function reload() {
-    setData(null);
-    setError('');
-    setAttempt((v) => v + 1);
-  }
+  const [selected, setSelected] = useState<string | null>(null);
+  const { data, error, reload } = useApiResource(
+    JSON.stringify(query),
+    (signal) =>
+      reviewList(
+        new URLSearchParams({
+          search: query.search,
+          status: query.status,
+          page: String(query.page),
+          limit: '20',
+        }),
+        signal,
+      ),
+    reviewError,
+  );
   function filter(event: FormEvent) {
     event.preventDefault();
-    setData(null);
-    setError('');
     setQuery({ search: search.trim(), status, page: 1 });
+    // Searching again for the same thing still refreshes the list.
+    reload();
   }
   return (
     <div className="users-management">
@@ -150,20 +138,14 @@ export function ModerationManagement() {
               <button
                 className="secondary-button"
                 disabled={data.page <= 1}
-                onClick={() => {
-                  setData(null);
-                  setQuery((q) => ({ ...q, page: q.page - 1 }));
-                }}
+                onClick={() => setQuery((q) => ({ ...q, page: q.page - 1 }))}
               >
                 Trang trước
               </button>
               <button
                 className="secondary-button"
                 disabled={data.page * data.limit >= data.total}
-                onClick={() => {
-                  setData(null);
-                  setQuery((q) => ({ ...q, page: q.page + 1 }));
-                }}
+                onClick={() => setQuery((q) => ({ ...q, page: q.page + 1 }))}
               >
                 Trang sau
               </button>

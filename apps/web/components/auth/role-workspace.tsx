@@ -10,13 +10,13 @@ import type { WorkspaceSection } from '../../lib/workspace-navigation';
 import {
   ApiError,
   apiRequest,
-  csrfToken,
   passwordChangePath,
   readProfile,
   roleLabels,
   workspacePath,
   type Profile,
   type Role,
+  apiWrite,
 } from '../../lib/auth';
 
 type State =
@@ -121,8 +121,7 @@ export function RoleWorkspace({
     setLogoutPending(true);
     setLogoutError('');
     try {
-      const token = await csrfToken();
-      await apiRequest('/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': token } });
+      await apiWrite('/auth/logout', 'POST');
       setState({ kind: 'loading' });
       window.location.replace('/login');
     } catch {

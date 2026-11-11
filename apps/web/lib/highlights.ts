@@ -1,5 +1,5 @@
 import { isNumericId } from './guards';
-import { apiRequest, csrfToken } from './auth';
+import { apiRequest, apiWrite } from './auth';
 export const highlightColors = {
   '#FFF59D': 'Vàng',
   '#A5D6A7': 'Xanh lá',
@@ -111,14 +111,11 @@ export async function writeHighlight(
     requestId: string;
   },
 ) {
-  const token = await csrfToken();
-  const response = await apiRequest(base(id) + (note ? '/' + encodeURIComponent(note.id) : ''), {
-    method: note ? 'PATCH' : 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify(
-      note ? { content: data.content, color: data.color, revision: note.revision } : data,
-    ),
-  });
+  const response = await apiWrite(
+    base(id) + (note ? '/' + encodeURIComponent(note.id) : ''),
+    note ? 'PATCH' : 'POST',
+    note ? { content: data.content, color: data.color, revision: note.revision } : data,
+  );
   const body: unknown = await response.json();
   if (
     !body ||
@@ -132,10 +129,7 @@ export async function writeHighlight(
   return body.item;
 }
 export async function removeHighlight(id: string, note: TextHighlight) {
-  const token = await csrfToken();
-  await apiRequest(base(id) + '/' + encodeURIComponent(note.id), {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify({ revision: note.revision }),
+  await apiWrite(base(id) + '/' + encodeURIComponent(note.id), 'DELETE', {
+    revision: note.revision,
   });
 }

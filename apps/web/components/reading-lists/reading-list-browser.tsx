@@ -12,12 +12,16 @@ import {
 } from '../../lib/reading-lists';
 import { SelectField } from '../ui/select-field';
 import { ReadingListItems, readCount } from './reading-list-view';
+import { useApiResource } from '../../lib/use-api-resource';
 
 type Courses = { id: string; code: string; name: string }[];
 
 export function ReadingListBrowser({ initialCourse }: { initialCourse?: string }) {
-  const [courses, setCourses] = useState<Courses | null>(null);
-  const [courseError, setCourseError] = useState('');
+  const {
+    data: courses,
+    error: courseError,
+    reload: reloadCourses,
+  } = useApiResource<Courses>('courses', libraryCourses, readingListError);
   const [courseId, setCourseId] = useState(initialCourse ?? '');
   const [lists, setLists] = useState<{
     course: string;
@@ -31,17 +35,6 @@ export function ReadingListBrowser({ initialCourse }: { initialCourse?: string }
   const [readError, setReadError] = useState('');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    void libraryCourses(controller.signal)
-      .then((items) => {
-        if (!controller.signal.aborted) setCourses(items);
-      })
-      .catch((failure) => {
-        if (!controller.signal.aborted) setCourseError(readingListError(failure));
-      });
-    return () => controller.abort();
-  }, [attempt]);
   useEffect(() => {
     if (!courseId) return;
     const controller = new AbortController();
@@ -135,13 +128,7 @@ export function ReadingListBrowser({ initialCourse }: { initialCourse?: string }
           <p role="alert" className="form-error">
             {courseError}
           </p>
-          <button
-            className="secondary-button"
-            onClick={() => {
-              setCourseError('');
-              setAttempt((v) => v + 1);
-            }}
-          >
+          <button className="secondary-button" onClick={reloadCourses}>
             Thử tải lại
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { isRecord, isNumericId } from './guards';
-import { ApiError, apiRequest, csrfToken, type Role } from './auth';
+import { ApiError, apiRequest, type Role, apiWrite } from './auth';
 import { formatLongDay, formatTime } from './calendar';
 import { fileFailedLabel } from './materials';
 
@@ -66,14 +66,7 @@ function unreadCount(body: unknown) {
   if (isRecord(body) && count(body.unread)) return body.unread;
   throw new Error('Invalid notification count.');
 }
-async function send(path: string) {
-  const token = await csrfToken();
-  return apiRequest(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: '{}',
-  });
-}
+const send = (path: string) => apiWrite(path, 'POST', {});
 
 export async function notificationList(
   params: URLSearchParams,

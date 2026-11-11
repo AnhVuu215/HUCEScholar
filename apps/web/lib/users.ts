@@ -1,4 +1,4 @@
-import { ApiError, apiRequest, csrfToken, roleLabels, type Profile } from './auth';
+import { ApiError, apiRequest, roleLabels, type Profile, apiWrite } from './auth';
 
 export const statusLabels = {
   ACTIVE: 'Hoạt động',
@@ -82,12 +82,7 @@ export async function listUsers(query: UserQuery, signal: AbortSignal): Promise<
 }
 
 export async function saveUser(path: string, method: 'POST' | 'PATCH', body: object) {
-  const token = await csrfToken();
-  const response = await apiRequest(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify(body),
-  });
+  const response = await apiWrite(path, method, body);
   const data: unknown = await response.json();
   if (data && typeof data === 'object' && 'user' in data && isUser(data.user)) return data.user;
   throw new Error('Invalid account response.');

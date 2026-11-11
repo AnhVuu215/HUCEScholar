@@ -1,5 +1,5 @@
 import { isRecord, isNumericId } from './guards';
-import { ApiError, apiRequest, csrfToken } from './auth';
+import { ApiError, apiRequest, apiWrite } from './auth';
 import { materialTypes } from './materials';
 
 export type ReadingItem = {
@@ -125,14 +125,7 @@ export async function saveReadingList(
   courseId: string,
   data: { title: string; published: boolean; revision: number; items: ReadingDraftItem[] },
 ) {
-  const token = await csrfToken();
-  const body: unknown = await (
-    await apiRequest(`${path(courseId)}/manage`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify(data),
-    })
-  ).json();
+  const body: unknown = await (await apiWrite(`${path(courseId)}/manage`, 'PUT', data)).json();
   if (isRecord(body) && validList(body.item)) return body.item;
   throw new Error('Invalid reading list.');
 }
@@ -159,28 +152,20 @@ export async function followReadingLists(
   following: boolean,
   remindMinutes?: number | null,
 ) {
-  const token = await csrfToken();
   const body: unknown = await (
-    await apiRequest(`${path(courseId)}/follow`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify(
-        remindMinutes === undefined ? { following } : { following, remindMinutes },
-      ),
-    })
+    await apiWrite(
+      `${path(courseId)}/follow`,
+      'PUT',
+      remindMinutes === undefined ? { following } : { following, remindMinutes },
+    )
   ).json();
   if (isRecord(body) && typeof body.following === 'boolean') return body.following;
   throw new Error('Invalid follow state.');
 }
 /** COURSE-02: mark or unmark a listed version as read; only the signed-in reader sees it. */
 export async function markRead(courseId: string, versionId: string, read: boolean) {
-  const token = await csrfToken();
   const body: unknown = await (
-    await apiRequest(`${path(courseId)}/read/${encodeURIComponent(versionId)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify({ read }),
-    })
+    await apiWrite(`${path(courseId)}/read/${encodeURIComponent(versionId)}`, 'PUT', { read })
   ).json();
   if (isRecord(body) && body.versionId === versionId && typeof body.read === 'boolean')
     return body.read;
