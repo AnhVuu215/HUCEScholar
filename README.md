@@ -1,198 +1,108 @@
 # HUCEScholar
 
-**SEARCH-02 —18/10/2026:** kho thu gọn nguồn/loại, giữ bộ lọc công khai trên URL và khôi phục khi Back/Forward; request cũ bị hủy. [Contract, kiểm chứng và bàn giao PREF-01](docs/implementation/2026-10-18-library-catalog.md).
+Kho học liệu điện tử cho cộng đồng sinh viên HUCE: tìm và đọc PDF ngay trên web, ghi chú riêng theo trang, tô sáng, làm thẻ ôn tập, theo dõi danh sách đọc và lịch học. Sinh viên đóng góp tài liệu; quản trị viên duyệt trước khi công bố.
 
-**READ-01 —18/10/2026:** tìm chữ trong PDF theo lô, dấu kết quả tạm, mục lục nội bộ và đọc tập trung giữ bản soạn. [Hành vi, giới hạn và kiểm chứng](docs/implementation/2026-10-18-reader-find-focus.md).
+> Dự án độc lập đang phát triển, **chưa phải hệ thống chính thức của trường**. Chưa có học liệu được trường cấp quyền, chưa đọc offline, chưa triển khai vận hành. Dữ liệu local và prototype trong `design/` là minh họa.
 
-**LEARN-01 —18/10/2026:** reader có sổ ghi chú toàn phiên bản, tìm chữ trong ghi chú/đoạn tô, lọc loại/màu và mở đúng trang để sửa. Duyệt tìm giữ bản soạn; API chỉ trả ghi chú của chính người đăng nhập. [Contract và kiểm chứng local](docs/implementation/2026-10-18-reader-notebook.md).
+## Vai trò
 
-**Cập nhật 18/10/2026:** reader có trích dẫn đoạn chọn kèm nguồn và link mở đúng phiên bản/trang PDF, sao chép thủ công khi clipboard bị chặn và nút quay lại tiến độ trước. Sao chép không tự tạo ghi chú. [Hành vi và kiểm chứng](docs/implementation/2026-10-18-reader-citations.md).
+| Vai trò           | Làm được gì                                                                                                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sinh viên**     | Tự đăng ký bằng email. Tìm và đọc tài liệu, ghi chú, tô sáng, thẻ ôn tập, vở ghi, lịch học, theo dõi danh sách đọc. Tải PDF/Word lên kèm nguồn và căn cứ quyền rồi gửi duyệt. |
+| **Quản trị viên** | Cấp tài khoản sinh viên, quản lý danh mục khoa/ngành/môn, duyệt tài liệu, ẩn/khôi phục tài liệu, xử lý báo cáo, soạn danh sách đọc cho từng môn.                              |
 
-**Cập nhật17/10/2026:** giảng viên chọn PDF/DOCX và nhập tiêu đề/môn trong cùng form. Word được chuyển thành PDF để đọc/ghi chú, giữ Word gốc tải theo quyền. Nguồn và PDF phải qua kiểm tra trước khi tự công bố. [Hướng dẫn, kiểm chứng và giới hạn](docs/implementation/2026-10-17-lecturer-pdf-docx-upload.md).
+Tài khoản quản trị chỉ được tạo bằng script (xem bên dưới), không tự đăng ký được.
 
-**Cập nhật14/10/2026:** giảng viên upload PDF từ nguồn tự chọn và tự công bố khi file quét đạt; nguồn tham khảo tùy chọn, không bắt buộc căn cứ quyền hoặc admin duyệt. Tài liệu sinh viên vẫn dùng quy trình kiểm duyệt.
+## Bắt đầu đọc từ đâu
 
-Nền tảng học liệu điện tử dành cho cộng đồng HUCE, theo hướng web responsive + PWA. Ba vai trò: quản trị viên, giảng viên và sinh viên. Dự án độc lập đang phát triển; chưa phải hệ thống chính thức của trường.
+| Muốn biết                                                       | Đọc                                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Hệ thống gồm những phần nào, request đi qua đâu, code nằm ở đâu | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                                          |
+| Quy tắc sản phẩm và các quyết định hiện hành                    | [PRODUCT.md](PRODUCT.md)                                                              |
+| Ma trận quyền, trạng thái tài liệu, luồng duyệt                 | [Quy tắc nghiệp vụ](docs/HUCEScholar-quy-tac-nghiep-vu.md)                            |
+| Vì sao chọn Next.js / NestJS / PostgreSQL                       | [Tech stack](docs/HUCEScholar-tech-stack.md)                                          |
+| Mô hình dữ liệu                                                 | [docs/database](docs/database/README.md) và `apps/api/prisma/schema.prisma`           |
+| Từng tính năng đã làm gì, kiểm chứng ra sao                     | [docs/implementation](docs/implementation/) (một file cho mỗi mốc, đặt tên theo ngày) |
+| Quy ước cho người/agent viết code                               | [AGENTS.md](AGENTS.md)                                                                |
 
-Đã có PostgreSQL/Prisma migration, đăng nhập/đăng xuất thật, cookie phiên, phân quyền ba vai trò, quản lý tài khoản, danh mục khoa/ngành/môn và phân công giảng viên. Giảng viên/sinh viên tạo bản nháp riêng, upload PDF private, gửi/rút và xem lịch sử. Admin xem PDF SAFE, yêu cầu sửa, từ chối hoặc duyệt bản hiện hành; chủ mở lại bản được yêu cầu sửa. Đã có kho học liệu, reader PDF.js, tải bản gốc theo quyền, ghi chú riêng theo trang và lưu tiến độ đọc. Giao diện responsive cho desktop, điện thoại và tablet. **Chưa có học liệu trường được cấp quyền thật, đọc offline hoặc triển khai vận hành.** Prototype trong `design/` vẫn dùng dữ liệu minh họa.
+## Cấu trúc thư mục
 
-Trang chủ `/` là landing giới thiệu, chủ đề minh họa và hướng dẫn theo vai trò. Trang tiến độ cùng kiểm tra kết nối API nằm ở `/project`. Bìa minh họa không phải học liệu đã được công bố. Chi tiết: [landing page](docs/implementation/2026-10-12-landing-page.md).
+```text
+apps/web/          Next.js (App Router): giao diện, gọi API qua lib/
+apps/api/          NestJS: API /api/v1, nghiệp vụ, phân quyền; file worker cùng mã nguồn
+apps/api/prisma/   Prisma schema và migration SQL
+infra/             Docker Compose: PostgreSQL, Redis, ClamAV, docx-converter, file worker
+scripts/           Thiết lập local, môi trường test, sinh tài nguyên PWA/PDF.js
+tests/             Kiểm thử e2e Playwright
+docs/              Kiến trúc, nghiệp vụ, dữ liệu, ghi chú triển khai
+design/            Prototype thiết kế (mock, không phải ứng dụng thật)
+```
 
-## Tài liệu
+## Chạy local (Windows / PowerShell)
 
-- [Kế hoạch V2: UI, sidebar/header, reader thông minh, hồ sơ/cài đặt và 36 ý tưởng để chọn](docs/superpowers/specs/2026-10-17-workspace-v2-design.md) — đề xuất, kèm ba plan kỹ thuật theo đợt
-- [Upload PDF/DOCX cho giảng viên: kết quả triển khai và giới hạn local](docs/implementation/2026-10-17-lecturer-pdf-docx-upload.md), [thiết kế](docs/superpowers/specs/2026-10-17-lecturer-pdf-docx-upload.md) và [plan gốc](docs/superpowers/plans/2026-10-17-lecturer-pdf-docx-upload.md) — đã triển khai trên nhánh tính năng
-- [Kế hoạch cải thiện web, backlog ưu tiên và ý tưởng sản phẩm —17/10/2026](docs/roadmap/2026-10-17-web-improvement-roadmap.md)
-- [Kế hoạch bảo mật dùng lại trong V2: tự đổi mật khẩu](docs/superpowers/specs/2026-10-17-self-service-password-change.md) và [plan triển khai](docs/superpowers/plans/2026-10-17-self-service-password-change.md) — đã triển khai
-- [AUTH-02: buộc đổi mật khẩu được cấp và admin cấp lại mật khẩu](docs/implementation/2026-10-20-forced-password-change.md)
-- [HOME-01: trang đầu theo vai trò](docs/implementation/2026-10-20-role-home.md)
-- [UX-01: trả focus khi hủy xác nhận, ca biên thư viện cá nhân](docs/implementation/2026-10-20-interaction-fixes.md)
-- [UPLOAD-01: theo dõi trạng thái kiểm tra file](docs/implementation/2026-10-20-scan-status.md)
-- [SEARCH-01: tìm học liệu không dấu](docs/implementation/2026-10-20-library-search.md)
-- [REPORT-01: báo cáo tài liệu và xử lý](docs/implementation/2026-10-20-material-reports.md)
-- [OPS-01: readiness và log có request ID](docs/implementation/2026-10-20-readiness-logging.md)
-- [Tech stack và kiến trúc MVP](docs/HUCEScholar-tech-stack.md)
-- [Mô hình dữ liệu và SQL tham chiếu](docs/database/README.md)
-- [Kết quả mốc database/auth, API và ranh giới bảo mật](docs/implementation/2026-10-11-database-auth.md)
-- [Quản lý tài khoản và giới hạn hiện tại](docs/implementation/2026-10-11-account-management.md)
-- [Danh mục đào tạo và phân công](docs/implementation/2026-10-11-academic-catalog.md)
-- [Bản nháp học liệu](docs/implementation/2026-10-11-material-drafts.md)
-- [Upload PDF riêng tư, worker và cách chạy](docs/implementation/2026-10-11-private-pdf-upload.md)
-- [Gửi/rút yêu cầu duyệt và lịch sử](docs/implementation/2026-10-12-publication-requests.md)
-- [Admin kiểm duyệt và bản hiện hành](docs/implementation/2026-10-12-admin-moderation.md)
-- [Kho học liệu, trình đọc và quyền tải](docs/implementation/2026-10-12-learning-library.md)
-- [Ghi chú riêng và tiến độ đọc](docs/implementation/2026-10-12-reader-notes-progress.md)
-- [Phiên bản, bàn giao và ẩn/khôi phục](docs/implementation/2026-10-12-material-lifecycle.md)
-- [Thư viện cá nhân](docs/implementation/2026-10-12-personal-library.md)
-- [Ôn thẻ theo lịch](docs/implementation/2026-11-04-study-schedule.md)
-- [Tìm trong nội dung PDF](docs/implementation/2026-11-04-pdf-content-search.md)
-- [Giảng viên upload và tự công bố](docs/implementation/2026-10-14-lecturer-self-publication.md)
-- [Tiến độ và phần còn lại ngày 14/10/2026](docs/implementation/2026-10-14-project-status.md)
-- [Kết quả mốc khởi tạo](docs/implementation/2026-10-11-foundation.md)
-- [Prototype thiết kế](design/wireframe/README.md)
-- [Proposal, use case và tài liệu bàn giao](docs/deliverables/)
-- [Quy tắc sản phẩm](PRODUCT.md), [thiết kế prototype](DESIGN.md)
-
-## Chạy local trên Windows / PowerShell
-
-Yêu cầu **Node.js 24.19.x LTS**, **pnpm 11.25.0** và Docker Desktop đang chạy. Runtime và dependencies được pin trong repository.
+Cần **Node.js 24.19.x**, **pnpm 11.25.0** và Docker Desktop đang chạy.
 
 ```powershell
 pnpm install --frozen-lockfile
-pnpm setup:local
-pnpm infra:up
+pnpm setup:local                              # tạo infra/.env và apps/api/.env với secret ngẫu nhiên
+pnpm infra:up                                 # PostgreSQL :55432, Redis :56379 (chỉ 127.0.0.1)
 pnpm --filter @hucescholar/api db:migrate
-pnpm dev
+pnpm dev                                      # web :3000, API :3001
 ```
 
-Mở [http://127.0.0.1:3000/](http://127.0.0.1:3000/) rồi đăng nhập. API liveness ở `http://127.0.0.1:3001/api/v1/health`; readiness (DB, Redis, kho file, heartbeat worker và trình quét ClamAV) ở `/api/v1/health/ready`, trả 503 khi dependency bắt buộc lỗi. Mỗi phản hồi có `X-Request-Id`, trùng với id trong log truy cập và log lỗi. Dừng web/API bằng `Ctrl+C`. Trang tiến độ dự án và kiểm tra API nằm ở `/project`.
+Mở http://127.0.0.1:3000. API: `/api/v1/health` (sống) và `/api/v1/health/ready` (DB, Redis, kho file, worker, trình quét). Mỗi phản hồi có `X-Request-Id` khớp với log.
 
-`setup:local` tạo `infra/.env` và `apps/api/.env` với password/CSRF secret ngẫu nhiên, giữ nguyên file đã có và không in secret. PostgreSQL mặc định **55432**, Redis **56379**, chỉ bind `127.0.0.1`; không đụng PostgreSQL khác trên 5432. `pnpm infra:down` giữ named volumes; không thêm `-v` khi cần giữ dữ liệu.
-
-Đổi web/API origin cần sửa `APP_ORIGIN` (origin truy cập trình duyệt) và `API_PROXY_TARGET` (server web gọi Nest). Next rewrites đọc đích API khi build; thay đích sau build cần build lại. Không đặt secret vào `NEXT_PUBLIC_*`. Mặc định phát triển local qua HTTP, không phải production HTTPS.
-
-### Chạy đầy đủ: kiểm tra file, Word, nhắc lịch
-
-`pnpm dev` chỉ chạy web và API. Quét PDF, tạo bản đọc từ Word và nhắc lịch (CAL-03) do **file worker** làm. Worker cần ClamAV, Poppler và docx-converter; các dịch vụ này chỉ có trong Docker và không mở cổng ra máy, nên worker chạy trong container:
+`pnpm dev` chỉ chạy web và API. Quét file, chuyển Word sang PDF, nhắc lịch và nhắc thẻ ôn do **file worker** làm, chạy trong Docker:
 
 ```powershell
-pnpm infra:up
-pnpm infra:files   # ClamAV, docx-converter, file-worker; lần đầu ClamAV nạp chữ ký mất vài phút
-pnpm dev
+pnpm infra:files   # ClamAV, docx-converter, file-worker; lần đầu ClamAV nạp dữ liệu mất vài phút
 ```
 
-- Đổi code API thì chạy lại `pnpm infra:files` để build lại image worker.
-- Không chạy thêm `pnpm --filter @hucescholar/api worker:files` trên máy cùng lúc. Hai worker cùng nhận job; bản trên máy không gọi được ClamAV nên sẽ đánh lỗi file "dịch vụ kiểm tra không phản hồi".
-- Thư đăng ký, khôi phục mật khẩu và nhắc lịch được ghi thành file JSON trong `.local/mail-outbox`, không gửi đi. API cần `MAIL_TRANSPORT=file` và `MAIL_DIR=<repo>.localmail-outbox` trong `apps/api/.env` (`setup:local` thêm sẵn cho file mới); worker trong container đã cấu hình sẵn.
-- Kiểm tra: `docker ps` thấy `clamav` healthy; `/api/v1/health/ready` báo `worker` và `scanner` đều `ok`. Ngay sau khi bật, `scanner` là `fail` khoảng một phút trong lúc ClamAV nạp dữ liệu.
+- Sửa code API thì chạy lại `pnpm infra:files` để build lại worker. Không chạy thêm worker trên máy cùng lúc.
+- Thư (đăng ký, khôi phục mật khẩu, nhắc) được ghi thành file trong `.local/mail-outbox`, không gửi đi.
+- `pnpm infra:down` giữ dữ liệu; đừng thêm `-v` nếu muốn giữ database.
 
-## Tạo quản trị viên đầu tiên
-
-Không có mật khẩu mặc định; tài khoản ADMIN không tự đăng ký được. Chỉ làm khi database chưa có ADMIN:
+### Tạo quản trị viên đầu tiên
 
 ```powershell
 Copy-Item apps/api/.env.bootstrap.example apps/api/.env.bootstrap
-# Điền BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_NAME và mật khẩu riêng 16–128 ký tự.
-# Không truyền mật khẩu qua command argument, không commit file thật.
+# Điền BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_NAME và mật khẩu 16–128 ký tự. Không commit file này.
 pnpm --filter @hucescholar/api build
 pnpm --filter @hucescholar/api db:bootstrap-admin
 Remove-Item -LiteralPath apps/api/.env.bootstrap
 ```
 
-CLI tạo account ACTIVE/verified và audit trong transaction; gọi lại không ghi đè tài khoản/mật khẩu. Đây chỉ là bootstrap ADMIN đầu tiên. Sau khi đăng nhập Admin, mở `/workspace/admin/users` để cấp tài khoản giảng viên/sinh viên. Admin nhập mật khẩu khởi tạo 16–128 ký tự và xác nhận đã đối chiếu danh sách hợp lệ; chuyển thông tin qua kênh riêng. Người nhận phải đổi mật khẩu được cấp ở lần đăng nhập đầu; admin có thể cấp lại mật khẩu tạm tại cùng màn hình. Sinh viên và giảng viên cũng tự đăng ký bằng email được (AUTH-04), và tự khôi phục mật khẩu qua email (AUTH-03) khi đã cấu hình `MAIL_TRANSPORT`; mail mới thử bằng transport file, chưa thử SMTP thật. Tài khoản E2E ở database test không dùng để đăng nhập ứng dụng local.
+Lệnh chỉ tạo khi chưa có admin và không ghi đè tài khoản có sẵn. Sau đó đăng nhập và cấp tài khoản sinh viên ở `/workspace/admin/users`, hoặc để sinh viên tự đăng ký tại `/signup`.
 
-Danh sách hỗ trợ tìm tên/email, lọc vai trò/trạng thái và phân trang. Sửa tên/email, khóa/mở khóa sử dụng revision chống ghi đè. Xung đột cho tải thông tin mới để đối chiếu trong khi giữ nội dung đang nhập. Khóa hoặc đổi email thu hồi mọi phiên của tài khoản; mở khóa không phục hồi cookie cũ. Role của tài khoản được giữ nguyên; ADMIN chỉ đọc ở chức năng này. Không xóa tài khoản.
-
-## Danh mục và phân công
-
-Admin mở `/workspace/admin/catalog/faculties`, tạo khoa → ngành/môn thuộc khoa, rồi chọn các ngành sử dụng môn. Môn có thể dùng chung khác khoa. Khoa phụ trách giữ cố định sau khi tạo; ngừng sử dụng giữ lịch sử. Không thể ngừng khoa còn ngành/môn hoạt động hoặc ngừng môn còn phân công hiện hành.
-
-Tại `/workspace/admin/assignments`, chọn giảng viên hoạt động/đã xác minh và môn, cấp phân công hoặc thu hồi kèm lý do. Giảng viên mở `/workspace/lecturer/assignments` xem phân công riêng. Thu hồi chặn sửa bản nháp nhưng không xóa học liệu hoặc tự bàn giao. Danh mục local để trống, không tự nhập mã/sách HUCE giả.
-
-## Bản nháp học liệu
-
-Giảng viên mở `/workspace/lecturer/materials`, sinh viên mở `/workspace/student/materials` hoặc chọn **Học liệu của tôi**. Tạo bản nháp, nhập tiêu đề/loại, thêm 1–20 môn rồi lưu. Tác giả/mô tả có thể để trống. **Giảng viên không cần tài liệu HUCE, nguồn tham khảo tùy chọn và không bắt buộc khai báo căn cứ quyền.** Sinh viên vẫn cần nguồn/căn cứ quyền cho tài liệu bổ sung và không sửa học liệu giảng viên; Admin không biên soạn ở luồng này.
-
-Giảng viên cần còn phân công ở tất cả môn hiện tại và môn mới để lưu. Khi mất phân công, metadata vẫn được giữ để xem và đối chiếu. Lỗi/xung đột giữ nội dung nhập; chỉ bỏ thay đổi khi xác nhận. Metadata được lưu riêng trước upload: `file_id` null chỉ ở DRAFT, không tạo file giả. Giảng viên chọn PDF/DOCX tối đa25MiB ngay khi tạo, **Lưu và tải file lên** sẽ lưu thông tin rồi upload và giữ form mở. **Cập nhật trạng thái file** tách kiểm tra nguồn và chuyển đổi PDF. Khi bản đọc sẵn sàng, **Xem trước bản PDF** trước khi công bố. Sinh viên tiếp tục gắn PDF vào bản nháp đã lưu. Khi SAFE, giảng viên chọn **Công bố** rồi xác nhận: tài liệu xuất hiện trong kho nếu đang hiển thị, không qua admin duyệt. Mất phản hồi dùng **Tải trạng thái công bố** trước retry. Lựa chọn tải PDF có hiệu lực sau công bố. Xem [giảng viên tự công bố](docs/implementation/2026-10-14-lecturer-self-publication.md).
-
-Sinh viên chọn **Gửi duyệt** khi PDF SAFE rồi xác nhận phiên bản/lần lưu. Bản SUBMITTED khóa metadata/PDF; nhập lý do rồi **Rút về nháp** để sửa. Nếu lỗi hoặc chưa rõ kết quả, bấm **Tải trạng thái duyệt** trước retry. Yêu cầu giảng viên cũ vẫn được rút/mở lại; sau đó dùng Công bố. CHANGES_REQUIRED có **Mở lại để chỉnh sửa**. APPROVED/REJECTED giữ nguyên; **Tạo phiên bản kế tiếp** copy thông tin/môn sang nháp mới, cần PDF mới và chọn lại quyền tải. Giảng viên tự công bố lại, sinh viên gửi duyệt lại. Bản công bố và ghi chú cũ giữ nguyên; **Lịch sử phiên bản** giữ các yêu cầu/ quyết định trước đó.
-
-Admin mở **Kiểm duyệt học liệu** ở `/workspace/admin/moderation`, lọc yêu cầu và mở chi tiết. Chỉ PDF SAFE với snapshot còn khớp được mở ở tab mới. Chọn quyết định, nhập lý do, duyệt cần xác nhận đã kiểm tra nội dung/quyền; xác nhận inline để lưu. Duyệt đặt bản hiện hành, không tự mở tài liệu HIDDEN. Khi mất kết nối, **Tải trạng thái yêu cầu** trước retry.
-
-Ba vai trò mở **Kho học liệu** ở `/workspace/library`, tìm tiêu đề/tác giả, lọc môn/loại/nguồn và chọn **Đọc tài liệu**. Reader chuyển trang, zoom, xoay và chọn chữ nếu PDF có text layer. Nguồn/quyền nằm trong phần mở rộng inline; **Tải PDF gốc** chỉ xuất hiện khi được phép; nguồn DOCX có **Tải Word gốc** và **Tải bản PDF**. Mỗi lượt metadata/file kiểm tra APPROVED + VISIBLE + SAFE + hạn quyền; admin không vượt điều kiện này. Ghi chú riêng gắn phiên bản/trang, có tạo/sửa/xóa; lỗi lưu giữ bản soạn, retry tạo giữ request ID để tránh nhân đôi. Guard Back/Forward trong lịch sử ứng dụng giữ bản soạn khi chọn ở lại và chặn khi đang lưu; link/logout/unload vẫn có guard. Phạm vi browser và giới hạn: [checkpoint web](docs/implementation/2026-10-17-web-reader-history.md). Tiến độ chỉ lưu trang render thành công, mở lại sau khi máy chủ xác nhận; xung đột tab yêu cầu tải lại. Khi lỗi tải tiến độ có thể đọc từ trang 1 mà không ghi. Đã có vùng tô chữ riêng với tám màu và ghi chú tùy chọn; chưa đọc PDF offline. Hướng dẫn và giới hạn: [vùng tô PDF](docs/implementation/2026-10-17-pdf-text-highlights.md). Chi tiết: [ghi chú và tiến độ](docs/implementation/2026-10-12-reader-notes-progress.md). `dev`/`build` chuẩn bị worker, CMaps, font và wasm PDF.js cùng version vào public; không dùng CDN.
-
-Để chạy kiểm tra file local, xem [Chạy đầy đủ](#chạy-đầy-đủ-kiểm-tra-file-word-nhắc-lịch). API và worker dùng chung `.local/files` ngoài webroot. Production yêu cầu S3 private; chưa tạo dịch vụ cloud. Hướng dẫn, giới hạn và bằng chứng quét thật ở tài liệu upload phía trên.
-
-## Kiểm tra
+## Kiểm thử
 
 ```powershell
 pnpm format:check
-pnpm check
-pnpm test:setup
-pnpm test:integration
+pnpm check                         # lint, typecheck, unit test, build
+pnpm test:setup                    # tạo/migrate database hucescholar_test, tài khoản e2e ngẫu nhiên
+pnpm test:integration              # API với PostgreSQL/Redis test
 pnpm exec playwright install chromium
-pnpm test:e2e
+pnpm test:e2e                      # Playwright, tự chạy web/API ở 3100/3101
 ```
 
-`pnpm check` chạy lint, typecheck, unit Jest và build; không cần kết nối DB để chạy unit/build. Prisma client được sinh trước typecheck/build/dev và không commit. `test:setup` cần PostgreSQL/Redis đang chạy, tạo/migrate **hucescholar_test**, cập nhật các account tổng hợp `e2e-*@example.test` theo từng suite với mật khẩu ngẫu nhiên, ghi env bị Git bỏ qua vào `.local/test.env`. Không dùng credential thật trong kiểm thử.
+- Test dùng riêng database `hucescholar_test` và Redis DB 15; không chạy integration và e2e cùng lúc.
+- Chạy `pnpm test:setup` lại trước mỗi lượt e2e đầy đủ (một số spec đổi mật khẩu tài khoản test).
+- Phạm vi kiểm chứng: Chrome với chuột trên desktop, tablet và điện thoại (kích thước màn hình). Safari và thiết bị cảm ứng chưa được hỗ trợ.
 
-Integration và browser dùng riêng database `_test` + Redis **DB 15**, không chạy đồng thời vì suite reset vùng rate-limit test. Browser global setup flush DB 15 dành riêng cho dự án; không dùng DB 15 này cho việc khác. Test setup không drop database. Ca kiểm tra schema SQL dùng rollback; fixture API được dọn sau suite; dữ liệu synthetic do Playwright tạo chỉ tồn tại trong database test. Playwright tự chạy web/API ở 3100/3101 rồi dừng; giữ hai cổng trống. Trace tắt để tránh ghi lại mật khẩu/cookie.
-
-Chạy xong `check`/typecheck/build và Prisma generate **trước** browser; các lệnh này có thể sửa source sinh tự động, khiến API test chạy `--watch` khởi động lại giữa request PDF. Khi máy tải cao có thể dùng `pnpm test:e2e --workers=2`; không chạy codegen song song với bộ browser.
-
-Có thể dùng Chrome đã cài:
-
-```powershell
-$env:PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-pnpm test:e2e
-```
-
-Browser kiểm tra reflow desktop/mobile/tablet bằng Chrome. Dự án chỉ kiểm chứng trên Chrome dùng chuột; Safari và thiết bị cảm ứng đã bỏ khỏi phạm vi từ 04/11/2026, nên không được xem là hỗ trợ. Chưa kiểm chứng cài PWA.
-
-## Build và chạy bản build local
+## Build và triển khai
 
 ```powershell
 pnpm build
-# Terminal 1
-pnpm --filter @hucescholar/api start
-# Terminal 2
-pnpm --filter @hucescholar/web start
+pnpm --filter @hucescholar/api start     # terminal 1
+pnpm --filter @hucescholar/web start     # terminal 2
 ```
 
-Bản build local dùng env phát triển hiện có. Production yêu cầu HTTPS, cookie Secure/host-prefixed, tách DB migration/runtime role và cấu hình proxy được kiểm tra. `TRUSTED_PROXY_IPS` mặc định trống. Next rewrite local dùng chung bucket IP loopback; triển khai nhiều người dùng phải route `/api` trực tiếp Caddy→Nest, ghi đè forwarded IP và chỉ tin exact IP của Caddy. Chi tiết trong nhật ký auth. Chưa deploy cloud.
+Production cần HTTPS, cookie Secure, kho file S3 riêng tư và proxy tin cậy (`TRUSTED_PROXY_IPS`). Diễn tập local S3/HTTPS/phục hồi đã đạt ([OPS-02](docs/implementation/2026-11-04-ops-02-rehearsal.md)); chưa triển khai thật. Không đặt secret vào biến `NEXT_PUBLIC_*`. PWA chỉ cache trang offline và icon, không cache dữ liệu đăng nhập, PDF hay ghi chú ([chi tiết](docs/implementation/2026-10-15-pwa-foundation.md)).
 
-CI dùng PostgreSQL/Redis ephemeral trên runner và chạy format, lint, typecheck, unit, build, integration và E2E. Không dùng trust auth của CI cho local/production.
+## Còn lại
 
-Admin mở **Quản lý học liệu** tại `/workspace/admin/materials` để tìm/lọc, bàn giao giáo trình giảng viên hoặc ẩn/khôi phục toàn tài liệu. Người nhận phải hoạt động, đã xác minh và có phân công ở mọi môn trong lịch sử. Bàn giao rút yêu cầu đang chờ về nháp nguyên tử; giữ bản công bố, tác giả và ghi chú. Ẩn chặn lượt đọc/tải mới ở mọi version; khôi phục cần bản hiện hành đã duyệt, PDF SAFE, quyền còn hiệu lực và xác nhận lý do ẩn đã giải quyết. Lỗi/xung đột giữ lý do, bắt tải trạng thái trước thử lại. Xem [vòng đời học liệu](docs/implementation/2026-10-12-material-lifecycle.md).
-
-## Lộ trình còn lại
-
-1. Thử mail bằng SMTP thật. Các luồng tài khoản (AUTH-01…04) đã có.
-2. Nguồn nội dung có quyền rõ ràng.
-3. OPS-02: [diễn tập local S3, HTTPS và phục hồi](docs/implementation/2026-11-04-ops-02-rehearsal.md) đã đạt; còn thử trên S3, domain và chứng chỉ thật.
-4. Cài PWA và phiên dùng thử với người thật vẫn chưa làm.
-
-Mỗi mốc có kiểm chứng riêng; không cam kết đọc PDF offline trong MVP.
-
-## PWA
-
-Mở `/install` từ trang chủ, đăng nhập hoặc menu không gian để xem hướng dẫn cài. Nút **Cài ứng dụng** chỉ xuất hiện khi trình duyệt cung cấp prompt; Safari/iOS dùng hướng dẫn menu. Chưa kiểm chứng cài trên thiết bị thật hoặc domain HTTPS.
-
-Production đăng ký worker khi trình duyệt hỗ trợ secure context. Dev mặc định không đăng ký; bật thử bằng PowerShell `$env:NEXT_PUBLIC_ENABLE_PWA = '1'` trước `pnpm --filter @hucescholar/web dev`. Bỏ biến chỉ ngừng đăng ký mới; worker đã cài vẫn tồn tại theo vòng đời browser, có thể gỡ trong DevTools → Application → Service Workers khi kết thúc thử nghiệm. Biến được Next đọc lúc build; không thay thế HTTPS khi triển khai.
-
-`scripts/pwa-assets.mjs` chạy trước dev/build, sinh icon PNG từ monogram H riêng và compile `scripts/pwa-worker.ts` thành `public/sw.js` (bị Git bỏ qua). Worker được typecheck với WebWorker lib; không thêm dependency. Khi sửa tài nguyên precache, tăng phiên bản cache trong worker. Bản cập nhật chờ đóng các tab cũ, không tự reload làm mất bản soạn.
-
-Worker chỉ giữ sáu asset public cố định: offline HTML tự chứa và icon. Không cache HTML/RSC/Next chunks, API, cookie phiên, PDF, ghi chú, URL có query/token hoặc nguồn ngoài. Khi hard navigation trong app thất bại do mạng, hiện trang mất kết nối chung; HTTP401/404/500 giữ nguyên. Mất mạng không thể đọc PDF hoặc lưu ghi chú, không có background sync. Chi tiết: [mốc PWA](docs/implementation/2026-10-15-pwa-foundation.md).
-
-Ba vai trò mở **Thư viện của tôi** ở `/workspace/personal-library`. Trong reader chọn **Lưu tài liệu**; **Đã lưu** mở bản công bố hiện hành, **Đọc gần đây** mở đúng phiên bản/trang đã lưu tiến độ. Bỏ lưu cần xác nhận và giữ ghi chú/tiến độ. Mục bị ẩn, hết hạn quyền hoặc PDF không SAFE chỉ hiện thông báo không khả dụng; vẫn bỏ được liên kết đã lưu. Khi mất phản hồi, **Tải trạng thái lưu** đối chiếu server trước thử lại. Xem [thư viện cá nhân](docs/implementation/2026-10-12-personal-library.md).
-
-```text
-apps/web/       Next.js App Router, login, tài khoản, danh mục, phân công và bản nháp/PDF
-apps/api/       NestJS, Prisma, auth guards, Users/Academic/Materials và PDF worker
-scripts/        Cấu hình local và database/test fixture riêng
-apps/api/prisma SQL migrations và mapping 23 model
-infra/          PostgreSQL/Redis local và profile ClamAV/Poppler worker
-tests/          Hành trình Playwright (không ghi credential vào trace)
-design/         Prototype được giữ riêng
-docs/           Proposal, use case, schema và nhật ký triển khai
-```
+1. Gửi mail bằng SMTP thật (hiện mới thử bằng transport file).
+2. Nguồn nội dung có quyền sử dụng rõ ràng.
+3. Triển khai trên S3, domain và chứng chỉ thật.
+4. Cài PWA trên thiết bị thật và phiên dùng thử với người dùng.
+5. Dọn nợ kỹ thuật đã ghi ở [ARCHITECTURE.md §9](docs/ARCHITECTURE.md#9-nợ-kỹ-thuật-đã-biết).
