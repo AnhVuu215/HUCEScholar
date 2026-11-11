@@ -1,4 +1,4 @@
-import { clean, escapeMarkdown, type ExportFormat } from './annotation-export';
+import { clean, escapeMarkdown, type ExportFormat } from '../reading/annotation-export';
 import { MAX_REVIEW_BOX } from './study-schedule';
 
 /** STUDY-04: an export holds at most this many cards; narrow the filter for the rest. */

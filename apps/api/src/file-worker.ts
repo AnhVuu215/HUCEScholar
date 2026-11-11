@@ -9,8 +9,8 @@ import { ScanProcessor } from './files/scan-processor';
 import { PDF_QUEUE, queueConnection } from './files/scan-queue';
 import { parseAuthEnvironment } from './auth/auth.config';
 import { SafeLogger } from './safe-logger';
-import { MaterialDraftCoreModule } from './materials/material-draft-core.module';
-import { SourceConversionProcessor } from './materials/source-conversion.processor';
+import { MaterialDraftCoreModule } from './drafts/material-draft-core.module';
+import { SourceConversionProcessor } from './drafts/source-conversion.processor';
 import { SOURCE_QUEUE } from './files/source-conversion-queue';
 import {
   SCANNER_STATUS_KEY,
@@ -20,7 +20,7 @@ import {
 import { PdfScanner } from './files/pdf-scanner';
 import { PdfTextIndexer } from './files/pdf-text-indexer';
 import { CalendarReminders, CalendarRemindersModule } from './calendar/calendar-reminders';
-import { StudyReminders } from './materials/study-reminders';
+import { StudyReminders } from './study/study-reminders';
 import {
   NotebookImagesModule,
   NotebookImagesProcessor,

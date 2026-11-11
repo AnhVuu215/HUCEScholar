@@ -2,7 +2,7 @@ import {
   escapeMarkdown,
   exportAnnotations,
   exportNotebook,
-} from '../src/materials/annotation-export';
+} from '../src/reading/annotation-export';
 
 const source = {
   title: 'Giáo trình # [Cơ học](javascript:x)',

@@ -7,7 +7,7 @@ import {
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type study_cards } from '../generated/prisma/client';
 import { Profile } from '../auth/auth.types';
-import { available, LibraryService } from './library.service';
+import { available, LibraryService } from '../library/library.service';
 import {
   CreateStudyCardDto,
   ReviewStudyCardDto,

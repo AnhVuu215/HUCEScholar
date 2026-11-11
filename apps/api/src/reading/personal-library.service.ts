@@ -2,8 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
 import { Prisma, type annotations } from '../generated/prisma/client';
-import { DraftListDto } from './materials.dto';
-import { available, LibraryService } from './library.service';
+import { DraftListDto } from '../drafts/materials.dto';
+import { available, LibraryService } from '../library/library.service';
 import { NotebookExportDto, NotebookSearchDto } from './annotation-search.dto';
 import { ReviewLaterListDto } from './personal-library.dto';
 import {

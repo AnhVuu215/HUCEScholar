@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, Matches } from 'class-validator';
-import { DraftListDto } from './materials.dto';
+import { DraftListDto } from '../drafts/materials.dto';
 export class LibraryListDto extends DraftListDto {
   @IsOptional()
   @IsIn(['TEXTBOOK', 'LECTURE', 'EXERCISE', 'EXAM', 'REFERENCE', 'OTHER'])

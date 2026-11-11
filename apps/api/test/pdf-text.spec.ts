@@ -2,7 +2,7 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { extractPdfText, MAX_PAGE_CHARS, pagesFromText } from '../src/files/pdf-text';
-import { foldedTerms, foldVietnamese, matchSnippet } from '../src/materials/search-fold';
+import { foldedTerms, foldVietnamese, matchSnippet } from '../src/library/search-fold';
 
 describe('PDF page text', () => {
   it('numbers pages by form feed and keeps the place of empty ones', () => {

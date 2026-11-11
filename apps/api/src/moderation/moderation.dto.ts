@@ -10,7 +10,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Transform as Convert } from 'class-transformer';
-import { DraftListDto, SubmitMaterialDto } from './materials.dto';
+import { DraftListDto, SubmitMaterialDto } from '../drafts/materials.dto';
 
 export class ModerationListDto extends DraftListDto {
   @IsOptional()

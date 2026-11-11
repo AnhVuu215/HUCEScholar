@@ -29,7 +29,7 @@ import { MaterialsService } from './materials.service';
 import { DraftPdfService } from './draft-pdf.service';
 import { SourceUploadService } from './source-upload.service';
 import { DOCX_MIME } from '../files/receive-docx';
-import { LibraryService } from './library.service';
+import { LibraryService } from '../library/library.service';
 @Controller('material-drafts')
 @UseGuards(SessionGuard, RolesGuard)
 @Roles('STUDENT')

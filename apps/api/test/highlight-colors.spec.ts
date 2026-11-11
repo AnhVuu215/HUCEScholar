@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { CreateHighlightDto, UpdateHighlightDto } from '../src/materials/highlight.dto';
+import { CreateHighlightDto, UpdateHighlightDto } from '../src/reading/highlight.dto';
 
 const create = {
   pageNumber: 1,
