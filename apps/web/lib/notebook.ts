@@ -1,5 +1,5 @@
 import { isNumericId } from './guards';
-import { apiRequest, csrfToken } from './auth';
+import { apiRequest, apiWrite } from './auth';
 import {
   downloadedFile,
   type AnnotationFilters,
@@ -22,14 +22,13 @@ export async function searchNotebook(
   cursor: string | null,
   signal: AbortSignal,
 ): Promise<{ items: NotebookEntry[]; nextCursor: string | null }> {
-  const token = await csrfToken();
   const body: unknown = await (
-    await apiRequest('/personal-library/notebook/search', {
-      method: 'POST',
-      signal,
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify({ ...filters, ...(cursor ? { cursor } : {}), limit: 20 }),
-    })
+    await apiWrite(
+      '/personal-library/notebook/search',
+      'POST',
+      { ...filters, ...(cursor ? { cursor } : {}), limit: 20 },
+      { signal },
+    )
   ).json();
   if (
     !body ||
@@ -82,15 +81,11 @@ export async function notebookCourses(signal: AbortSignal): Promise<NotebookCour
 
 /** EXPORT-02: every note the filters match, as one file; the filters go in a POST body. */
 export async function exportNotebook(filters: NotebookFilters, format: NotesExportFormat) {
-  const token = await csrfToken();
-  const response = await apiRequest(
+  const response = await apiWrite(
     '/personal-library/notebook/export',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify({ ...filters, format }),
-    },
-    20_000,
+    'POST',
+    { ...filters, format },
+    { timeoutMs: 20_000 },
   );
   return downloadedFile(response, 'so-tay-ghi-chu', format);
 }

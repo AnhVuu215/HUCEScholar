@@ -1,4 +1,4 @@
-import { apiRequest, csrfToken } from './auth';
+import { apiRequest, apiWrite } from './auth';
 import { isNote, removeNote, updateNote, type PageNote } from './reading';
 import {
   isHighlight,
@@ -21,14 +21,13 @@ export async function searchAnnotations(
   cursor: string | null,
   signal: AbortSignal,
 ): Promise<{ items: AnnotationItem[]; nextCursor: string | null }> {
-  const token = await csrfToken();
   const body: unknown = await (
-    await apiRequest(`/library/versions/${encodeURIComponent(versionId)}/annotations/search`, {
-      method: 'POST',
-      signal,
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify({ ...filters, ...(cursor ? { cursor } : {}), limit: 20 }),
-    })
+    await apiWrite(
+      `/library/versions/${encodeURIComponent(versionId)}/annotations/search`,
+      'POST',
+      { ...filters, ...(cursor ? { cursor } : {}), limit: 20 },
+      { signal },
+    )
   ).json();
   if (
     !body ||
@@ -64,15 +63,11 @@ export async function setReviewLater(
   item: AnnotationItem,
   reviewLater: boolean,
 ): Promise<AnnotationItem> {
-  const token = await csrfToken();
   const body: unknown = await (
-    await apiRequest(
+    await apiWrite(
       `/library/versions/${encodeURIComponent(versionId)}/annotations/${encodeURIComponent(item.id)}/review-later`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-        body: JSON.stringify({ reviewLater }),
-      },
+      'PUT',
+      { reviewLater },
     )
   ).json();
   if (

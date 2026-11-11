@@ -1,5 +1,5 @@
 import { isRecord, isNumericId } from './guards';
-import { ApiError, apiRequest, csrfToken } from './auth';
+import { ApiError, apiRequest, apiWrite } from './auth';
 
 export const reportCategories = {
   FILE_ERROR: 'File lỗi, thiếu trang hoặc chữ mờ',
@@ -97,14 +97,7 @@ function isDetail(v: unknown): v is AdminReportDetail {
     Array.isArray((v as unknown as Record<string, unknown>).actions)
   );
 }
-async function send(path: string, body: object) {
-  const token = await csrfToken();
-  return apiRequest(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify(body),
-  });
-}
+const send = (path: string, body: object) => apiWrite(path, 'POST', body);
 const versionPath = (versionId: string) =>
   `/library/versions/${encodeURIComponent(versionId)}/reports`;
 

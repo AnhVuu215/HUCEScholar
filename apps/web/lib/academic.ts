@@ -1,4 +1,4 @@
-import { ApiError, apiRequest, csrfToken } from './auth';
+import { ApiError, apiRequest, apiWrite, type WriteMethod } from './auth';
 
 export const catalogLabels = { faculties: 'Khoa', programs: 'Ngành', courses: 'Môn học' } as const;
 export type CatalogKind = keyof typeof catalogLabels;
@@ -60,13 +60,8 @@ export async function catalogList(
     return data as CatalogList;
   throw new Error('Invalid catalog response.');
 }
-export async function academicWrite(path: string, body: object, method = 'POST') {
-  const token = await csrfToken();
-  return apiRequest(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify(body),
-  });
+export async function academicWrite(path: string, body: object, method: WriteMethod = 'POST') {
+  return apiWrite(path, method, body);
 }
 export async function currentCatalog(kind: CatalogKind, id: string, signal?: AbortSignal) {
   const body: unknown = await (await apiRequest(`/admin/catalog/${kind}/${id}`, { signal })).json();

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ApiError } from '../../lib/auth';
 import { useReturnFocus } from '../../lib/use-return-focus';
 import {
@@ -11,8 +11,8 @@ import {
   reviewStatuses,
   publicationLabel,
   type MaterialDraft,
-  type PublicationHistory,
 } from '../../lib/materials';
+import { useApiResource } from '../../lib/use-api-resource';
 
 export function PublicationActions({
   current,
@@ -39,22 +39,18 @@ export function PublicationActions({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [page, setPage] = useState(1);
-  const [attempt, setAttempt] = useState(0);
-  const [history, setHistory] = useState<PublicationHistory | null>(null);
-  const [historyError, setHistoryError] = useState('');
   const feedback = useRef<HTMLParagraphElement>(null);
   const confirmation = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    void publicationHistory(current.id, page, controller.signal)
-      .then((result) => {
-        if (!controller.signal.aborted) setHistory(result);
-      })
-      .catch((failure) => {
-        if (!controller.signal.aborted) setHistoryError(materialError(failure));
-      });
-    return () => controller.abort();
-  }, [current.id, current.revision, page, attempt]);
+  // A new revision of the draft (submit, withdraw...) loads its history again.
+  const {
+    data: history,
+    error: historyError,
+    reload: reloadHistory,
+  } = useApiResource(
+    `${current.id}:${current.revision}:${page}`,
+    (signal) => publicationHistory(current.id, page, signal),
+    materialError,
+  );
   const locked = blocked || pending;
   const canSubmit =
     current.reviewStatus === 'DRAFT' &&
@@ -85,10 +81,8 @@ export function PublicationActions({
         setReason('');
         reasonChanged(false);
       }
-      setHistory(null);
-      setHistoryError('');
       setPage(1);
-      setAttempt((v) => v + 1);
+      reloadHistory();
       setNotice(
         action === 'submit'
           ? 'Đã gửi yêu cầu duyệt. Học liệu chưa được công bố.'
@@ -325,14 +319,7 @@ export function PublicationActions({
           <p role="alert" className="form-error">
             {historyError}
           </p>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              setHistoryError('');
-              setAttempt((v) => v + 1);
-            }}
-          >
+          <button type="button" className="secondary-button" onClick={reloadHistory}>
             Thử tải lịch sử
           </button>
         </div>
@@ -372,10 +359,7 @@ export function PublicationActions({
                 type="button"
                 className="secondary-button"
                 disabled={page <= 1}
-                onClick={() => {
-                  setHistory(null);
-                  setPage((v) => v - 1);
-                }}
+                onClick={() => setPage((v) => v - 1)}
               >
                 Lịch sử trước
               </button>
@@ -386,10 +370,7 @@ export function PublicationActions({
                 type="button"
                 className="secondary-button"
                 disabled={page * history.limit >= history.total}
-                onClick={() => {
-                  setHistory(null);
-                  setPage((v) => v + 1);
-                }}
+                onClick={() => setPage((v) => v + 1)}
               >
                 Lịch sử sau
               </button>

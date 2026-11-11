@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ApiError, apiRequest, csrfToken, landingPath, readProfile } from '../../lib/auth';
+import { ApiError, landingPath, readProfile, apiWrite } from '../../lib/auth';
 
 export function LoginForm() {
   const [pending, setPending] = useState(false);
@@ -20,11 +20,9 @@ export function LoginForm() {
     setError('');
     const form = new FormData(event.currentTarget);
     try {
-      const token = await csrfToken();
-      const response = await apiRequest('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-        body: JSON.stringify({ email: form.get('email'), password: form.get('password') }),
+      const response = await apiWrite('/auth/login', 'POST', {
+        email: form.get('email'),
+        password: form.get('password'),
       });
       const user = await readProfile(response);
       window.location.replace(landingPath(user));

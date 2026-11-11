@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import {
   ApiError,
   apiRequest,
-  csrfToken,
   readProfile,
   workspacePath,
   type Profile,
+  apiWrite,
 } from '../../lib/auth';
 import { ChangePasswordForm } from './change-password-form';
 
@@ -42,8 +42,7 @@ export function ForcedPasswordChange() {
     setLogoutPending(true);
     setLogoutError('');
     try {
-      const token = await csrfToken();
-      await apiRequest('/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': token } });
+      await apiWrite('/auth/logout', 'POST');
       window.location.replace('/login');
     } catch {
       setLogoutError('Chưa đăng xuất được. Kiểm tra kết nối rồi thử lại.');
