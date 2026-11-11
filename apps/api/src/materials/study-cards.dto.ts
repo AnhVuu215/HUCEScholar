@@ -42,6 +42,10 @@ export class StudyScheduleDto extends StudyCardScopeDto {
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) to?: string;
 }
+/** STUDY-04: the readable cards in the filter as a Markdown or plain-text file. */
+export class StudyCardExportDto extends StudyCardScopeDto {
+  @IsIn(['markdown', 'text']) format!: 'markdown' | 'text';
+}
 export class StudyCardListDto extends StudyCardScopeDto {
   @Transform(integer) @IsInt() @Min(1) @Max(100000) page = 1;
   @Transform(integer) @IsInt() @Min(1) @Max(50) limit = 20;

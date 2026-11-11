@@ -109,6 +109,29 @@ export function StudyPractice({
     setResults((v) => new Map(v).set(current.id, result));
     next();
   }
+  // STUDY-04: Space shows the answer, 1 is "Chưa nhớ" and 2 is "Nhớ". Typing in a field, a
+  // focused button or link, and modified keys keep their usual meaning.
+  const keyAction = useRef<(event: KeyboardEvent) => void>(() => undefined);
+  useEffect(() => {
+    keyAction.current = (event) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (!loaded || index >= order.length || saving) return;
+      if (!shown && event.key === ' ' && !target?.closest('button, a')) {
+        event.preventDefault();
+        setShown(true);
+      } else if (shown && (event.key === '1' || event.key === '2')) {
+        event.preventDefault();
+        void answer(event.key === '2' ? 'known' : 'again');
+      }
+    };
+  });
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => keyAction.current(event);
+    document.addEventListener('keydown', listener);
+    return () => document.removeEventListener('keydown', listener);
+  }, []);
   const known = order.filter((c) => results.get(c.id) === 'known');
   const again = order.filter((c) => results.get(c.id) === 'again');
 
@@ -221,6 +244,7 @@ export function StudyPractice({
                   ref={knownButton}
                   className="primary-button"
                   disabled={saving}
+                  aria-keyshortcuts="2"
                   onClick={() => void answer('known')}
                 >
                   Nhớ
@@ -228,6 +252,7 @@ export function StudyPractice({
                 <button
                   className="secondary-button"
                   disabled={saving}
+                  aria-keyshortcuts="1"
                   onClick={() => void answer('again')}
                 >
                   Chưa nhớ
@@ -245,10 +270,18 @@ export function StudyPractice({
               )}
             </>
           ) : (
-            <button type="button" className="primary-button" onClick={() => setShown(true)}>
+            <button
+              type="button"
+              className="primary-button"
+              aria-keyshortcuts="Space"
+              onClick={() => setShown(true)}
+            >
               Hiện đáp án
             </button>
           )}
+          <p className="field-hint study-shortcuts">
+            Phím tắt: Space hiện đáp án · 1 Chưa nhớ · 2 Nhớ.
+          </p>
         </article>
       )}
     </section>
