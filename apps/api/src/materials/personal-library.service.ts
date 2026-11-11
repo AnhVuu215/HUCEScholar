@@ -1,12 +1,6 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
-import { academicId } from '../academic/academic.service';
 import { Prisma, type annotations } from '../generated/prisma/client';
 import { DraftListDto } from './materials.dto';
 import { available, LibraryService } from './library.service';
@@ -20,6 +14,9 @@ import {
 } from './annotation-export';
 import { annotationFilter, decodeCursor, encodeCursor } from './annotation-query';
 import { noteItem } from './reading.service';
+import { parseId } from '../common/ids';
+import { lockKey } from '../common/locks';
+import { requireActiveUser } from '../common/active-user';
 /** Short text for a "cần xem lại" row: the owner's note, else the highlighted quote. */
 function excerpt(note: Pick<annotations, 'content' | 'anchor'>) {
   const anchor = note.anchor;
@@ -44,25 +41,18 @@ export class PersonalLibraryService {
     writing: boolean,
     action: (tx: Prisma.TransactionClient, owner: bigint) => Promise<T>,
   ) {
-    const owner = academicId(actor.id);
+    const owner = parseId(actor.id);
     return this.db.$transaction(
       async (tx) => {
-        if (writing)
-          await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`hucescholar:saved:${owner}`}, 0))`;
-        await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${owner} FOR SHARE`;
-        const user = await tx.users.findUnique({
-          where: { id: owner },
-          select: { status: true, verified_at: true },
-        });
-        if (!user || user.status !== 'ACTIVE' || !user.verified_at)
-          throw new ForbiddenException('Tài khoản không còn quyền truy cập.');
+        if (writing) await lockKey(tx, `saved:${owner}`);
+        await requireActiveUser(tx, owner, 'Tài khoản không còn quyền truy cập.');
         return action(tx, owner);
       },
       { isolationLevel: writing ? 'ReadCommitted' : 'RepeatableRead' },
     );
   }
   status(actor: Profile, rawId: string) {
-    const document_id = academicId(rawId);
+    const document_id = parseId(rawId);
     return this.run(actor, false, async (tx, user_id) => ({
       saved: !!(await tx.saved_documents.findUnique({
         where: { user_id_document_id: { user_id, document_id } },
@@ -70,7 +60,7 @@ export class PersonalLibraryService {
     }));
   }
   change(actor: Profile, rawId: string, saved: boolean) {
-    const document_id = academicId(rawId);
+    const document_id = parseId(rawId);
     return this.run(actor, true, async (tx, user_id) => {
       if (saved) {
         await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${document_id} FOR SHARE`;
@@ -162,12 +152,12 @@ export class PersonalLibraryService {
       const where: Prisma.annotationsWhereInput = {
         user_id,
         review_later: true,
-        ...(query.versionId ? { version_id: academicId(query.versionId) } : {}),
+        ...(query.versionId ? { version_id: parseId(query.versionId) } : {}),
         document_versions: {
           AND: [
             available(),
             ...(query.courseId
-              ? [{ version_courses: { some: { course_id: academicId(query.courseId) } } }]
+              ? [{ version_courses: { some: { course_id: parseId(query.courseId) } } }]
               : []),
           ],
         },
@@ -284,13 +274,13 @@ export class PersonalLibraryService {
             Number.isInteger(page) &&
             (page as number) >= 1 &&
             typeof id === 'string'
-              ? { version: academicId(version), page: page as number, id: academicId(id) }
+              ? { version: parseId(version), page: page as number, id: parseId(id) }
               : null,
           )
         : undefined;
       const limit = query.limit ?? 20;
-      const course = query.courseId ? academicId(query.courseId) : undefined;
-      const version = query.versionId ? academicId(query.versionId) : undefined;
+      const course = query.courseId ? parseId(query.courseId) : undefined;
+      const version = query.versionId ? parseId(query.versionId) : undefined;
       const versions = await this.annotatedVersions(tx, owner, course, version);
       if (!versions.length) return { items: [], nextCursor: null };
       const rows = await tx.$queryRaw<annotations[]>(Prisma.sql`
@@ -327,8 +317,8 @@ export class PersonalLibraryService {
   notebookExport(actor: Profile, query: NotebookExportDto) {
     return this.run(actor, false, async (tx, owner) => {
       const filter = annotationFilter(query);
-      const course = query.courseId ? academicId(query.courseId) : undefined;
-      const version = query.versionId ? academicId(query.versionId) : undefined;
+      const course = query.courseId ? parseId(query.courseId) : undefined;
+      const version = query.versionId ? parseId(query.versionId) : undefined;
       const versions = await this.annotatedVersions(tx, owner, course, version);
       const rows = versions.length
         ? await tx.$queryRaw<annotations[]>(Prisma.sql`

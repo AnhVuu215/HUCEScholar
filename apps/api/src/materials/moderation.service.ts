@@ -1,6 +1,4 @@
 import {
-  ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -9,12 +7,15 @@ import {
 import { once } from 'node:events';
 import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
-import { academicId } from '../academic/academic.service';
 import { Prisma } from '../generated/prisma/client';
 import { PrivateStore, MissingObjectError, fileMissing } from '../files/private-store';
 import { MaterialsService } from './materials.service';
 import { notify, type NotificationKind } from '../notifications/notify';
 import { ModerationDecisionDto, ModerationListDto } from './moderation.dto';
+import { parseId } from '../common/ids';
+import { lockCatalog } from '../common/locks';
+import { conflict } from '../common/errors';
+import { requireActiveUser } from '../common/active-user';
 
 const selection = {
   id: true,
@@ -71,7 +72,6 @@ const selection = {
   },
 } satisfies Prisma.publication_requestsSelect;
 type ReviewRow = Prisma.publication_requestsGetPayload<{ select: typeof selection }>;
-const fail = (code: string, message: string) => new ConflictException({ code, message });
 
 @Injectable()
 export class ModerationService {
@@ -172,26 +172,23 @@ export class ModerationService {
   }
   async get(rawId: string) {
     return this.db.$transaction(
-      async (tx) => ({ item: this.serialize(await this.read(tx, academicId(rawId))) }),
+      async (tx) => ({ item: this.serialize(await this.read(tx, parseId(rawId))) }),
       { isolationLevel: 'RepeatableRead' },
     );
   }
   async decide(actor: Profile, rawId: string, body: ModerationDecisionDto) {
     if (body.outcome !== 'APPROVED' && !body.reason.trim())
-      throw fail('REASON_REQUIRED', 'Nhập lý do yêu cầu sửa hoặc từ chối.');
+      throw conflict('REASON_REQUIRED', 'Nhập lý do yêu cầu sửa hoặc từ chối.');
     if (body.outcome === 'APPROVED' && body.rightsConfirmed !== true)
-      throw fail(
+      throw conflict(
         'RIGHTS_CONFIRMATION_REQUIRED',
         'Xác nhận đã kiểm tra nội dung và căn cứ quyền trước khi duyệt.',
       );
-    const id = academicId(rawId),
-      actorId = academicId(actor.id);
+    const id = parseId(rawId),
+      actorId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
-      const admin = await tx.users.findUnique({ where: { id: actorId } });
-      if (!admin || admin.role !== 'ADMIN' || admin.status !== 'ACTIVE' || !admin.verified_at)
-        throw new ForbiddenException('Không còn quyền kiểm duyệt.');
-      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(68467, 1)`;
+      await requireActiveUser(tx, actorId, 'Không còn quyền kiểm duyệt.', 'ADMIN');
+      await lockCatalog(tx);
       const target = await this.read(tx, id);
       const documentId = target.document_versions.document_id,
         versionId = target.document_versions.id;
@@ -206,7 +203,7 @@ export class ModerationService {
         row.status !== 'PENDING' ||
         !this.matches(row)
       )
-        throw fail(
+        throw conflict(
           'REQUEST_CHANGED',
           'Yêu cầu đã thay đổi. Tải trạng thái mới trước khi quyết định.',
         );
@@ -220,16 +217,16 @@ export class ModerationService {
           manager.status !== 'ACTIVE' ||
           !manager.verified_at
         )
-          throw fail('MANAGER_UNAVAILABLE', 'Chủ tài liệu không còn đủ điều kiện công bố.');
+          throw conflict('MANAGER_UNAVAILABLE', 'Chủ tài liệu không còn đủ điều kiện công bố.');
         if (
           !v.title.trim() ||
           !v.source_reference.trim() ||
           !v.rights_basis.trim() ||
           !v.version_courses.length
         )
-          throw fail('METADATA_REQUIRED', 'Thiếu thông tin, nguồn, căn cứ quyền hoặc môn.');
+          throw conflict('METADATA_REQUIRED', 'Thiếu thông tin, nguồn, căn cứ quyền hoặc môn.');
         if (v.rights_valid_until && v.rights_valid_until <= new Date())
-          throw fail('RIGHTS_EXPIRED', 'Căn cứ quyền đã hết hạn.');
+          throw conflict('RIGHTS_EXPIRED', 'Căn cứ quyền đã hết hạn.');
         await this.materials.checkCourses(
           tx,
           v.version_courses.map((c) => c.courses.id),
@@ -238,7 +235,7 @@ export class ModerationService {
           await tx.$queryRaw`SELECT id FROM hucescholar.files WHERE id=${v.files.id} FOR SHARE`;
         const file = v.files ? await tx.files.findUnique({ where: { id: v.files.id } }) : null;
         if (!file || file.scan_status !== 'SAFE')
-          throw fail('FILE_NOT_SAFE', 'PDF không còn an toàn để duyệt.');
+          throw conflict('FILE_NOT_SAFE', 'PDF không còn an toàn để duyệt.');
       }
       const now = new Date();
       await tx.publication_requests.update({
@@ -276,18 +273,18 @@ export class ModerationService {
   }
   async preview(rawId: string) {
     const file = await this.db.$transaction(async (tx) => {
-      const row = await this.read(tx, academicId(rawId));
+      const row = await this.read(tx, parseId(rawId));
       if (!this.matches(row))
-        throw fail(
+        throw conflict(
           'REQUEST_CHANGED',
           'Snapshot đã thay đổi; không xem file hiện tại như bản đã gửi.',
         );
-      if (!row.document_versions.files) throw fail('FILE_NOT_SAFE', 'Không có PDF an toàn.');
+      if (!row.document_versions.files) throw conflict('FILE_NOT_SAFE', 'Không có PDF an toàn.');
       const id = row.document_versions.files.id;
       await tx.$queryRaw`SELECT id FROM hucescholar.files WHERE id=${id} FOR SHARE`;
       const current = await tx.files.findUnique({ where: { id } });
       if (!current || current.scan_status !== 'SAFE')
-        throw fail('FILE_NOT_SAFE', 'Không có PDF an toàn.');
+        throw conflict('FILE_NOT_SAFE', 'Không có PDF an toàn.');
       return current;
     });
     try {

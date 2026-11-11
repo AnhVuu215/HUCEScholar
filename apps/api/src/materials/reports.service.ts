@@ -1,20 +1,16 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
-import { academicId } from '../academic/academic.service';
 import { Profile } from '../auth/auth.types';
 import { LibraryService } from './library.service';
 import { LifecycleService } from './lifecycle.service';
 import { notify } from '../notifications/notify';
 import { CreateReportDto, ReportActionDto, ReportListDto } from './reports.dto';
+import { parseId } from '../common/ids';
+import { lockKey } from '../common/locks';
+import { conflict } from '../common/errors';
+import { requireActiveUser } from '../common/active-user';
 
-const fail = (code: string, message: string) => new ConflictException({ code, message });
 const reviewing = 'Quản trị viên đang xem xét báo cáo.';
 const ownSelect = {
   id: true,
@@ -81,14 +77,14 @@ export class ReportsService {
 
   /** Anyone who can read the version may report it. Reports never change visibility. */
   async create(actor: Profile, rawVersionId: string, body: CreateReportDto) {
-    const versionId = academicId(rawVersionId),
-      actorId = academicId(actor.id);
+    const versionId = parseId(rawVersionId),
+      actorId = parseId(actor.id);
     return this.db.$transaction(async (tx) => {
       const readable = (await this.library.readableItems(tx, [versionId])).get(String(versionId));
       if (!readable)
         throw new NotFoundException('Học liệu không còn khả dụng hoặc bạn không có quyền đọc.');
       // Serialize one reporter's submissions for a version so a double submit cannot duplicate.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`report:${actorId}:${versionId}`}, 0)) IS NULL AS locked`;
+      await lockKey(tx, `report:${actorId}:${versionId}`);
       const duplicate = await tx.reports.findFirst({
         where: {
           reported_by: actorId,
@@ -99,7 +95,7 @@ export class ReportsService {
         select: { id: true },
       });
       if (duplicate)
-        throw fail(
+        throw conflict(
           'DUPLICATE_REPORT',
           'Bạn đã có báo cáo cùng loại đang chờ xử lý cho phiên bản này.',
         );
@@ -121,7 +117,7 @@ export class ReportsService {
   /** The caller's own reports for one version; never other people's reports. */
   async mine(actor: Profile, rawVersionId: string) {
     const rows = await this.db.reports.findMany({
-      where: { reported_by: academicId(actor.id), version_id: academicId(rawVersionId) },
+      where: { reported_by: parseId(actor.id), version_id: parseId(rawVersionId) },
       select: ownSelect,
       orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
       take: 20,
@@ -157,15 +153,14 @@ export class ReportsService {
   }
 
   async get(rawId: string) {
-    return this.db.$transaction(
-      async (tx) => ({ item: await this.detail(tx, academicId(rawId)) }),
-      { isolationLevel: 'RepeatableRead' },
-    );
+    return this.db.$transaction(async (tx) => ({ item: await this.detail(tx, parseId(rawId)) }), {
+      isolationLevel: 'RepeatableRead',
+    });
   }
 
   async act(actor: Profile, rawId: string, body: ReportActionDto) {
-    const id = academicId(rawId),
-      actorId = academicId(actor.id);
+    const id = parseId(rawId),
+      actorId = parseId(actor.id);
     if (body.action !== 'RESOLVE' && body.hide)
       throw new BadRequestException('Chỉ ẩn tài liệu khi đánh dấu báo cáo đã xử lý.');
     if (body.action !== 'TAKE_REVIEW' && !body.result)
@@ -173,20 +168,18 @@ export class ReportsService {
     if (body.hide && (!body.hideReason || !body.documentRevision))
       throw new BadRequestException('Ẩn tài liệu cần lý do và trạng thái tài liệu hiện tại.');
     return this.db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
-      const user = await tx.users.findUnique({ where: { id: actorId } });
-      if (!user || user.role !== 'ADMIN' || user.status !== 'ACTIVE' || !user.verified_at)
-        throw new ForbiddenException('Không còn quyền xử lý báo cáo.');
+      await requireActiveUser(tx, actorId, 'Không còn quyền xử lý báo cáo.', 'ADMIN');
       await tx.$queryRaw`SELECT id FROM hucescholar.reports WHERE id=${id} FOR UPDATE`;
       const report = await tx.reports.findUnique({ where: { id } });
       if (!report?.document_id) throw new NotFoundException('Không tìm thấy báo cáo.');
       if (report.revision !== body.revision)
-        throw fail('STALE_REVISION', 'Báo cáo đã thay đổi. Tải lại trước khi xử lý.');
+        throw conflict('STALE_REVISION', 'Báo cáo đã thay đổi. Tải lại trước khi xử lý.');
       const allowed =
         body.action === 'TAKE_REVIEW'
           ? report.status === 'OPEN'
           : ['OPEN', 'IN_REVIEW'].includes(report.status);
-      if (!allowed) throw fail('REPORT_CLOSED', 'Báo cáo đã được xử lý hoặc đang được xem xét.');
+      if (!allowed)
+        throw conflict('REPORT_CLOSED', 'Báo cáo đã được xử lý hoặc đang được xem xét.');
       const event = body.hide
         ? await this.lifecycle.hideWithin(
             tx,

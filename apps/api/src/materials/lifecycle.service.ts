@@ -1,17 +1,14 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
-import { academicId } from '../academic/academic.service';
 import { Prisma } from '../generated/prisma/client';
 import { MaterialsService } from './materials.service';
 import { DraftListDto } from './materials.dto';
 import { LifecycleListDto, MaterialVisibilityDto } from './lifecycle.dto';
-const fail = (code: string, message: string) => new ConflictException({ code, message });
+import { parseId } from '../common/ids';
+import { lockCatalog } from '../common/locks';
+import { conflict } from '../common/errors';
+import { requireActiveUser } from '../common/active-user';
 const docSelect = {
   id: true,
   visibility: true,
@@ -140,7 +137,7 @@ export class LifecycleService {
   }
   get(rawId: string, query: DraftListDto) {
     return this.db.$transaction(
-      async (tx) => ({ item: await this.detail(tx, academicId(rawId), query) }),
+      async (tx) => ({ item: await this.detail(tx, parseId(rawId), query) }),
       { isolationLevel: 'RepeatableRead' },
     );
   }
@@ -186,29 +183,32 @@ export class LifecycleService {
     rawId: string,
     revision: number,
   ) {
-    const actorId = academicId(actor.id),
-      id = academicId(rawId);
-    await tx.$queryRaw`SELECT id FROM hucescholar.users WHERE id=${actorId} FOR SHARE`;
-    const user = await tx.users.findUnique({ where: { id: actorId } });
-    if (!user || user.role !== 'ADMIN' || user.status !== 'ACTIVE' || !user.verified_at)
-      throw new ForbiddenException('Không còn quyền quản lý học liệu.');
-    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(68467,1)`;
+    const actorId = parseId(actor.id),
+      id = parseId(rawId);
+    await requireActiveUser(tx, actorId, 'Không còn quyền quản lý học liệu.', 'ADMIN');
+    await lockCatalog(tx);
     await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${id} FOR UPDATE`;
     const doc = await this.read(tx, id);
     if (doc.revision !== revision)
-      throw fail('STALE_REVISION', 'Tài liệu đã thay đổi. Tải trạng thái trước khi tiếp tục.');
+      throw conflict('STALE_REVISION', 'Tài liệu đã thay đổi. Tải trạng thái trước khi tiếp tục.');
     return { doc, id, actorId };
   }
   visibility(actor: Profile, rawId: string, body: MaterialVisibilityDto) {
     return this.db.$transaction(async (tx) => {
       const { doc, id, actorId } = await this.lock(tx, actor, rawId, body.revision);
       if (doc.visibility === body.visibility)
-        throw fail('VISIBILITY_UNCHANGED', 'Tài liệu đã ở trạng thái này. Tải lại để đối chiếu.');
+        throw conflict(
+          'VISIBILITY_UNCHANGED',
+          'Tài liệu đã ở trạng thái này. Tải lại để đối chiếu.',
+        );
       if (body.visibility === 'VISIBLE') {
         if (!body.resolved)
-          throw fail('RESOLUTION_REQUIRED', 'Xác nhận đã giải quyết lý do ẩn trước khi khôi phục.');
+          throw conflict(
+            'RESOLUTION_REQUIRED',
+            'Xác nhận đã giải quyết lý do ẩn trước khi khôi phục.',
+          );
         if (!doc.current_version_id)
-          throw fail('MATERIAL_UNAVAILABLE', 'Chưa có bản hiện hành đủ điều kiện khôi phục.');
+          throw conflict('MATERIAL_UNAVAILABLE', 'Chưa có bản hiện hành đủ điều kiện khôi phục.');
         await tx.$queryRaw`SELECT id FROM hucescholar.document_versions WHERE id=${doc.current_version_id} FOR SHARE`;
         const v = await tx.document_versions.findUnique({
           where: { id: doc.current_version_id },
@@ -228,7 +228,7 @@ export class LifecycleService {
             (!v.source_reference.trim() || !v.rights_basis.trim())) ||
           (v.rights_valid_until && v.rights_valid_until <= new Date())
         )
-          throw fail(
+          throw conflict(
             'MATERIAL_UNAVAILABLE',
             'Bản hiện hành phải đã duyệt, PDF an toàn và còn quyền sử dụng.',
           );
@@ -248,13 +248,13 @@ export class LifecycleService {
     revision: number,
     reason: string,
   ) {
-    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(68467,1)`;
+    await lockCatalog(tx);
     await tx.$queryRaw`SELECT id FROM hucescholar.documents WHERE id=${id} FOR UPDATE`;
     const doc = await this.read(tx, id);
     if (doc.revision !== revision)
-      throw fail('STALE_REVISION', 'Tài liệu đã thay đổi. Tải trạng thái trước khi tiếp tục.');
+      throw conflict('STALE_REVISION', 'Tài liệu đã thay đổi. Tải trạng thái trước khi tiếp tục.');
     if (doc.visibility === 'HIDDEN')
-      throw fail('VISIBILITY_UNCHANGED', 'Tài liệu đã bị ẩn. Tải lại để đối chiếu.');
+      throw conflict('VISIBILITY_UNCHANGED', 'Tài liệu đã bị ẩn. Tải lại để đối chiếu.');
     return this.applyVisibility(tx, actorId, id, doc.visibility, 'HIDDEN', reason);
   }
   private async applyVisibility(
