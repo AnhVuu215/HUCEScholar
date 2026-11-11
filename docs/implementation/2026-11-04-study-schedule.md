@@ -60,6 +60,4 @@ Chưa thử với người học thật, nên khoảng cách 1–60 ngày chưa 
 
 ## Chưa làm
 
-- Nhắc qua chuông thông báo hoặc email, theo quyết định ở trên.
-- Thống kê ôn tập theo thời gian: mốc này chỉ giữ trạng thái hiện tại của thẻ, không giữ lịch sử từng lần ôn.
-- Phím tắt riêng cho "Hiện đáp án", "Nhớ", "Chưa nhớ".
+Đã làm cả ba ở [STUDY-04](2026-11-11-study-review-history.md): nhắc bằng chuông hoặc email (mặc định tắt), lịch sử và thống kê ôn tập, phím tắt khi ôn.

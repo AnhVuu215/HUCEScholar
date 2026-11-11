@@ -29,7 +29,7 @@ export const colorNames: Record<string, string> = {
 };
 
 /** Normalizes newlines and drops control characters other than tab and newline. */
-function clean(value: string) {
+export function clean(value: string) {
   return value.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '');
 }
 /**

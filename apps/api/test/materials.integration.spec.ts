@@ -28,6 +28,7 @@ import { DOCX_MIME } from '../src/files/receive-docx';
 import { DocxTools, SourceConversionProcessor } from '../src/materials/source-conversion.processor';
 import { SourceConversionQueue } from '../src/files/source-conversion-queue';
 import { CalendarReminders } from '../src/calendar/calendar-reminders';
+import { dispatchStudyReminders, StudyReminders } from '../src/materials/study-reminders';
 import { Mailer } from '../src/auth/mailer';
 import { AUTH_CONFIG } from '../src/auth/auth.config';
 import { thumbKey } from '../src/notebooks/notebook-assets.service';
@@ -2613,6 +2614,246 @@ describe('private material drafts', () => {
       "UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=(SELECT document_id FROM hucescholar.document_versions WHERE id=$1)",
       [item.versionId],
     );
+  });
+  /** STUDY-04: a card made by `who` from a fresh highlight on page 1 of the version. */
+  async function studyCard(versionId: string, question: string, answer = 'Đáp án', who = 'author') {
+    const path = `/api/v1/library/versions/${versionId}`;
+    const highlight = (
+      await readingWrite(who, `${path}/highlights`, {
+        pageNumber: 1,
+        content: '',
+        color: '#FFF59D',
+        requestId: randomUUID(),
+        anchor: highlightAnchor(),
+      })
+    ).body.item;
+    const created = await readingWrite(who, `${path}/study-cards`, {
+      annotationId: highlight.id,
+      question,
+      answer,
+      requestId: randomUUID(),
+    });
+    expect(created.status).toBe(201);
+    return created.body.item as { id: string; revision: number };
+  }
+  it('STUDY-04: saved answers build private statistics that outlive the card', async () => {
+    const item = await readingFixture();
+    const review = (id: string, result: string, requestId: string = randomUUID()) =>
+      readingWrite('author', `/api/v1/study-cards/${id}/review`, { result, requestId });
+    const stats = async (who = 'author') =>
+      (await agents[who].get('/api/v1/study-cards/stats').expect(200)).body;
+    const before = await stats();
+    const otherBefore = await stats('other');
+    expect(before).toMatchObject({ streak: 0, reviewedToday: false });
+    expect(before.boxes.map((b: { box: number }) => b.box)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+
+    const one = await studyCard(item.versionId, 'Thống kê một');
+    const two = await studyCard(item.versionId, 'Thống kê hai');
+    const requestId = randomUUID();
+    expect((await review(one.id, 'KNOWN', requestId)).status).toBe(200);
+    // A retried answer is one review, not two.
+    expect((await review(one.id, 'KNOWN', requestId)).status).toBe(200);
+    expect((await review(two.id, 'AGAIN')).status).toBe(200);
+    let now = await stats();
+    expect(now.days.at(-1)).toEqual({ date: now.today, known: 1, again: 1 });
+    expect(now.totals).toEqual({
+      known: before.totals.known + 1,
+      again: before.totals.again + 1,
+    });
+    expect(now).toMatchObject({ streak: 1, reviewedToday: true });
+    expect(now.boxes.find((b: { box: number }) => b.box === 1).cards).toBeGreaterThanOrEqual(2);
+    expect(
+      (
+        await db.query(
+          'SELECT result, box_after FROM hucescholar.study_card_reviews WHERE card_id=$1',
+          [one.id],
+        )
+      ).rows,
+    ).toEqual([{ result: 'KNOWN', box_after: 1 }]);
+
+    // Earlier days: two in a row extend the run, a gap ends it, and the chart keeps 30 days.
+    await db.query(
+      `INSERT INTO hucescholar.study_card_reviews(user_id,card_id,reviewed_on,result,box_after)
+       VALUES ($1,$2,$3::date - 1,'KNOWN',2),($1,$2,$3::date - 2,'AGAIN',1),
+              ($1,$2,$3::date - 4,'KNOWN',1),($1,NULL,$3::date - 40,'KNOWN',1)`,
+      [users.author, one.id, now.today],
+    );
+    now = await stats();
+    expect(now.streak).toBe(3);
+    expect(now.from <= now.days[0].date).toBe(true);
+    expect(now.days.map((d: { date: string }) => d.date)).not.toContain(
+      new Date(Date.parse(`${now.today}T00:00:00Z`) - 40 * 86_400_000).toISOString().slice(0, 10),
+    );
+    expect(now.totals).toEqual({
+      known: before.totals.known + 4,
+      again: before.totals.again + 2,
+    });
+
+    // Deleting a card keeps what its reviews add up to, without its text.
+    expect(
+      (await readingWrite('author', `/api/v1/study-cards/${two.id}`, { revision: 1 }, 'delete'))
+        .status,
+    ).toBe(204);
+    expect((await stats()).totals).toEqual(now.totals);
+    expect(
+      (
+        await db.query(
+          'SELECT count(*)::int n FROM hucescholar.study_card_reviews WHERE user_id=$1 AND card_id IS NULL',
+          [users.author],
+        )
+      ).rows[0].n,
+    ).toBeGreaterThanOrEqual(2);
+
+    // Private: another reader's statistics do not move.
+    expect((await stats('other')).totals).toEqual(otherBefore.totals);
+    await expect(
+      db.query(
+        "INSERT INTO hucescholar.study_card_reviews(user_id,reviewed_on,result,box_after) VALUES ($1,current_date,'MAYBE',1)",
+        [users.author],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+    await request(app.getHttpServer()).get('/api/v1/study-cards/stats').expect(401);
+  });
+  it('STUDY-04: exports the readable cards in the filter as escaped Markdown or plain text', async () => {
+    const item = await readingFixture();
+    await studyCard(item.versionId, '**Đậm** <b>thẻ</b> [link](http://x.test)', 'Dòng 1\nDòng 2');
+    const url = (format: string) =>
+      `/api/v1/study-cards/export?format=${format}&versionId=${item.versionId}`;
+    const md = await agents.author.get(url('markdown')).expect(200);
+    expect(md.headers['content-type']).toContain('text/markdown');
+    expect(md.headers['content-disposition']).toBe('attachment; filename="the-on-tap.md"');
+    expect(md.headers['cache-control']).toBe('no-store');
+    expect(md.text).toContain('# Thẻ ôn tập');
+    expect(md.text).toContain('Bộ lọc: tài liệu');
+    expect(md.text).toContain('\\*\\*Đậm\\*\\* \\<b\\>thẻ\\</b\\>');
+    expect(md.text).not.toMatch(/<b>|\]\(http/);
+    expect(md.text).toContain('Dòng 1\\\nDòng 2');
+    expect(md.text).toContain('thẻ mới');
+    const text = await agents.author.get(url('text')).expect(200);
+    expect(text.headers['content-type']).toContain('text/plain');
+    expect(text.text).toContain('THẺ ÔN TẬP');
+    expect(text.text).toContain('Hỏi: **Đậm** <b>thẻ</b>');
+    // Only the owner's cards, and only while the document is readable.
+    expect((await agents.other.get(url('text')).expect(200)).text).not.toContain('Đậm');
+    await db.query(
+      "UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id=(SELECT document_id FROM hucescholar.document_versions WHERE id=$1)",
+      [item.versionId],
+    );
+    try {
+      const hidden = (await agents.author.get(url('text')).expect(200)).text;
+      expect(hidden).not.toContain('Đậm');
+      expect(hidden).toContain('Bộ lọc: một tài liệu');
+    } finally {
+      await db.query(
+        "UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id=(SELECT document_id FROM hucescholar.document_versions WHERE id=$1)",
+        [item.versionId],
+      );
+    }
+    await agents.author.get('/api/v1/study-cards/export?format=pdf').expect(400);
+    await agents.author.get('/api/v1/study-cards/export').expect(400);
+    await request(app.getHttpServer()).get(url('text')).expect(401);
+  });
+  it('STUDY-04: owners who ask get one morning notice about due cards, by bell or email', async () => {
+    const item = await readingFixture();
+    await studyCard(item.versionId, 'Thẻ nhắc buổi sáng');
+    expect(app.get(StudyReminders)).toBeInstanceOf(StudyReminders);
+    const sent: { to: string; subject: string; text: string }[] = [];
+    const mailer = {
+      enabled: true,
+      send: async (mail: (typeof sent)[0]) => void sent.push(mail),
+    } as unknown as Mailer;
+    const run = (at: Date) =>
+      dispatchStudyReminders(app.get(DatabaseService), mailer, 'http://127.0.0.1:3100', at);
+    const email = `${prefix}-author@example.test`;
+    const mine = () => sent.filter((mail) => mail.to === email);
+    const notices = async () =>
+      (
+        await db.query(
+          "SELECT event_key, title, detail FROM hucescholar.notifications WHERE user_id=$1 AND kind='STUDY_CARDS_DUE' ORDER BY id",
+          [users.author],
+        )
+      ).rows;
+    const today = (await agents.author.get('/api/v1/study-cards/stats').expect(200)).body.today;
+    const at = (day: string, hour: number) =>
+      new Date(Date.parse(`${day}T00:00:00+07:00`) + hour * 3_600_000);
+    const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const preferences = async (studyReminder: unknown) => {
+      const current = (await agents.author.get('/api/v1/account/preferences').expect(200)).body;
+      return readingWrite(
+        'author',
+        '/api/v1/account/preferences',
+        { preferences: { ...current.preferences, studyReminder }, revision: current.revision },
+        'put',
+      );
+    };
+    try {
+      // Off by default: nothing, even with cards due.
+      expect(
+        (await agents.author.get('/api/v1/account/preferences').expect(200)).body.preferences,
+      ).toMatchObject({ studyReminder: 'OFF' });
+      await run(at(today, 8));
+      expect(await notices()).toEqual([]);
+      expect((await preferences('LOUD')).status).toBe(400);
+      const saved = await preferences('EMAIL');
+      expect(saved.status).toBe(200);
+      expect(saved.body.preferences.studyReminder).toBe('EMAIL');
+
+      // Not before 07:00 Vietnam time; then once, with the count of readable due cards.
+      await run(at(today, 6.5));
+      expect(await notices()).toEqual([]);
+      await run(at(today, 7.25));
+      await run(at(today, 9));
+      const due = (await agents.author.get('/api/v1/study-cards/schedule').expect(200)).body.dueNow;
+      expect(await notices()).toEqual([
+        {
+          event_key: `studydue:${today.replace(/-/g, '')}`,
+          title: 'Thẻ ôn tập đến hạn',
+          detail: String(due),
+        },
+      ]);
+      expect(mine()).toHaveLength(1);
+      expect(mine()[0].subject).toBe(`Hôm nay có ${due} thẻ ôn tập đến hạn`);
+      expect(mine()[0].text).toContain('http://127.0.0.1:3100/workspace/study?on=due');
+      const listed = (await agents.author.get('/api/v1/notifications').expect(200)).body.items;
+      expect(listed.find((n: { kind: string }) => n.kind === 'STUDY_CARDS_DUE')).toMatchObject({
+        documentId: null,
+        versionId: null,
+        calendarItemId: null,
+      });
+
+      // Bell only: the next morning's notice comes without a mail.
+      expect((await preferences('BELL')).status).toBe(200);
+      await run(at(tomorrow, 8));
+      expect((await notices()).map((n: { event_key: string }) => n.event_key)).toEqual([
+        `studydue:${today.replace(/-/g, '')}`,
+        `studydue:${tomorrow.replace(/-/g, '')}`,
+      ]);
+      expect(mine()).toHaveLength(1);
+
+      // Cards of a document the owner cannot read do not count: no due cards, no notice.
+      await db.query(
+        "UPDATE hucescholar.documents SET visibility='HIDDEN' WHERE id IN (SELECT DISTINCT v.document_id FROM hucescholar.study_cards c JOIN hucescholar.document_versions v ON v.id=c.version_id WHERE c.user_id=$1)",
+        [users.author],
+      );
+      const later = at(tomorrow, 48);
+      await run(later);
+      expect(await notices()).toHaveLength(2);
+    } finally {
+      await db.query(
+        "UPDATE hucescholar.documents SET visibility='VISIBLE' WHERE id IN (SELECT DISTINCT v.document_id FROM hucescholar.study_cards c JOIN hucescholar.document_versions v ON v.id=c.version_id WHERE c.user_id=$1)",
+        [users.author],
+      );
+      await db.query(
+        "UPDATE hucescholar.user_preferences SET study_reminder='OFF' WHERE user_id=$1",
+        [users.author],
+      );
+      await db.query(
+        "DELETE FROM hucescholar.notifications WHERE user_id=$1 AND kind='STUDY_CARDS_DUE'",
+        [users.author],
+      );
+    }
   });
   it('STUDY-02: practice and the card list filter by course or document, from readable cards only', async () => {
     const first = await readingFixture();

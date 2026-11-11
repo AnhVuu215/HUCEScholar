@@ -30,12 +30,19 @@ export const readerZooms = {
   '125': '125%',
   '150': '150%',
 } as const;
+export const studyReminders = {
+  OFF: 'Không nhắc',
+  BELL: 'Chuông thông báo',
+  EMAIL: 'Chuông và email',
+} as const;
 export interface ReaderPreferences {
   highlightColor: HighlightColor;
   defaultZoom: keyof typeof readerZooms;
   annotationPanelOpen: boolean;
   /** CAL-07: whether calendar reminders may be emailed at all. */
   reminderEmail: boolean;
+  /** STUDY-04: the morning notice about due study cards. */
+  studyReminder: keyof typeof studyReminders;
 }
 export interface PreferencesSnapshot {
   userId: string;
@@ -47,6 +54,7 @@ export const defaultReaderPreferences: ReaderPreferences = {
   defaultZoom: 'fit-width',
   annotationPanelOpen: false,
   reminderEmail: true,
+  studyReminder: 'OFF',
 };
 export function isReaderPreferences(value: unknown): value is ReaderPreferences {
   if (!value || typeof value !== 'object') return false;
@@ -56,7 +64,9 @@ export function isReaderPreferences(value: unknown): value is ReaderPreferences 
     typeof item.defaultZoom === 'string' &&
     Object.hasOwn(readerZooms, item.defaultZoom) &&
     typeof item.annotationPanelOpen === 'boolean' &&
-    typeof item.reminderEmail === 'boolean'
+    typeof item.reminderEmail === 'boolean' &&
+    typeof item.studyReminder === 'string' &&
+    Object.hasOwn(studyReminders, item.studyReminder)
   );
 }
 async function preferencesResponse(

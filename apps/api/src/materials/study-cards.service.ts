@@ -12,18 +12,24 @@ import { available, LibraryService } from './library.service';
 import {
   CreateStudyCardDto,
   ReviewStudyCardDto,
+  StudyCardExportDto,
   StudyCardListDto,
   StudyCardRevisionDto,
   StudyCardScopeDto,
   StudyScheduleDto,
   UpdateStudyCardDto,
 } from './study-cards.dto';
-import { addDays, dayText, dayValue, localDay, nextReview } from './study-schedule';
+import { addDays, dayText, dayValue, localDay, MAX_REVIEW_BOX, nextReview } from './study-schedule';
+import { exportStudyCards, MAX_EXPORT_CARDS, type ExportCardDocument } from './study-card-export';
 
 /** A practice round loads at most this many cards, newest first. */
 export const MAX_PRACTICE_CARDS = 200;
 /** The calendar's month grid spans six weeks; this leaves room without an unbounded scan. */
 const MAX_SCHEDULE_DAYS = 92;
+/** STUDY-04: the review chart covers the last 30 days, today included. */
+export const STATS_DAYS = 30;
+/** Consecutive review days are counted back at most this far. */
+const MAX_STREAK_DAYS = 400;
 
 const stale = () =>
   new ConflictException({
@@ -275,8 +281,145 @@ export class StudyCardsService {
           last_review_request: body.requestId,
         },
       });
+      // STUDY-04: history for the owner's own statistics; a retry returned above, so once only.
+      await tx.study_card_reviews.create({
+        data: {
+          user_id: card.user_id,
+          card_id: card.id,
+          reviewed_on: dayValue(today),
+          result: body.result,
+          box_after: next.box,
+        },
+      });
       return { item: cardItem(updated) };
     });
+  }
+  /**
+   * STUDY-04: the owner's review history: answers per day over the last STATS_DAYS days, totals
+   * since the first review, the run of consecutive review days, and where the readable cards
+   * stand in the schedule. History covers every review, including those of deleted cards.
+   */
+  async stats(actor: Profile) {
+    const user_id = academicId(actor.id);
+    const today = localDay(new Date());
+    const from = addDays(today, 1 - STATS_DAYS);
+    const { readable } = this.scope(actor, {});
+    return this.db.$transaction(
+      async (tx) => {
+        const recent = await tx.study_card_reviews.groupBy({
+          by: ['reviewed_on', 'result'],
+          where: { user_id, reviewed_on: { gte: dayValue(from) } },
+          orderBy: { reviewed_on: 'asc' },
+          _count: { _all: true },
+        });
+        const totals = await tx.study_card_reviews.groupBy({
+          by: ['result'],
+          where: { user_id },
+          _count: { _all: true },
+        });
+        const reviewDays = await tx.study_card_reviews.findMany({
+          where: { user_id, reviewed_on: { gte: dayValue(addDays(today, -MAX_STREAK_DAYS)) } },
+          distinct: ['reviewed_on'],
+          orderBy: { reviewed_on: 'desc' },
+          select: { reviewed_on: true },
+        });
+        const boxes = await tx.study_cards.groupBy({
+          by: ['review_box'],
+          where: readable,
+          _count: { _all: true },
+        });
+        const days = new Map<string, { date: string; known: number; again: number }>();
+        for (const row of recent) {
+          const date = dayText(row.reviewed_on);
+          const entry = days.get(date) ?? { date, known: 0, again: 0 };
+          entry[row.result === 'KNOWN' ? 'known' : 'again'] += row._count._all;
+          days.set(date, entry);
+        }
+        const total = (result: string) =>
+          totals.find((row) => row.result === result)?._count._all ?? 0;
+        // A run still counts until the end of the day after its last review.
+        const seen = new Set(reviewDays.map((row) => dayText(row.reviewed_on)));
+        let cursor = seen.has(today) ? today : addDays(today, -1);
+        let streak = 0;
+        while (seen.has(cursor)) {
+          streak++;
+          cursor = addDays(cursor, -1);
+        }
+        const perBox = new Map(boxes.map((row) => [row.review_box, row._count._all]));
+        return {
+          today,
+          from,
+          days: [...days.values()],
+          totals: { known: total('KNOWN'), again: total('AGAIN') },
+          streak,
+          reviewedToday: seen.has(today),
+          boxes: Array.from({ length: MAX_REVIEW_BOX + 1 }, (_, box) => ({
+            box,
+            cards: perBox.get(box) ?? 0,
+          })),
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  /** STUDY-04: the readable cards in the filter as one file, grouped by document. */
+  async export(actor: Profile, query: StudyCardExportDto) {
+    const { readable } = this.scope(actor, query);
+    return this.db.$transaction(
+      async (tx) => {
+        const total = await tx.study_cards.count({ where: readable });
+        if (total > MAX_EXPORT_CARDS)
+          throw new ConflictException({
+            code: 'EXPORT_TOO_LARGE',
+            message: `Có hơn ${MAX_EXPORT_CARDS} thẻ. Chọn môn hoặc tài liệu để xuất từng phần.`,
+          });
+        const rows = await tx.study_cards.findMany({
+          where: readable,
+          include: {
+            document_versions: { select: { title: true, authors: true, version_no: true } },
+          },
+          orderBy: [{ version_id: 'asc' }, { page_number: 'asc' }, { id: 'asc' }],
+        });
+        const documents = new Map<bigint, ExportCardDocument>();
+        for (const row of rows) {
+          const doc = documents.get(row.version_id) ?? {
+            title: row.document_versions.title,
+            authors: row.document_versions.authors,
+            versionNo: row.document_versions.version_no,
+            cards: [],
+          };
+          doc.cards.push({
+            question: row.question,
+            answer: row.answer,
+            quote: row.quote,
+            pageNumber: row.page_number,
+            reviewBox: row.review_box,
+            dueOn: dayText(row.due_on),
+          });
+          documents.set(row.version_id, doc);
+        }
+        const filters: string[] = [];
+        if (query.courseId) {
+          const course = await tx.courses.findUnique({
+            where: { id: academicId(query.courseId) },
+            select: { code: true, name: true },
+          });
+          if (course) filters.push(`môn ${course.code} · ${course.name}`);
+        }
+        if (query.versionId) {
+          const versionId = academicId(query.versionId);
+          // A version the owner cannot read is not named, even in their own file.
+          const doc = documents.get(versionId);
+          filters.push(doc ? `tài liệu ${doc.title}` : 'một tài liệu');
+        }
+        return exportStudyCards(
+          [...documents.values()].sort((a, b) => a.title.localeCompare(b.title, 'vi')),
+          { filters: filters.join('; ') || 'mọi thẻ', exportedAt: new Date() },
+          query.format,
+        );
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
   /** STUDY-03: "Ôn lại từ đầu": the card is due today as if it had never been reviewed. */
   async resetSchedule(actor: Profile, rawId: string) {

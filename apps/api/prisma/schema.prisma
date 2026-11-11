@@ -482,6 +482,7 @@ model users {
   reading_list_follows reading_list_follows[]
   reading_marks reading_marks[]
   study_cards study_cards[]
+  study_card_reviews study_card_reviews[]
   calendar_items calendar_items[]
   notebooks notebooks[]
   notebook_assets notebook_assets[]
@@ -533,6 +534,7 @@ model user_preferences {
   default_zoom String @default("fit-width") @db.VarChar(16)
   annotation_panel_open Boolean @default(false)
   reminder_email Boolean @default(true)
+  study_reminder String @default("OFF") @db.VarChar(8)
   revision Int @default(1)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -612,11 +614,28 @@ model study_cards {
   users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document_versions document_versions @relation(fields: [version_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   annotations annotations? @relation(fields: [annotation_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  study_card_reviews study_card_reviews[]
   @@unique([user_id, request_id], map: "ux_study_card_request")
   @@index([user_id, due_on], map: "ix_study_card_due")
   @@index([user_id, created_at(sort: Desc), id(sort: Desc)], map: "ix_study_card_owner")
   @@index([user_id, version_id], map: "ix_study_card_version")
   @@index([annotation_id], map: "ix_study_card_annotation")
+  @@schema("hucescholar")
+}
+
+/// STUDY-04: one row per saved answer in a scheduled review; kept after the card is deleted.
+model study_card_reviews {
+  id BigInt @id @default(autoincrement())
+  user_id BigInt
+  card_id BigInt?
+  reviewed_on DateTime @db.Date
+  result String @db.VarChar(8)
+  box_after Int @db.SmallInt
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  study_cards study_cards? @relation(fields: [card_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  @@index([user_id, reviewed_on], map: "ix_study_review_owner")
+  @@index([card_id], map: "ix_study_review_card")
   @@schema("hucescholar")
 }
 

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   deleteStudyCard,
+  exportStudyCards,
   formatStudyDay,
   MAX_REVIEW_BOX,
   resetStudySchedule,
@@ -11,14 +12,18 @@ import {
   studyCardFilters,
   studyCards,
   studySchedule,
+  studyStats,
   updateStudyCard,
   type StudyCard,
   type StudyCardFilters,
   type StudyCardList,
   type StudyCardScope,
   type StudySchedule,
+  type StudyStats,
+  type StudyTally,
 } from '../../lib/study-cards';
 import { SelectField } from '../ui/select-field';
+import { NotesExport } from '../library/notebook-parts';
 import { StudyPractice } from './study-practice';
 import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
 
@@ -206,6 +211,97 @@ function Card({
   );
 }
 
+const boxLabel = (box: number) => (box === 0 ? 'Thẻ mới' : `Hộp ${box}`);
+/** "Nhớ" share of one day's answers, rounded for the table. */
+const share = (day: StudyTally) => Math.round((100 * day.known) / (day.known + day.again));
+
+/**
+ * STUDY-04: what the saved answers of scheduled reviews add up to. Covers every card the owner
+ * has reviewed, deleted ones included; free practice rounds are not counted.
+ */
+function StudyHistory({ attempt }: { attempt: number }) {
+  const [stats, setStats] = useState<StudyStats | null>(null);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    studyStats(controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setStats(result);
+        setError('');
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) setError(studyCardError(failure));
+      });
+    return () => controller.abort();
+  }, [attempt, retry]);
+  const answers = stats ? stats.totals.known + stats.totals.again : 0;
+  return (
+    <details className="study-history">
+      <summary>Thống kê ôn tập</summary>
+      {error ? (
+        <div>
+          <p role="alert" className="form-error">
+            {error}
+          </p>
+          <button className="text-button" onClick={() => setRetry((v) => v + 1)}>
+            Tải lại thống kê
+          </button>
+        </div>
+      ) : !stats ? (
+        <p role="status">Đang tải thống kê…</p>
+      ) : (
+        <>
+          <p>
+            {stats.streak > 0
+              ? `Chuỗi ôn ${stats.streak} ngày liên tiếp.${stats.reviewedToday ? '' : ' Ôn hôm nay để giữ chuỗi.'}`
+              : 'Chưa có chuỗi ngày ôn. Mỗi ngày ôn thẻ đến hạn sẽ nối dài chuỗi.'}{' '}
+            {answers > 0
+              ? `Đã lưu ${answers} câu trả lời: nhớ ${stats.totals.known}, chưa nhớ ${stats.totals.again}.`
+              : 'Chưa lưu câu trả lời nào.'}
+          </p>
+          <p className="field-hint">
+            Thẻ theo lịch:{' '}
+            {stats.boxes
+              .filter((b) => b.cards > 0)
+              .map((b) => `${boxLabel(b.box)}: ${b.cards}`)
+              .join(' · ') || 'chưa có thẻ'}
+            . Chỉ lượt “Ôn thẻ đến hạn” được tính; lượt luyện tự do không lưu kết quả.
+          </p>
+          {stats.days.length === 0 ? (
+            <p className="field-hint">Chưa có lượt ôn nào trong 30 ngày qua.</p>
+          ) : (
+            <table className="study-history-table">
+              <caption className="sr-only">Kết quả ôn từng ngày, 30 ngày gần nhất</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Ngày</th>
+                  <th scope="col">Nhớ</th>
+                  <th scope="col">Chưa nhớ</th>
+                  <th scope="col">Tỉ lệ nhớ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...stats.days].reverse().map((day) => (
+                  <tr key={day.date}>
+                    <th scope="row">
+                      {day.date === stats.today ? 'Hôm nay' : formatStudyDay(day.date)}
+                    </th>
+                    <td>{day.known}</td>
+                    <td>{day.again}</td>
+                    <td>{share(day)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+    </details>
+  );
+}
+
 export function StudyDeck({ startDue = false }: { startDue?: boolean }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<StudyCardList | null>(null);
@@ -342,6 +438,15 @@ export function StudyDeck({ startDue = false }: { startDue?: boolean }) {
                 Luyện {data.total} thẻ{filtered ? ' đang lọc' : ''}
               </button>
             </div>
+          )}
+          <StudyHistory attempt={attempt} />
+          {data.total > 0 && (
+            <NotesExport
+              label={filtered ? 'Tải thẻ đang lọc' : 'Tải thẻ ôn tập'}
+              noun="thẻ ôn tập"
+              tooLarge="Quá nhiều thẻ để xuất một lần. Chọn môn hoặc tài liệu để xuất từng phần."
+              download={(format) => exportStudyCards(scope, format)}
+            />
           )}
           {data.total > 0 && schedule && dueNow === 0 && (
             <p className="field-hint">
