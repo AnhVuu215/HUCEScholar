@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, IsString, Matches } from 'class-validator';
-import { DraftListDto } from './materials.dto';
+import { DraftListDto } from '../drafts/materials.dto';
 export class PersonalListDto extends DraftListDto {
   override limit = 12;
 }

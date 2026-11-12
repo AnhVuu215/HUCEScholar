@@ -11,7 +11,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { DraftListDto } from './materials.dto';
+import { DraftListDto } from '../drafts/materials.dto';
 
 export const reportCategories = [
   'FILE_ERROR',

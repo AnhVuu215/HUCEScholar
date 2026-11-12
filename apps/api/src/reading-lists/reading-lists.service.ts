@@ -8,7 +8,7 @@ import { DatabaseService } from '../database/database.module';
 import { Prisma } from '../generated/prisma/client';
 import { Profile } from '../auth/auth.types';
 import { formatDate, parseDate } from '../calendar/calendar-repeat';
-import { available } from '../materials/library.service';
+import { available } from '../library/library.service';
 import { notify } from '../notifications/notify';
 import {
   FollowReadingListsDto,

@@ -9,7 +9,7 @@ import { DatabaseService } from '../database/database.module';
 import { Profile } from '../auth/auth.types';
 import { Prisma } from '../generated/prisma/client';
 import { PrivateStore, MissingObjectError, fileMissing } from '../files/private-store';
-import { MaterialsService } from './materials.service';
+import { MaterialsService } from '../drafts/materials.service';
 import { notify, type NotificationKind } from '../notifications/notify';
 import { ModerationDecisionDto, ModerationListDto } from './moderation.dto';
 import { parseId } from '../common/ids';

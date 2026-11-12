@@ -1,4 +1,4 @@
-import { addDays, localDay, MAX_REVIEW_BOX, nextReview } from '../src/materials/study-schedule';
+import { addDays, localDay, MAX_REVIEW_BOX, nextReview } from '../src/study/study-schedule';
 
 describe('study card schedule', () => {
   const today = '2026-11-04';

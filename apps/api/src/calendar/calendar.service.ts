@@ -9,7 +9,7 @@ import { AUTH_CONFIG, AuthConfiguration } from '../auth/auth.config';
 import { DatabaseService } from '../database/database.module';
 import { Prisma, type calendar_items } from '../generated/prisma/client';
 import { Profile } from '../auth/auth.types';
-import { available } from '../materials/library.service';
+import { available } from '../library/library.service';
 import { calendarIcs, type IcsDeadline } from './calendar-ics';
 import { importRequestId, parseIcs } from './calendar-ics-import';
 import { dueInstant, shown } from '../reading-lists/reading-lists.service';

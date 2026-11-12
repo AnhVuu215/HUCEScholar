@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseService } from '../database/database.module';
-import { foldVietnamese } from '../materials/search-fold';
+import { foldVietnamese } from '../library/search-fold';
 import { FILE_CONFIG, FileConfiguration } from './files.config';
 import { extractPdfText, pagesFromText } from './pdf-text';
 import { PrivateStore } from './private-store';

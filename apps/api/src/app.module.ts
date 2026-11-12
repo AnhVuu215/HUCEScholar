@@ -4,7 +4,12 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { AcademicModule } from './academic/academic.module';
-import { MaterialsModule } from './materials/materials.module';
+import { DraftsModule } from './drafts/drafts.module';
+import { LibraryModule } from './library/library.module';
+import { ModerationModule } from './moderation/moderation.module';
+import { ReportsModule } from './reports/reports.module';
+import { ReadingModule } from './reading/reading.module';
+import { StudyModule } from './study/study.module';
 import { AccountModule } from './account/account.module';
 import { OpsModule } from './ops/ops.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -18,7 +23,12 @@ import { NotebooksModule } from './notebooks/notebooks.module';
     AuthModule,
     UsersModule,
     AcademicModule,
-    MaterialsModule,
+    DraftsModule,
+    LibraryModule,
+    ModerationModule,
+    ReportsModule,
+    ReadingModule,
+    StudyModule,
     AccountModule,
     OpsModule,
     NotificationsModule,
