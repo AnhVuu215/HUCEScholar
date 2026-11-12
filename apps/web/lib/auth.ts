@@ -62,6 +62,29 @@ export async function csrfToken(): Promise<string> {
   return body.csrfToken;
 }
 
+export type WriteMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+/**
+ * A JSON write with the CSRF token the API requires on every mutation. `body` is sent as JSON;
+ * leave it out for a request without a body. Uploads and non-JSON bodies call apiRequest.
+ */
+export async function apiWrite(
+  path: string,
+  method: WriteMethod,
+  body?: unknown,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<Response> {
+  const token = await csrfToken();
+  return apiRequest(
+    path,
+    {
+      method,
+      signal: options.signal,
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    options.timeoutMs,
+  );
+}
 export async function readProfile(response: Response): Promise<Profile> {
   const body: unknown = await response.json();
   if (
@@ -99,10 +122,5 @@ export function landingPath(user: Profile): string {
   return user.mustChangePassword ? passwordChangePath : workspacePath(user.role);
 }
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  const token = await csrfToken();
-  await apiRequest('/auth/change-password', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify({ currentPassword, newPassword }),
-  });
+  await apiWrite('/auth/change-password', 'POST', { currentPassword, newPassword });
 }

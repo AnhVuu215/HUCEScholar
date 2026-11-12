@@ -26,6 +26,7 @@ import { SelectField } from '../ui/select-field';
 import { NotesExport } from '../library/notebook-parts';
 import { StudyPractice } from './study-practice';
 import { useNotesLeaveGuard } from '../library/use-notes-leave-guard';
+import { useApiResource } from '../../lib/use-api-resource';
 
 function nextReviewLabel(card: StudyCard, today: string) {
   const box = card.reviewBox ? ` · Hộp ${card.reviewBox}/${MAX_REVIEW_BOX}` : ' · Thẻ mới';
@@ -220,22 +221,12 @@ const share = (day: StudyTally) => Math.round((100 * day.known) / (day.known + d
  * has reviewed, deleted ones included; free practice rounds are not counted.
  */
 function StudyHistory({ attempt }: { attempt: number }) {
-  const [stats, setStats] = useState<StudyStats | null>(null);
-  const [error, setError] = useState('');
-  const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    studyStats(controller.signal)
-      .then((result) => {
-        if (controller.signal.aborted) return;
-        setStats(result);
-        setError('');
-      })
-      .catch((failure) => {
-        if (!controller.signal.aborted) setError(studyCardError(failure));
-      });
-    return () => controller.abort();
-  }, [attempt, retry]);
+  // `attempt` changes after a review round, so the figures include the answers just saved.
+  const {
+    data: stats,
+    error,
+    reload,
+  } = useApiResource<StudyStats>(`stats:${attempt}`, studyStats, studyCardError);
   const answers = stats ? stats.totals.known + stats.totals.again : 0;
   return (
     <details className="study-history">
@@ -245,7 +236,7 @@ function StudyHistory({ attempt }: { attempt: number }) {
           <p role="alert" className="form-error">
             {error}
           </p>
-          <button className="text-button" onClick={() => setRetry((v) => v + 1)}>
+          <button className="text-button" onClick={reload}>
             Tải lại thống kê
           </button>
         </div>

@@ -1,4 +1,4 @@
-import { ApiError, apiRequest, csrfToken } from './auth';
+import { ApiError, apiRequest, csrfToken, apiWrite, type WriteMethod } from './auth';
 import { isNumericId, isRecord } from './guards';
 import {
   COVERS,
@@ -128,18 +128,8 @@ function asset(body: unknown): UploadedAsset {
   throw new Error('Invalid image.');
 }
 
-async function send(path: string, method: string, body?: object, timeoutMs?: number) {
-  const token = await csrfToken();
-  return apiRequest(
-    path,
-    {
-      method,
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: body ? JSON.stringify(body) : undefined,
-    },
-    timeoutMs,
-  );
-}
+const send = (path: string, method: WriteMethod, body?: object, timeoutMs?: number) =>
+  apiWrite(path, method, body, { timeoutMs });
 
 export async function listNotebooks(
   params: { q?: string; courseId?: string; trash?: boolean },

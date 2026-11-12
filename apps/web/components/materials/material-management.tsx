@@ -1,13 +1,13 @@
 'use client';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import {
   draftList,
   fileFailedLabel,
   materialError,
   materialTypes,
   publicationLabel,
-  type DraftList,
 } from '../../lib/materials';
+import { useApiResource } from '../../lib/use-api-resource';
 import { MaterialEditor } from './material-editor';
 export function MaterialManagement({
   initialDraft,
@@ -18,38 +18,25 @@ export function MaterialManagement({
   const [query, setQuery] = useState({ search: '', page: 1, reviewStatus: '' });
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
-  const [data, setData] = useState<DraftList | null>(null);
-  const [error, setError] = useState('');
-  const [attempt, setAttempt] = useState(0);
   const [editor, setEditor] = useState<{ id?: string } | null>(
     initialDraft ? { id: initialDraft } : null,
   );
   const [notice, setNotice] = useState('');
   const create = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    void draftList(
-      new URLSearchParams({
-        search: query.search,
-        page: String(query.page),
-        limit: '20',
-        ...(query.reviewStatus ? { reviewStatus: query.reviewStatus } : {}),
-      }),
-      controller.signal,
-    )
-      .then((result) => {
-        if (!controller.signal.aborted) setData(result);
-      })
-      .catch((failure) => {
-        if (!controller.signal.aborted) setError(materialError(failure));
-      });
-    return () => controller.abort();
-  }, [query, attempt]);
-  function reload() {
-    setError('');
-    setData(null);
-    setAttempt((v) => v + 1);
-  }
+  const { data, error, reload, setData } = useApiResource(
+    JSON.stringify(query),
+    (signal) =>
+      draftList(
+        new URLSearchParams({
+          search: query.search,
+          page: String(query.page),
+          limit: '20',
+          ...(query.reviewStatus ? { reviewStatus: query.reviewStatus } : {}),
+        }),
+        signal,
+      ),
+    materialError,
+  );
   function close() {
     setEditor(null);
     // Drop the notification's ?draft= so a reload does not reopen the editor.
@@ -60,9 +47,9 @@ export function MaterialManagement({
   }
   function filter(event: FormEvent) {
     event.preventDefault();
-    setError('');
-    setData(null);
     setQuery({ search: search.trim(), page: 1, reviewStatus: status });
+    // Searching again for the same thing still refreshes the list.
+    reload();
   }
   return (
     <div className="users-management materials-management">
@@ -147,8 +134,7 @@ export function MaterialManagement({
                   setSearch('');
                   setStatus('');
                   setQuery({ search: '', page: 1, reviewStatus: '' });
-                  setError('');
-                  setData(null);
+                  reload();
                 }}
               >
                 Xóa tìm kiếm
@@ -251,20 +237,14 @@ export function MaterialManagement({
               <button
                 className="secondary-button"
                 disabled={data.page <= 1}
-                onClick={() => {
-                  setData(null);
-                  setQuery((v) => ({ ...v, page: v.page - 1 }));
-                }}
+                onClick={() => setQuery((q) => ({ ...q, page: q.page - 1 }))}
               >
                 Trang trước
               </button>
               <button
                 className="secondary-button"
                 disabled={data.page * data.limit >= data.total}
-                onClick={() => {
-                  setData(null);
-                  setQuery((v) => ({ ...v, page: v.page + 1 }));
-                }}
+                onClick={() => setQuery((q) => ({ ...q, page: q.page + 1 }))}
               >
                 Trang sau
               </button>

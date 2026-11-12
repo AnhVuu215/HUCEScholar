@@ -84,9 +84,14 @@ Mỗi thư mục là một module NestJS (`*.module.ts`) gồm controller, servi
 | `components/<tính năng>/` | Component theo tính năng (`library`, `materials`, `study`, `calendar`, `notes`...) |
 | `components/ui/` | Thành phần giao diện dùng chung |
 | `lib/<tính năng>.ts` | Gọi API, kiểm tra dữ liệu trả về, nhãn và câu lỗi tiếng Việt |
-| `lib/auth.ts` | `apiRequest`, `csrfToken`, `ApiError`, vai trò |
+| `lib/auth.ts` | `apiRequest` (đọc), `apiWrite` (ghi JSON kèm CSRF), `ApiError`, vai trò |
+| `lib/use-api-resource.ts` | Hook `useApiResource` để component tải dữ liệu |
 
-Quy tắc: component không gọi `fetch` trực tiếp mà luôn đi qua `lib/`.
+Quy tắc:
+
+- Component không gọi `fetch` trực tiếp mà luôn đi qua `lib/`.
+- Ghi dữ liệu dạng JSON dùng `apiWrite(path, method, body)`. Chỉ upload file hoặc body không phải JSON (`text/calendar`, nội dung vở ghi có `If-Match`) mới tự gắn header qua `apiRequest`.
+- Tải dữ liệu cho một màn hình dùng `useApiResource(key, load, describe)`: hook tự hủy request cũ khi `key` đổi, không hiện dữ liệu cũ cho truy vấn mới, có `reload()` và `setData()`. Các effect có logic riêng (chờ kết quả quét file, lưu tiến độ đọc, render PDF, chuyển trang khi hết phiên) được giữ riêng có chủ đích.
 
 ## 4. Mô hình dữ liệu cốt lõi
 
@@ -143,7 +148,7 @@ File không bao giờ nằm trong webroot. Người đọc chỉ nhận file qua
 
 ## 9. Nợ kỹ thuật đã biết
 
-Đánh giá ngày 11/11/2026; sửa dần theo từng PR nhỏ, không đổi hành vi. Đã xong: helper dùng chung `common/` (PR #80) và tách module `materials` cũ thành `drafts`, `library`, `moderation`, `reports`, `reading`, `study`. Còn lại:
+Đánh giá ngày 11/11/2026; sửa dần theo từng PR nhỏ, không đổi hành vi. Đã xong: helper dùng chung `common/` (PR #80), tách module `materials` cũ thành `drafts`, `library`, `moderation`, `reports`, `reading`, `study` (PR #81), và `apiWrite`/`useApiResource` cho web. Còn lại:
 
-- Web tự viết lại cùng một kiểu tải dữ liệu (`useEffect` + `AbortController`) và gắn CSRF ở nhiều chỗ.
+- Web: còn nhiều component tự viết `useEffect` + `AbortController` theo biến thể riêng; chuyển dần sang `useApiResource` khi sửa tới. Mọi request ghi JSON đã dùng `apiWrite`.
 - Một số file lớn: `calendar.service.ts`, `notebooks.service.ts`, `note-editor.tsx`, `calendar-board.tsx`, `apps/api/test/materials.integration.spec.ts`.

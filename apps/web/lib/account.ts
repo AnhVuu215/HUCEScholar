@@ -1,4 +1,4 @@
-import { ApiError, apiRequest, csrfToken, readProfile, type Profile } from './auth';
+import { ApiError, apiRequest, readProfile, type Profile, apiWrite } from './auth';
 import { isHighlightColor, type HighlightColor } from './highlights';
 export interface AccountProfile extends Profile {
   revision: number;
@@ -15,14 +15,7 @@ export async function accountProfile(signal?: AbortSignal) {
   return profileResponse(await apiRequest('/account/profile', { signal }));
 }
 export async function updateProfile(displayName: string, revision: number) {
-  const token = await csrfToken();
-  return profileResponse(
-    await apiRequest('/account/profile', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify({ displayName, revision }),
-    }),
-  );
+  return profileResponse(await apiWrite('/account/profile', 'PATCH', { displayName, revision }));
 }
 export const readerZooms = {
   'fit-width': 'Vừa chiều rộng',
@@ -98,13 +91,8 @@ export async function updatePreferences(
   preferences: ReaderPreferences,
   revision: number,
 ) {
-  const token = await csrfToken();
   return preferencesResponse(
-    await apiRequest('/account/preferences', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-      body: JSON.stringify({ preferences, revision }),
-    }),
+    await apiWrite('/account/preferences', 'PUT', { preferences, revision }),
     userId,
   );
 }

@@ -1,5 +1,5 @@
 import { isRecord, isNumericId } from './guards';
-import { ApiError, apiRequest, csrfToken } from './auth';
+import { ApiError, apiRequest, csrfToken, apiWrite, type WriteMethod } from './auth';
 
 export const calendarColors = ['blue', 'green', 'orange', 'purple', 'red', 'gray'] as const;
 export type CalendarColor = (typeof calendarColors)[number];
@@ -148,14 +148,7 @@ function fit(fields: CalendarFields): CalendarFields {
     return { ...fields, remindMinutes: null, remindMore: [], remindEmail: false };
   return { ...fields, remindMinutes: leads[0], remindMore: leads.slice(1) };
 }
-async function send(path: string, method: string, body: object) {
-  const token = await csrfToken();
-  return apiRequest(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify(body),
-  });
-}
+const send = (path: string, method: WriteMethod, body: object) => apiWrite(path, method, body);
 function item(body: unknown) {
   if (isRecord(body) && valid(body.item)) return body.item;
   throw new Error('Invalid calendar item.');

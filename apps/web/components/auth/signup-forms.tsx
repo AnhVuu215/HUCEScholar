@@ -1,15 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { useRef, useState, type FormEvent } from 'react';
-import { ApiError, apiRequest, csrfToken } from '../../lib/auth';
+import { ApiError, apiWrite } from '../../lib/auth';
 
 async function post(path: string, body: object) {
-  const token = await csrfToken();
-  return apiRequest(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify(body),
-  });
+  return apiWrite(path, 'POST', body);
 }
 const sent =
   'Đã nhận yêu cầu. Thư xác nhận sẽ đến email này trong vài phút; liên kết hết hạn sau 24 giờ.';

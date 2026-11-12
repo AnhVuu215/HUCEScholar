@@ -1,35 +1,23 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { lifecycleError, managedMaterials } from '../../lib/lifecycle';
+import { useApiResource } from '../../lib/use-api-resource';
 import { publicationLabel } from '../../lib/materials';
 import { LifecycleDetail } from './lifecycle-detail';
 export function LifecycleManagement() {
   const [search, setSearch] = useState(''),
     [visibility, setVisibility] = useState('');
   const [query, setQuery] = useState({ search: '', visibility: '', page: 1 }),
-    [attempt, setAttempt] = useState(0);
-  const [data, setData] = useState<Awaited<ReturnType<typeof managedMaterials>> | null>(null),
-    [error, setError] = useState(''),
     [selected, setSelected] = useState<string | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    void managedMaterials(
-      new URLSearchParams({ ...query, page: String(query.page), limit: '20' }),
-      controller.signal,
-    )
-      .then((result) => {
-        if (!controller.signal.aborted) setData(result);
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(lifecycleError(e));
-      });
-    return () => controller.abort();
-  }, [query, attempt]);
-  function reload() {
-    setData(null);
-    setError('');
-    setAttempt((n) => n + 1);
-  }
+  const { data, error, reload } = useApiResource(
+    JSON.stringify(query),
+    (signal) =>
+      managedMaterials(
+        new URLSearchParams({ ...query, page: String(query.page), limit: '20' }),
+        signal,
+      ),
+    lifecycleError,
+  );
   return (
     <div className="users-management materials-management">
       <p className="users-guidance">
@@ -50,9 +38,9 @@ export function LifecycleManagement() {
           className="users-filters"
           onSubmit={(e) => {
             e.preventDefault();
-            setData(null);
-            setError('');
             setQuery({ search: search.trim(), visibility, page: 1 });
+            // Searching again for the same thing still refreshes the list.
+            reload();
           }}
         >
           <div className="form-field">
@@ -137,20 +125,14 @@ export function LifecycleManagement() {
               <button
                 className="secondary-button"
                 disabled={query.page <= 1}
-                onClick={() => {
-                  setData(null);
-                  setQuery((q) => ({ ...q, page: q.page - 1 }));
-                }}
+                onClick={() => setQuery((q) => ({ ...q, page: q.page - 1 }))}
               >
                 Trang trước
               </button>
               <button
                 className="secondary-button"
                 disabled={query.page * data.limit >= data.total}
-                onClick={() => {
-                  setData(null);
-                  setQuery((q) => ({ ...q, page: q.page + 1 }));
-                }}
+                onClick={() => setQuery((q) => ({ ...q, page: q.page + 1 }))}
               >
                 Trang sau
               </button>

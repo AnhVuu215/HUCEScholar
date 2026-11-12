@@ -1,5 +1,5 @@
 import { isRecord, isNumericId } from './guards';
-import { ApiError, apiRequest, csrfToken } from './auth';
+import { ApiError, apiRequest, apiWrite, type WriteMethod } from './auth';
 import { downloadedFile, type NotesExportFormat } from './annotations';
 
 export type StudyCard = {
@@ -45,14 +45,7 @@ function valid(v: unknown): v is StudyCard {
     (v.title === undefined || typeof v.title === 'string')
   );
 }
-async function send(path: string, method: string, body: object) {
-  const token = await csrfToken();
-  return apiRequest(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-    body: JSON.stringify(body),
-  });
-}
+const send = (path: string, method: WriteMethod, body: object) => apiWrite(path, method, body);
 function item(body: unknown) {
   if (isRecord(body) && valid(body.item)) return body.item;
   throw new Error('Invalid study card.');
