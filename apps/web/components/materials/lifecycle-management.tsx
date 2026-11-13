@@ -1,13 +1,22 @@
 'use client';
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { lifecycleError, managedMaterials } from '../../lib/lifecycle';
 import { useApiResource } from '../../lib/use-api-resource';
 import { publicationLabel } from '../../lib/materials';
 import { LifecycleDetail } from './lifecycle-detail';
 export function LifecycleManagement() {
+  // The admin home links here with ?textIndex=FAILED to open the failed-index list directly.
+  const initialTextIndex = useSearchParams().get('textIndex') === 'FAILED' ? 'FAILED' : '';
   const [search, setSearch] = useState(''),
-    [visibility, setVisibility] = useState('');
-  const [query, setQuery] = useState({ search: '', visibility: '', page: 1 }),
+    [visibility, setVisibility] = useState(''),
+    [textIndex, setTextIndex] = useState(initialTextIndex);
+  const [query, setQuery] = useState({
+      search: '',
+      visibility: '',
+      textIndex: initialTextIndex,
+      page: 1,
+    }),
     [selected, setSelected] = useState<string | null>(null);
   const { data, error, reload } = useApiResource(
     JSON.stringify(query),
@@ -38,7 +47,7 @@ export function LifecycleManagement() {
           className="users-filters"
           onSubmit={(e) => {
             e.preventDefault();
-            setQuery({ search: search.trim(), visibility, page: 1 });
+            setQuery({ search: search.trim(), visibility, textIndex, page: 1 });
             // Searching again for the same thing still refreshes the list.
             reload();
           }}
@@ -63,6 +72,17 @@ export function LifecycleManagement() {
               <option value="">Tất cả</option>
               <option value="VISIBLE">Hiển thị</option>
               <option value="HIDDEN">Đang ẩn</option>
+            </select>
+          </div>
+          <div className="form-field">
+            <label htmlFor="managed-text-index">Tìm trong nội dung</label>
+            <select
+              id="managed-text-index"
+              value={textIndex}
+              onChange={(e) => setTextIndex(e.target.value)}
+            >
+              <option value="">Tất cả</option>
+              <option value="FAILED">Lập chỉ mục chữ lỗi</option>
             </select>
           </div>
           <button className="secondary-button">Tìm kiếm</button>
@@ -103,6 +123,9 @@ export function LifecycleManagement() {
                         <span>
                           Phiên bản {item.latest.versionNo} · {publicationLabel(item.latest)}
                         </span>
+                        {item.textIndex?.state === 'FAILED' && (
+                          <span className="form-error">Lập chỉ mục chữ lỗi</span>
+                        )}
                       </td>
                       <td>{item.manager.name}</td>
                       <td>{item.visibility === 'VISIBLE' ? 'Hiển thị' : 'Đang ẩn'}</td>

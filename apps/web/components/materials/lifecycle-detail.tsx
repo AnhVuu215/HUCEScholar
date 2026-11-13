@@ -4,6 +4,8 @@ import {
   changeMaterial,
   lifecycleError,
   materialLifecycle,
+  retryTextIndex,
+  textIndexLabel,
   type MaterialLifecycle,
 } from '../../lib/lifecycle';
 import { fileFailedLabel, publicationLabel } from '../../lib/materials';
@@ -61,23 +63,22 @@ export function LifecycleDetail({
     setError('');
     setAttempt((n) => n + 1);
   }
-  async function run() {
+  /** Runs one admin action; on any failure the panel waits for a reload before the next one. */
+  async function perform(
+    action: (item: MaterialLifecycle) => Promise<MaterialLifecycle>,
+    message: (item: MaterialLifecycle) => string,
+  ) {
     if (!current || pending || uncertain) return;
     setPending(true);
     setError('');
     setNotice('');
     try {
-      const item = await changeMaterial(current, 'visibility', {
-        visibility: current.visibility === 'VISIBLE' ? 'HIDDEN' : 'VISIBLE',
-        reason: visibilityReason.trim(),
-        resolved,
-      });
+      const item = await action(current);
       if (!alive.current) return;
       setCurrent(item);
       setConfirmation(null);
       setResolved(false);
-      setVisibilityReason('');
-      setNotice(item.visibility === 'HIDDEN' ? 'Đã ẩn toàn tài liệu.' : 'Đã khôi phục hiển thị.');
+      setNotice(message(item));
       changed();
       requestAnimationFrame(() => feedback.current?.focus());
     } catch (e) {
@@ -90,6 +91,24 @@ export function LifecycleDetail({
       if (alive.current) setPending(false);
     }
   }
+  const run = () =>
+    perform(
+      async (item) => {
+        const next = await changeMaterial(item, 'visibility', {
+          visibility: item.visibility === 'VISIBLE' ? 'HIDDEN' : 'VISIBLE',
+          reason: visibilityReason.trim(),
+          resolved,
+        });
+        setVisibilityReason('');
+        return next;
+      },
+      (item) => (item.visibility === 'HIDDEN' ? 'Đã ẩn toàn tài liệu.' : 'Đã khôi phục hiển thị.'),
+    );
+  const retryIndex = () =>
+    perform(
+      retryTextIndex,
+      () => 'Đã yêu cầu lập chỉ mục lại. Worker sẽ thử trong khoảng một phút.',
+    );
   const locked = pending || uncertain;
   return (
     <section className="user-editor lifecycle-detail" aria-label="Chi tiết quản lý học liệu">
@@ -133,6 +152,25 @@ export function LifecycleDetail({
             <div>
               <dt>Bản công bố</dt>
               <dd>{current.current ? `Phiên bản ${current.current.versionNo}` : 'Chưa có'}</dd>
+            </div>
+            <div>
+              <dt>Tìm trong nội dung</dt>
+              <dd>
+                {textIndexLabel(current.textIndex)}
+                {current.textIndex?.state === 'FAILED' && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={locked}
+                      onClick={() => void retryIndex()}
+                    >
+                      Lập chỉ mục lại
+                    </button>
+                  </>
+                )}
+              </dd>
             </div>
           </dl>
           <p className="field-hint">

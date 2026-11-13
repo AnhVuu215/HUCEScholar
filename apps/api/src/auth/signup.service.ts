@@ -106,7 +106,7 @@ export class SignupService {
       text: [
         'Chào bạn,',
         '',
-        'Mở liên kết dưới đây trong 24 giờ để hoàn tất đăng ký: nhập tên, chọn vai trò sinh viên hoặc giảng viên và đặt mật khẩu.',
+        'Mở liên kết dưới đây trong 24 giờ để hoàn tất đăng ký tài khoản sinh viên: nhập tên và đặt mật khẩu.',
         '',
         link,
         '',

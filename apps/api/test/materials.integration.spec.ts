@@ -4182,6 +4182,62 @@ describe('private material drafts', () => {
         extract.mockRestore();
       }
     });
+    it('shows admins which current PDFs failed indexing and lets them retry', async () => {
+      const item = await readingFixture();
+      const file = await fileOf(item.versionId);
+      await db.query(
+        'INSERT INTO hucescholar.file_text(file_id,attempts) VALUES($1,3) ON CONFLICT (file_id) DO UPDATE SET attempts=3,indexed_at=NULL',
+        [file],
+      );
+      const failed = await agents.admin
+        .get('/api/v1/admin/materials')
+        .query({ textIndex: 'FAILED', limit: 100 })
+        .expect(200);
+      const listed = failed.body.items.find((m: { id: string }) => m.id === item.id);
+      expect(listed.textIndex).toEqual({ state: 'FAILED', attempts: 3 });
+      expect(
+        failed.body.items.every(
+          (m: { textIndex: { state: string } }) => m.textIndex.state === 'FAILED',
+        ),
+      ).toBe(true);
+      await agents.admin.get('/api/v1/admin/materials').query({ textIndex: 'OTHER' }).expect(400);
+
+      // Only admins retry, and only a failed index.
+      expect((await lifecycleWrite(item.id, 'text-index', {}, 'student')).status).toBe(403);
+      const retried = await lifecycleWrite(item.id, 'text-index', {});
+      expect(retried.status).toBe(201);
+      expect(retried.body.item.textIndex).toEqual({ state: 'PENDING', attempts: 0 });
+      const again = await lifecycleWrite(item.id, 'text-index', {});
+      expect(again.status).toBe(409);
+      expect(again.body.code).toBe('TEXT_INDEX_NOT_FAILED');
+      const audit = await db.query(
+        "SELECT count(*)::int AS n FROM hucescholar.audit_events WHERE entity_type='DOCUMENT' AND entity_id=$1 AND event_type='TEXT_INDEX_RETRIED'",
+        [item.id],
+      );
+      expect(audit.rows[0].n).toBe(1);
+      const after = await agents.admin
+        .get('/api/v1/admin/materials')
+        .query({ textIndex: 'FAILED', limit: 100 })
+        .expect(200);
+      expect(after.body.items.map((m: { id: string }) => m.id)).not.toContain(item.id);
+
+      // Once indexed, the detail reports the page count.
+      await db.query('UPDATE hucescholar.file_text SET pages=3,indexed_at=now() WHERE file_id=$1', [
+        file,
+      ]);
+      const detail = await agents.admin.get(`/api/v1/admin/materials/${item.id}`).expect(200);
+      expect(detail.body.item.textIndex).toMatchObject({
+        state: 'INDEXED',
+        pages: 3,
+        truncated: false,
+      });
+
+      // A file the worker has not given up on cannot be retried.
+      const fresh = await readingFixture();
+      const freshDetail = await agents.admin.get(`/api/v1/admin/materials/${fresh.id}`).expect(200);
+      expect(freshDetail.body.item.textIndex).toEqual({ state: 'PENDING', attempts: 0 });
+      expect((await lifecycleWrite(fresh.id, 'text-index', {})).status).toBe(409);
+    });
   });
   it('says a PDF whose bytes are gone is missing (410), not a connection problem', async () => {
     const root = app.get<FileConfiguration>(FILE_CONFIG).root;

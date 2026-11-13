@@ -27,7 +27,7 @@ Chạy theo thứ tự, trong một transaction:
 
 Sau migration, database test còn 40 bảng, 75 FK, 133 CHECK và 19 partial index (bớt 1 bảng, 4 FK, 3 CHECK và 2 partial index). `schema.integration.spec.ts` kiểm tra các con số này.
 
-Migration đã chạy trên database test có sẵn tài khoản giảng viên của bộ e2e: sau migration không còn role LECTURER, seed chạy lại bình thường. Database dev local chưa chạy migration này; chạy `pnpm --filter @hucescholar/api db:migrate` trước khi mở app.
+Migration đã chạy trên database test có sẵn tài khoản giảng viên của bộ e2e: sau migration không còn role LECTURER, seed chạy lại bình thường. Database dev local cần chạy `pnpm --filter @hucescholar/api db:migrate` trước khi mở app (đã chạy trên máy dev, kiểm lại ngày 13/11).
 
 ## Giao diện
 
@@ -41,6 +41,6 @@ Migration đã chạy trên database test có sẵn tài khoản giảng viên c
 
 - API: lint, typecheck, 27 bộ unit test (224 pass, 2 skip) và toàn bộ test tích hợp trên PostgreSQL/Redis test đều đạt.
 - Web: lint, typecheck và `pnpm build` đạt.
-- E2E Playwright (Chromium, 1 worker): toàn bộ spec đạt, 206 pass. 4 skip là các test cần bật riêng: Word thật với converter/ClamAV và pilot với corpus thật. Đã sửa `pilot-local.spec.ts`, phần upload Word thật và `rehearsal-check.mjs` theo luồng mới, nhưng chưa chạy lại vì cần Docker converter/worker và S3/Caddy.
+- E2E Playwright (Chromium, 1 worker): toàn bộ spec đạt, 206 pass. 4 skip là các test cần bật riêng: Word thật với converter/ClamAV và pilot với corpus thật. Đã sửa `pilot-local.spec.ts`, phần upload Word thật và `rehearsal-check.mjs` theo luồng mới; ngày 13/11 đã chạy lại cả ba với Docker thật và đều đạt, xem [mốc 13/11](2026-11-13-finish-open-gaps.md).
 
 Chưa kiểm chứng trên production hoặc thiết bị thật.

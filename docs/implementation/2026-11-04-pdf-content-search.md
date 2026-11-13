@@ -73,4 +73,4 @@ Local (Windows, Node 24.19.0, pnpm 11.25.0), database `_test` sau `pnpm test:set
 - OCR cho PDF scan.
 - Tìm trong phiên bản cũ của tài liệu; chỉ tìm phiên bản hiện hành.
 - Khớp nguyên từ, gợi ý chính tả, xếp hạng theo tần suất từ.
-- Cột thống kê cho admin về file lập chỉ mục lỗi; hiện chỉ có log và `file_text.attempts`.
+- ~~Cột thống kê cho admin về file lập chỉ mục lỗi~~: đã làm ở [mốc 13/11](2026-11-13-finish-open-gaps.md), gồm trạng thái từng tài liệu, bộ lọc, mục trên trang đầu admin và nút lập chỉ mục lại. Mốc đó cũng chạy trọn bước lập chỉ mục qua worker thật.

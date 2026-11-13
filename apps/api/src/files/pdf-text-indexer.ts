@@ -7,9 +7,9 @@ import { FILE_CONFIG, FileConfiguration } from './files.config';
 import { extractPdfText, pagesFromText } from './pdf-text';
 import { PrivateStore } from './private-store';
 import { receivePdf } from './receive-pdf';
+import { TEXT_INDEX_MAX_ATTEMPTS as MAX_ATTEMPTS } from './text-index-state';
 
 const BATCH = 5;
-const MAX_ATTEMPTS = 3;
 const INSERT_CHUNK = 200;
 
 /**

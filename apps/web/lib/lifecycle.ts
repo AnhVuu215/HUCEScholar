@@ -10,6 +10,11 @@ type Version = {
   fileState: string;
   fileError?: string | null;
 };
+/** SEARCH-04: whether the current version's PDF text can be found by content search. */
+export type TextIndex =
+  | { state: 'INDEXED'; pages: number; truncated: boolean; indexedAt: string }
+  | { state: 'PENDING' | 'FAILED'; attempts: number }
+  | { state: 'NO_TEXT' | 'COPY_RESTRICTED' | 'UNAVAILABLE' };
 export type ManagedMaterial = {
   id: string;
   visibility: 'VISIBLE' | 'HIDDEN';
@@ -17,6 +22,7 @@ export type ManagedMaterial = {
   manager: { id: string; name: string };
   latest: Version;
   currentVersionId: string | null;
+  textIndex: TextIndex | null;
 };
 export type MaterialLifecycle = ManagedMaterial & {
   current: Version | null;
@@ -61,6 +67,20 @@ const version = (v: unknown): v is Version =>
   ) &&
   ['MISSING', 'CHECKING', 'SAFE', 'FAILED'].includes(String(v.fileState)) &&
   (v.fileError == null || typeof v.fileError === 'string');
+function textIndex(v: unknown): v is TextIndex {
+  if (!isRecord(v)) return false;
+  switch (v.state) {
+    case 'INDEXED':
+      return (
+        integer(v.pages) && typeof v.truncated === 'boolean' && typeof v.indexedAt === 'string'
+      );
+    case 'PENDING':
+    case 'FAILED':
+      return integer(v.attempts);
+    default:
+      return ['NO_TEXT', 'COPY_RESTRICTED', 'UNAVAILABLE'].includes(String(v.state));
+  }
+}
 function overview(v: unknown): v is ManagedMaterial {
   return (
     isRecord(v) &&
@@ -72,7 +92,8 @@ function overview(v: unknown): v is ManagedMaterial {
     isNumericId(v.manager.id) &&
     typeof v.manager.name === 'string' &&
     version(v.latest) &&
-    (v.currentVersionId === null || isNumericId(v.currentVersionId))
+    (v.currentVersionId === null || isNumericId(v.currentVersionId)) &&
+    (v.textIndex === null || textIndex(v.textIndex))
   );
 }
 function detail(v: unknown): v is MaterialLifecycle {
@@ -126,7 +147,7 @@ export async function managedMaterials(
   params: URLSearchParams,
   signal: AbortSignal,
 ): Promise<List> {
-  if (!params.get('visibility')) params.delete('visibility');
+  for (const key of ['visibility', 'textIndex']) if (!params.get(key)) params.delete(key);
   const data: unknown = await (await apiRequest(`/admin/materials?${params}`, { signal })).json();
   if (
     isRecord(data) &&
@@ -139,6 +160,28 @@ export async function managedMaterials(
 }
 export async function materialLifecycle(id: string, page = 1, signal?: AbortSignal) {
   return readItem(await apiRequest(`/admin/materials/${id}?page=${page}&limit=10`, { signal }));
+}
+/** SEARCH-04: lets the worker try a failed text extraction again. */
+export async function retryTextIndex(current: MaterialLifecycle) {
+  return readItem(await academicWrite(`/admin/materials/${current.id}/text-index`, {}));
+}
+/** Admin wording for each content-search state. */
+export function textIndexLabel(index: TextIndex | null) {
+  if (!index) return 'Chưa có bản công bố nên chưa tìm được trong nội dung.';
+  switch (index.state) {
+    case 'INDEXED':
+      return `Tìm được trong nội dung: ${index.pages} trang có chữ${index.truncated ? ', phần cuối quá dài nên bị cắt' : ''}.`;
+    case 'PENDING':
+      return 'Đang chờ lập chỉ mục chữ, thường trong khoảng một phút.';
+    case 'FAILED':
+      return `Lập chỉ mục chữ lỗi sau ${index.attempts} lần thử. Tìm theo tiêu đề và tác giả vẫn chạy.`;
+    case 'NO_TEXT':
+      return 'PDF không có lớp chữ (có thể là bản scan), nên không tìm được trong nội dung.';
+    case 'COPY_RESTRICTED':
+      return 'PDF khóa sao chép chữ, nên không lập chỉ mục nội dung.';
+    case 'UNAVAILABLE':
+      return 'PDF bản hiện hành chưa qua kiểm tra an toàn.';
+  }
 }
 export async function changeMaterial(
   current: MaterialLifecycle,
@@ -159,6 +202,7 @@ export function lifecycleError(e: unknown) {
     STALE_REVISION: 'Tài liệu đã thay đổi ở lượt khác.',
     VISIBILITY_UNCHANGED: 'Tài liệu đã ở trạng thái này.',
     RESOLUTION_REQUIRED: 'Xác nhận lý do ẩn đã được giải quyết trước khi khôi phục.',
+    TEXT_INDEX_NOT_FAILED: 'Bản hiện hành không còn ở trạng thái lỗi lập chỉ mục.',
   };
   return e instanceof ApiError && e.code && codes[e.code] ? codes[e.code] : academicError(e);
 }
