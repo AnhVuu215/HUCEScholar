@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Role } from '../../lib/auth';
 import { libraryError } from '../../lib/library';
+import { lifecycleError, managedMaterials } from '../../lib/lifecycle';
 import { draftList, materialError, type DraftList } from '../../lib/materials';
 import { reviewError, reviewList, type ReviewList } from '../../lib/moderation';
 import { personalList, type PersonalList } from '../../lib/personal-library';
@@ -383,6 +384,49 @@ function OpenReports() {
   );
 }
 
+const loadTextIndexFailures = (signal: AbortSignal) =>
+  managedMaterials(new URLSearchParams({ textIndex: 'FAILED', page: '1', limit: '5' }), signal);
+
+/** SEARCH-04: approved PDFs the content search could not read, so admins can retry them. */
+function TextIndexFailures() {
+  const failures = useSection(loadTextIndexFailures, lifecycleError);
+  return (
+    <section className="content-section home-section" aria-labelledby="home-text-index">
+      <h2 id="home-text-index">Lập chỉ mục chữ lỗi</h2>
+      <SectionState
+        section={failures}
+        loading="Đang tải trạng thái lập chỉ mục…"
+        retryLabel="Tải lại trạng thái lập chỉ mục"
+      >
+        {(list) =>
+          list.items.length ? (
+            <>
+              <p>
+                {list.total} tài liệu chưa tìm được trong nội dung. Tìm theo tiêu đề và tác giả vẫn
+                chạy.
+              </p>
+              <ul className="home-list">
+                {list.items.map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.latest.title}</strong>
+                  </li>
+                ))}
+              </ul>
+              <p>
+                <Link href="/workspace/admin/materials?textIndex=FAILED">
+                  Xem và lập chỉ mục lại
+                </Link>
+              </p>
+            </>
+          ) : (
+            <p>Không có tài liệu lập chỉ mục chữ lỗi.</p>
+          )
+        }
+      </SectionState>
+    </section>
+  );
+}
+
 /** First page after sign-in: the work this role should pick up next, from real data only. */
 export function RoleHome({ role }: { role: Role }) {
   return (
@@ -394,6 +438,7 @@ export function RoleHome({ role }: { role: Role }) {
         <>
           <ModerationQueue />
           <OpenReports />
+          <TextIndexFailures />
         </>
       ) : (
         <MaterialTasks />

@@ -56,6 +56,14 @@ STUDY-03 [ôn thẻ theo lịch](../implementation/2026-11-04-study-schedule.md)
 
 SEARCH-04 [tìm trong nội dung PDF](../implementation/2026-11-04-pdf-content-search.md): worker lưu chữ từng trang của PDF đã duyệt, Kho học liệu tìm không dấu trong đó, hiện đoạn trích và mở đúng trang với ô tìm chữ đã chạy. PDF scan và PDF khóa sao chép không tìm được.
 
+## Cập nhật 10–13/11
+
+ROLE-01 [bỏ vai trò giảng viên](../implementation/2026-11-10-remove-lecturer-role.md) theo quyết định của chủ dự án: chỉ còn quản trị viên và sinh viên. Sinh viên tải tài liệu lên, admin duyệt trước khi công bố và soạn danh sách đọc (mỗi môn một danh sách). Bỏ tự công bố, phân công môn và bàn giao. **Mọi chỗ nhắc giảng viên ở các mục cũ bên dưới là lịch sử.**
+
+STUDY-04 [lịch sử ôn, thống kê, xuất thẻ và nhắc thẻ đến hạn](../implementation/2026-11-11-study-review-history.md) làm nốt phần còn lại của STUDY-03. PR #79–#83 viết lại README, thêm [hướng dẫn kiến trúc](../ARCHITECTURE.md) và gom code dùng chung ở API và web, không đổi hành vi.
+
+Ngày 13/11 [làm nốt việc còn mở](../implementation/2026-11-13-finish-open-gaps.md): admin thấy và lập chỉ mục lại file tìm-trong-nội-dung bị lỗi (SEARCH-04), sửa email đăng ký còn nhắc giảng viên, chạy lại pilot local, upload Word thật và diễn tập S3/HTTPS/phục hồi sau ROLE-01, đều đạt. Việc còn mở: OPS-02 trên môi trường thật, cài PWA, phiên dùng thử với người thật; cả ba chờ chủ dự án quyết.
+
 ## Bổ sung yêu cầu V2 ngày 17/10
 
 Theo yêu cầu mới, đã có [kế hoạch V2 tổng hợp](../superpowers/specs/2026-10-17-workspace-v2-design.md): chuẩn hóa button/dropdown → sidebar/header theo vai trò → ghi chú/tô màu/trích dẫn trực tiếp → hồ sơ và cài đặt, kèm36 ý tưởng để lựa chọn. Ba plan kỹ thuật được liên kết trong tài liệu đó; **chưa triển khai V2**. Người dùng chọn edit annotations riêng trước, chưa sửa nội dung gốc PDF/Word.

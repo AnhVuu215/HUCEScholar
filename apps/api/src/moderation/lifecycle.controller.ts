@@ -15,6 +15,12 @@ export class LifecycleController {
   @Get(':id') get(@Param('id') id: string, @Query() query: DraftListDto) {
     return this.lifecycle.get(id, query);
   }
+  @Post(':id/text-index') retryTextIndex(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
+    return this.lifecycle.retryTextIndex(req.user, id);
+  }
   @Post(':id/visibility') visibility(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,

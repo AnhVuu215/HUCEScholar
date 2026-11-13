@@ -165,6 +165,8 @@ try {
     ['study4-student', 'STUDENT'],
     ['search4-admin', 'ADMIN'],
     ['search4-student', 'STUDENT'],
+    ['textindex-admin', 'ADMIN'],
+    ['textindex-student', 'STUDENT'],
     ['cal1-admin', 'ADMIN'],
     ['cal1-student', 'STUDENT'],
     ['cal2-student', 'STUDENT'],

@@ -9,6 +9,7 @@ import { parseId } from '../common/ids';
 import { lockCatalog } from '../common/locks';
 import { conflict } from '../common/errors';
 import { requireActiveUser } from '../common/active-user';
+import { TEXT_INDEX_MAX_ATTEMPTS, textIndexState } from '../files/text-index-state';
 const docSelect = {
   id: true,
   visibility: true,
@@ -28,7 +29,15 @@ const versionSelect = {
   rights_basis: true,
   rights_valid_until: true,
   file_id: true,
-  files: { select: { scan_status: true, check_error: true } },
+  files: {
+    select: {
+      scan_status: true,
+      check_error: true,
+      has_text_layer: true,
+      copy_restricted: true,
+      file_text: { select: { pages: true, truncated: true, attempts: true, indexed_at: true } },
+    },
+  },
 } satisfies Prisma.document_versionsSelect;
 type Doc = Prisma.documentsGetPayload<{ select: typeof docSelect }>;
 type Version = Prisma.document_versionsGetPayload<{ select: typeof versionSelect }>;
@@ -44,14 +53,24 @@ const versionItem = (v: Version | null) =>
         fileError: v.files?.check_error ?? null,
       }
     : null;
-const overview = (d: Doc, v: Version) => ({
+/** SEARCH-04: content search only reads the current version, so that is the file reported. */
+const overview = (d: Doc, v: Version, current: Version | null) => ({
   id: String(d.id),
   visibility: d.visibility,
   revision: d.revision,
   manager: { id: String(d.manager_id), name: d.users_documents_manager_idTousers.display_name },
   latest: versionItem(v)!,
   currentVersionId: d.current_version_id ? String(d.current_version_id) : null,
+  textIndex: current ? textIndexState(current.files) : null,
 });
+/** Current version whose PDF text extraction gave up; the worker no longer retries it. */
+const textIndexFailed = Prisma.sql`EXISTS (
+  SELECT 1 FROM hucescholar.document_versions cv
+  JOIN hucescholar.files f ON f.id=cv.file_id
+  JOIN hucescholar.file_text t ON t.file_id=f.id
+  WHERE cv.id=d.current_version_id AND f.scan_status='SAFE' AND f.has_text_layer
+    AND NOT f.copy_restricted AND t.indexed_at IS NULL AND t.attempts>=${TEXT_INDEX_MAX_ATTEMPTS}
+)`;
 @Injectable()
 export class LifecycleService {
   constructor(
@@ -106,7 +125,7 @@ export class LifecycleService {
     });
     const visibility = await tx.visibility_events.findMany(historyQuery);
     return {
-      ...overview(doc, latest),
+      ...overview(doc, latest, current),
       current: versionItem(current),
       courses: courses.map((c) => ({ ...c, id: String(c.id) })),
       history: {
@@ -146,7 +165,8 @@ export class LifecycleService {
       SELECT v.id,v.title FROM hucescholar.document_versions v WHERE v.document_id=d.id ORDER BY v.version_no DESC LIMIT 1
     ) latest ON TRUE WHERE TRUE
     ${query.search ? Prisma.sql`AND latest.title ILIKE ${`%${query.search}%`}` : Prisma.empty}
-    ${query.visibility ? Prisma.sql`AND d.visibility=${query.visibility}` : Prisma.empty}`;
+    ${query.visibility ? Prisma.sql`AND d.visibility=${query.visibility}` : Prisma.empty}
+    ${query.textIndex === 'FAILED' ? Prisma.sql`AND ${textIndexFailed}` : Prisma.empty}`;
     return this.db.$transaction(
       async (tx) => {
         const rows = await tx.$queryRaw<{ id: bigint; version_id: bigint }[]>(
@@ -157,7 +177,14 @@ export class LifecycleService {
           select: docSelect,
         });
         const versions = await tx.document_versions.findMany({
-          where: { id: { in: rows.map((r) => r.version_id) } },
+          where: {
+            id: {
+              in: [
+                ...rows.map((r) => r.version_id),
+                ...docs.flatMap((d) => (d.current_version_id ? [d.current_version_id] : [])),
+              ],
+            },
+          },
           select: versionSelect,
         });
         const docMap = new Map(docs.map((d) => [String(d.id), d])),
@@ -166,9 +193,16 @@ export class LifecycleService {
           Prisma.sql`SELECT count(*) AS total ${from}`,
         );
         return {
-          items: rows.map((r) =>
-            overview(docMap.get(String(r.id))!, versionMap.get(String(r.version_id))!),
-          ),
+          items: rows.map((r) => {
+            const doc = docMap.get(String(r.id))!;
+            return overview(
+              doc,
+              versionMap.get(String(r.version_id))!,
+              doc.current_version_id
+                ? (versionMap.get(String(doc.current_version_id)) ?? null)
+                : null,
+            );
+          }),
           total: Number(count[0].total),
           page: query.page,
           limit: query.limit,
@@ -234,6 +268,39 @@ export class LifecycleService {
           );
       }
       await this.applyVisibility(tx, actorId, id, doc.visibility, body.visibility, body.reason);
+      return { item: await this.detail(tx, id) };
+    });
+  }
+  /**
+   * SEARCH-04: gives a current-version PDF whose text extraction failed three more tries. The
+   * worker sweep picks it up within a minute; the file and its review state are not touched.
+   */
+  retryTextIndex(actor: Profile, rawId: string) {
+    return this.db.$transaction(async (tx) => {
+      const actorId = parseId(actor.id),
+        id = parseId(rawId);
+      await requireActiveUser(tx, actorId, 'Không còn quyền quản lý học liệu.', 'ADMIN');
+      const doc = await this.read(tx, id);
+      const fileId = doc.current_version_id
+        ? (
+            await tx.document_versions.findUnique({
+              where: { id: doc.current_version_id },
+              select: { file_id: true },
+            })
+          )?.file_id
+        : null;
+      if (fileId)
+        await tx.$queryRaw`SELECT file_id FROM hucescholar.file_text WHERE file_id=${fileId} FOR UPDATE`;
+      const file = fileId
+        ? await tx.files.findUnique({ where: { id: fileId }, select: versionSelect.files.select })
+        : null;
+      if (!fileId || textIndexState(file).state !== 'FAILED')
+        throw conflict(
+          'TEXT_INDEX_NOT_FAILED',
+          'Bản hiện hành không ở trạng thái lỗi lập chỉ mục. Tải lại để đối chiếu.',
+        );
+      await tx.file_text.update({ where: { file_id: fileId }, data: { attempts: 0 } });
+      await this.materials.audit(tx, actorId, id, 'TEXT_INDEX_RETRIED');
       return { item: await this.detail(tx, id) };
     });
   }
